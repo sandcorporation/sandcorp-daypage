@@ -115,3 +115,14 @@ def test_logout_ends_session(client, fake_kakao):
 
 def test_me_for_anonymous(client):
     assert client.get("/api/me").json() == {"authenticated": False, "notes": []}
+
+
+def test_dev_login_is_disabled_by_default(client, settings):
+    settings.DEV_LOGIN = False
+    assert client.get("/auth/dev-login", {"kakao_id": 5}).status_code == 404
+
+
+def test_dev_login_requires_debug(client, settings):
+    settings.DEBUG = False
+    settings.DEV_LOGIN = True
+    assert client.get("/auth/dev-login", {"kakao_id": 5}).status_code == 404

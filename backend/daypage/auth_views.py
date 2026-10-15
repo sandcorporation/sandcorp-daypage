@@ -60,3 +60,16 @@ def kakao_callback(request):
 def logout_view(request):
     logout(request)
     return HttpResponse(status=204)
+
+
+@require_GET
+def dev_login(request):
+    """로컬 수동 확인용 로그인. DEBUG와 DEV_LOGIN이 모두 켜졌을 때만 동작한다."""
+    from django.conf import settings
+    from django.http import Http404
+
+    if not (settings.DEBUG and settings.DEV_LOGIN):
+        raise Http404
+    user = User.objects.get_or_create_kakao(int(request.GET.get("kakao_id", "1")))
+    login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    return HttpResponseRedirect(safe_next(request.GET.get("next")))

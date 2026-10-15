@@ -278,3 +278,30 @@
     width: 100%;
   }
 }
+
+.page-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.page-layer [data-page-ui] {
+  pointer-events: auto;
+}
+.paper {
+  background-color: var(--white);
+  background-image:
+    linear-gradient(90deg, transparent 70px, #f1b5a4 70px, #f1b5a4 72px, transparent 72px),
+    linear-gradient(#e9ecf2 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    100% 32px;
+  background-position:
+    0 0,
+    0 31px;
+}
+.swatch-btn[aria-pressed='true']:has(.width-dot) {
+  background: var(--accent-soft);
+  color: var(--accent) !important;
+}

@@ -8,4 +8,5 @@ urlpatterns = [
     path("auth/kakao/login", auth_views.kakao_login),
     path("auth/kakao/callback", auth_views.kakao_callback),
     path("auth/logout", auth_views.logout_view),
+    path("auth/dev-login", auth_views.dev_login),
 ]

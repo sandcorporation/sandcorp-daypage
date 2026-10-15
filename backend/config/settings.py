@@ -106,6 +106,9 @@ KAKAO_CLIENT_SECRET = env("KAKAO_CLIENT_SECRET") or env("KAKAO_CLIENT_SECRET_KEY
 KAKAO_REDIRECT_URI = env("KAKAO_REDIRECT_URI", "http://localhost:5173/auth/kakao/callback")
 
 # 노트 화면에서 공유 링크를 만들 때 쓰는 공개 주소
+# 로컬 수동 확인용 로그인(/auth/dev-login). DEBUG일 때만 켤 수 있다.
+DEV_LOGIN = DEBUG and env_bool("DJANGO_DEV_LOGIN", False)
+
 PUBLIC_ORIGIN = env("PUBLIC_ORIGIN", "http://localhost:5173")
 
 # 노트당 동시 접속 상한(서버 보호용, 정원과 별개)
