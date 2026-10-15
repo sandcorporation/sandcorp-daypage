@@ -16,6 +16,7 @@ import { ConnectionPill } from './ConnectionPill'
 import { NoteHeader } from './NoteHeader'
 import { Cursors } from './Cursors'
 import { MemberLimitControl } from './MemberLimitControl'
+import { ZoomControl, type Zoom } from './ZoomControl'
 import { uniquePeople, usePresence } from './usePresence'
 import { useRealtime, type FatalReason } from './useRealtime'
 import type { NoteDetail } from './types'
@@ -35,6 +36,7 @@ export function NotePage({ initial }: Props) {
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(1)
   const [font, setFont] = useState<string>(DEFAULT_FONT.id)
   const [scale, setScale] = useState(0.5)
+  const [zoom, setZoom] = useState<Zoom>('fit')
   const [focusId, setFocusId] = useState<string | null>(null)
   const [editingBoxId, setEditingBoxId] = useState<string | null>(null)
   const clearFocus = useCallback(() => setFocusId(null), [])
@@ -165,7 +167,7 @@ export function NotePage({ initial }: Props) {
         note={note}
         pageDate={note.today}
         clockOffset={clockOffset}
-        peers={uniquePeople(presence.peers)}
+        peers={uniquePeople(presence.peers, note.me.nickname)}
         onRename={rename}
         onShare={share}
         settings={
@@ -202,6 +204,7 @@ export function NotePage({ initial }: Props) {
           origin={origin}
           pointerTool={tool === 'text' ? textTool : edit.pointerTool}
           onScale={setScale}
+          zoom={zoom}
           onPointerMove={presence.setCursor}
           overlay={edit.overlay}
           overlayVersion={edit.overlayVersion}
@@ -222,6 +225,7 @@ export function NotePage({ initial }: Props) {
         </PageView>
       </div>
       <ConnectionPill status={status} synced={synced} />
+      <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
       {toast}
     </div>
   )

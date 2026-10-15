@@ -50,14 +50,14 @@ export function NoteHeader({ note, pageDate, clockOffset, peers, onRename, onSha
           나: <b>{note.me.nickname}</b>
         </span>
         {settings}
-        <Link to={`/note/${note.id}/history`} className="btn">
+        <Link to={`/note/${note.id}/history`} className="btn" aria-label="기록">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.8" />
             <path d="M10 6v4l3 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
-          기록
+          <span className="btn-label">기록</span>
         </Link>
-        <button type="button" className="btn btn-primary" onClick={onShare}>
+        <button type="button" className="btn btn-primary" onClick={onShare} aria-label="링크 공유">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <path
               d="M8 12l4-4M7 9l-2 2a3 3 0 004 4l2-2M13 11l2-2a3 3 0 00-4-4l-2 2"
@@ -66,7 +66,7 @@ export function NoteHeader({ note, pageDate, clockOffset, peers, onRename, onSha
               strokeLinecap="round"
             />
           </svg>
-          링크 공유
+          <span className="btn-label">링크 공유</span>
         </button>
       </div>
     </header>

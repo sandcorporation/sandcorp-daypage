@@ -110,3 +110,17 @@ async def test_connection_over_the_concurrent_limit_is_refused(settings):
     assert await expect_close(ws) == 4429
     await a.close()
     await b.close()
+
+
+async def test_limit_counts_people_not_tabs(settings):
+    settings.MAX_CONCURRENT_PER_NOTE = 2
+    note_id, owner, (g1, g2), _ = await setup_note(2, 3)
+    a = await join(owner, note_id, "2026-10-15")
+    b = await join(g1, note_id, "2026-10-15")
+    # 이미 들어와 있는 사람의 새 탭(새로고침·재연결 포함)은 받는다.
+    a2 = await join(owner, note_id, "2026-10-15")
+    a3 = await join(owner, note_id, "2026-10-15")
+    ws = await open_ws(g2, note_id, "2026-10-15")
+    assert await expect_close(ws) == 4429
+    for y in (a, b, a2, a3):
+        await y.close()

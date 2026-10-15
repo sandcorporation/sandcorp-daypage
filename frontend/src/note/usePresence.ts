@@ -78,8 +78,8 @@ export function usePresence(provider: WebsocketProvider | null, me: { nickname: 
   return { peers, setCursor, setEditing, editors }
 }
 
-/** 같은 사람이 여러 탭으로 들어와도 아바타는 하나만. */
-export function uniquePeople(peers: Peer[]): Peer[] {
-  const seen = new Set<string>()
+/** 같은 사람이 여러 탭으로 들어와도 아바타는 하나만. 내 다른 탭도 뺀다. */
+export function uniquePeople(peers: Peer[], myNickname?: string): Peer[] {
+  const seen = new Set<string>(myNickname ? [myNickname] : [])
   return peers.filter((p) => !p.isMe && !seen.has(p.nickname) && seen.add(p.nickname))
 }

@@ -37,6 +37,9 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
   const [provider, setProvider] = useState<WebsocketProvider | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [synced, setSynced] = useState(false)
+  // 네트워크가 돌아오면 provider를 새로 만든다. 끊겼던 소켓은 닫기 핸드셰이크가 끝나지 않아
+  // 기존 provider로는 한참 동안 다시 붙지 못한다.
+  const [generation, setGeneration] = useState(0)
 
   useEffect(() => {
     // 같은 브라우저의 다른 탭과 직접 주고받지 않고 항상 서버를 거친다(서버가 봉인·권한을 판단).
@@ -52,7 +55,7 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
     }
     setProvider(p)
     setSynced(false)
-    setStatus('connecting')
+    setStatus(generation > 0 ? 'reconnecting' : 'connecting')
 
     const onStatus = ({ status: s }: { status: 'connected' | 'disconnected' | 'connecting' }) => {
       if (s === 'connected') {
@@ -76,7 +79,9 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
       }
     }
     const onOffline = () => setStatus('offline')
-    const onOnline = () => setStatus('reconnecting')
+    const onOnline = () => {
+      if (p.shouldConnect) setGeneration((g) => g + 1)
+    }
 
     p.on('status', onStatus)
     p.on('sync', onSync)
@@ -94,7 +99,7 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
     }
     // 콜백은 바뀌어도 다시 연결하지 않는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noteId, date, doc])
+  }, [noteId, date, doc, generation])
 
   return { provider, status, synced }
 }

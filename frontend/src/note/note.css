@@ -585,3 +585,88 @@
     white-space: normal;
   }
 }
+
+/* 확대·축소 */
+.zoom-control {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--white);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(31, 33, 40, 0.08);
+}
+.zoom-control button {
+  min-width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.zoom-control button:hover {
+  background: var(--paper-dark);
+}
+.zoom-control button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.page-viewport {
+  overflow-x: auto;
+}
+
+@media (max-width: 720px) {
+  .btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .note-header-right .btn {
+    padding: 0 12px;
+  }
+  .note-header-right {
+    gap: 6px;
+  }
+  .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+  .toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding: 4px;
+    gap: 2px;
+    scrollbar-width: thin;
+  }
+  .tool-btn,
+  .swatch-btn {
+    flex: 0 0 auto;
+  }
+  .tool-sep {
+    flex: 0 0 1px;
+  }
+  .connection-pill {
+    left: 12px;
+    bottom: 12px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  .zoom-control {
+    right: 12px;
+    bottom: 12px;
+  }
+}

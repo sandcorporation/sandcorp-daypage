@@ -88,8 +88,10 @@ class PageConsumer(AsyncWebsocketConsumer):
         if date != clock.today_kst():
             return await self.close(code=CLOSE_NOT_TODAY)
 
+        # 상한은 사람 수로 센다. 이미 들어와 있는 사람의 새 탭·재연결은 받는다.
         registry = rooms.registry()
-        if len(await registry.connections(self.note_id)) >= settings.MAX_CONCURRENT_PER_NOTE:
+        people = {c.user_id for c in await registry.connections(self.note_id)}
+        if user.id not in people and len(people) >= settings.MAX_CONCURRENT_PER_NOTE:
             return await self.close(code=CLOSE_CROWDED)
 
         page = await database_sync_to_async(pages.get_or_create_page)(note, date)

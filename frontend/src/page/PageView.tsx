@@ -25,6 +25,8 @@ type Props = {
   origin?: unknown
   onPointerMove?: (p: Point | null) => void
   onScale?: (scale: number) => void
+  /** 'fit'이면 화면 폭에 맞추고, 숫자면 그 배율로 보인다(넘치면 가로 스크롤) */
+  zoom?: 'fit' | number
   /** 포인터를 누를 때마다 불린다(되돌리기 단위 나누기) */
   onGestureStart?: () => void
   /** 장 좌표계(1600×2400) 위에 올라가는 DOM 레이어(글 상자, 커서 등) */
@@ -46,6 +48,7 @@ export function PageView({
   onPointerMove,
   onScale,
   onGestureStart,
+  zoom = 'fit',
   children,
   overlay,
   overlayVersion,
@@ -62,7 +65,7 @@ export function PageView({
     const el = viewportRef.current
     if (!el) return
     const update = () => {
-      const s = fitScale(el.clientWidth)
+      const s = zoom === 'fit' ? fitScale(el.clientWidth) : zoom
       setScale(s)
       onScale?.(s)
     }
@@ -70,7 +73,7 @@ export function PageView({
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [onScale])
+  }, [onScale, zoom])
 
   const repaint = useCallback(() => {
     const canvas = inkCanvasRef.current
@@ -188,7 +191,7 @@ export function PageView({
       <div
         ref={frameRef}
         className="page-frame"
-        style={{ width, height, cursor, touchAction: readOnly ? 'auto' : 'none' }}
+        style={{ width, height, cursor, touchAction: readOnly || tool === 'select' ? 'pan-x pan-y' : 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
