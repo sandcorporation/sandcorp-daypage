@@ -25,6 +25,8 @@ type Props = {
   origin?: unknown
   onPointerMove?: (p: Point | null) => void
   onScale?: (scale: number) => void
+  /** 포인터를 누를 때마다 불린다(되돌리기 단위 나누기) */
+  onGestureStart?: () => void
   /** 장 좌표계(1600×2400) 위에 올라가는 DOM 레이어(글 상자, 커서 등) */
   children?: ReactNode
   /** 선택 표시 등 획 위에 겹쳐 그리는 오버레이 */
@@ -43,6 +45,7 @@ export function PageView({
   origin,
   onPointerMove,
   onScale,
+  onGestureStart,
   children,
   overlay,
   overlayVersion,
@@ -126,6 +129,7 @@ export function PageView({
     // 글 상자 같은 DOM 위에서 누른 건 그 요소가 처리한다.
     if ((e.target as HTMLElement).closest('[data-page-ui]')) return
     const p = pagePoint(e)
+    onGestureStart?.()
     if (tool === 'pen' || tool === 'highlighter') {
       e.currentTarget.setPointerCapture(e.pointerId)
       drawing.current = {

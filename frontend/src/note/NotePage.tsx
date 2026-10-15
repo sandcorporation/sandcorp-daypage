@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { useToast } from '../components/Toast'
 import { createPageDoc } from '../page/doc'
 import { PageView } from '../page/PageView'
 import { Toolbar } from '../page/Toolbar'
 import { INKS, type ToolKind, type WidthLevel } from '../page/tools'
+import { useEditTools } from '../page/useEditTools'
+import { isTypingTarget, useUndo } from '../page/useUndo'
 import { NoteHeader } from './NoteHeader'
 import type { NoteDetail } from './types'
 import './note.css'
@@ -19,6 +21,29 @@ export function NotePage({ initial }: Props) {
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(1)
   const doc = useMemo(() => createPageDoc(note.today), [note.today])
   const { toast, show } = useToast()
+  const origin = useMemo(() => ({ local: true }), [])
+  const history = useUndo(doc, origin)
+  const edit = useEditTools(doc, tool, origin)
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (isTypingTarget(e.target)) return
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) history.redo()
+        else history.undo()
+      } else if (mod && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        history.redo()
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && edit.selected.length) {
+        e.preventDefault()
+        edit.deleteSelected()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [history, edit])
 
   const rename = useCallback(
     async (name: string) => {
@@ -55,15 +80,26 @@ export function NotePage({ initial }: Props) {
           tool={tool}
           ink={ink}
           widthLevel={widthLevel}
-          canUndo={false}
-          canRedo={false}
+          canUndo={history.canUndo}
+          canRedo={history.canRedo}
           onTool={setTool}
           onInk={setInk}
           onWidth={setWidthLevel}
-          onUndo={() => {}}
-          onRedo={() => {}}
+          onUndo={history.undo}
+          onRedo={history.redo}
         />
-        <PageView doc={doc} tool={tool} ink={ink} widthLevel={widthLevel} author={note.me.nickname} />
+        <PageView
+          doc={doc}
+          tool={tool}
+          ink={ink}
+          widthLevel={widthLevel}
+          author={note.me.nickname}
+          origin={origin}
+          pointerTool={edit.pointerTool}
+          overlay={edit.overlay}
+          overlayVersion={edit.overlayVersion}
+          onGestureStart={history.stopCapturing}
+        />
       </div>
       {toast}
     </div>
