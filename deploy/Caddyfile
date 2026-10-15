@@ -1,3 +1,10 @@
+{
+	# 앞단 프록시(NPMplus)가 넘겨준 X-Forwarded-Proto(https)를 그대로 Django에 전한다.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
 {$SITE_ADDRESS:daypage.sandcorp.co.kr} {
 	encode zstd gzip
 
