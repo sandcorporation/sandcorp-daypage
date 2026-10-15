@@ -12,6 +12,8 @@ import { isTypingTarget, useUndo } from '../page/useUndo'
 import { ErrorScreen } from '../pages/ErrorScreen'
 import { ConnectionPill } from './ConnectionPill'
 import { NoteHeader } from './NoteHeader'
+import { Cursors } from './Cursors'
+import { uniquePeople, usePresence } from './usePresence'
 import { useRealtime, type FatalReason } from './useRealtime'
 import type { NoteDetail } from './types'
 import './note.css'
@@ -37,20 +39,20 @@ export function NotePage({ initial }: Props) {
     }
   }, [note.id])
 
-  const { status, synced } = useRealtime({
+  const { provider, status, synced } = useRealtime({
     noteId: note.id,
     date: note.today,
     doc,
     onNotToday: refreshToday,
     onFatal: setFatal,
   })
+  const presence = usePresence(provider, note.me)
   const { toast, show } = useToast()
   const origin = useMemo(() => ({ local: true }), [])
   const history = useUndo(doc, origin)
   const edit = useEditTools(doc, tool, origin)
   const [scale, setScale] = useState(0.5)
   const [focusId, setFocusId] = useState<string | null>(null)
-  const [, setEditingBoxId] = useState<string | null>(null)
   const clearFocus = useCallback(() => setFocusId(null), [])
 
   const textTool = useMemo<PointerTool>(
@@ -113,7 +115,7 @@ export function NotePage({ initial }: Props) {
         note={note}
         pageDate={note.today}
         clockOffset={clockOffset}
-        peers={[]}
+        peers={uniquePeople(presence.peers)}
         onRename={rename}
         onShare={share}
       />
@@ -139,6 +141,7 @@ export function NotePage({ initial }: Props) {
           origin={origin}
           pointerTool={tool === 'text' ? textTool : edit.pointerTool}
           onScale={setScale}
+          onPointerMove={presence.setCursor}
           overlay={edit.overlay}
           overlayVersion={edit.overlayVersion}
           onGestureStart={history.stopCapturing}
@@ -151,9 +154,10 @@ export function NotePage({ initial }: Props) {
             origin={origin}
             focusId={focusId}
             onFocusHandled={clearFocus}
-            onEditing={setEditingBoxId}
-            editors={new Map()}
+            onEditing={presence.setEditing}
+            editors={presence.editors}
           />
+          <Cursors peers={presence.peers} scale={scale} />
         </PageView>
       </div>
       <ConnectionPill status={status} synced={synced} />

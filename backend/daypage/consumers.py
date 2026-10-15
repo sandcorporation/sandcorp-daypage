@@ -23,7 +23,7 @@ from pycrdt import (
     read_message,
 )
 
-from . import clock, pages, rooms
+from . import awareness, clock, pages, rooms
 from .models import Note, NoteMember
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,8 @@ class PageConsumer(AsyncWebsocketConsumer):
         self.page_id: int | None = None
         self.conn: rooms.Conn | None = None
         self.heartbeat: asyncio.Task | None = None
+        # 이 연결이 보낸 awareness 상태: clientID -> (clock, state)
+        self.presence: dict[int, tuple[int, dict]] = {}
         # 닫는 코드를 전하려면 먼저 수락해야 한다.
         await self.accept()
 
@@ -101,7 +103,10 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.on_joined()
 
     async def on_joined(self) -> None:
-        """하위 클래스·Presence가 접속 직후 할 일."""
+        # 이미 있는 사람들의 Presence를 새로 온 사람에게 보내 달라고 요청한다.
+        await self.channel_layer.group_send(
+            page_group(self.page_id), {"type": "awareness.query", "reply_to": self.channel_name}
+        )
 
     async def _heartbeat(self) -> None:
         try:
@@ -127,7 +132,13 @@ class PageConsumer(AsyncWebsocketConsumer):
             await database_sync_to_async(pages.compact)(self.page_id)
 
     async def on_left(self) -> None:
-        """하위 클래스·Presence가 나갈 때 할 일."""
+        # 이 연결이 보낸 Presence를 다른 사람 화면에서 지운다.
+        if self.presence:
+            gone = [(cid, clk + 1, None) for cid, (clk, _) in self.presence.items()]
+            await self.channel_layer.group_send(
+                page_group(self.page_id),
+                {"type": "y.awareness", "message": awareness.encode_message(gone), "sender": self.channel_name},
+            )
 
     async def receive(self, text_data=None, bytes_data=None) -> None:
         if not bytes_data or self.page_id is None:
@@ -161,8 +172,38 @@ class PageConsumer(AsyncWebsocketConsumer):
             await database_sync_to_async(pages.compact)(self.page_id)
 
     async def receive_awareness(self, data: bytes) -> None:
+        """닉네임·색은 클라이언트가 보낸 값 대신 서버가 배정한 값으로 바꿔 퍼뜨린다."""
+        try:
+            entries = awareness.decode_message(data)
+        except Exception:
+            logger.warning("잘못된 awareness 메시지", exc_info=True)
+            return
+        cleaned: list[awareness.Entry] = []
+        for client_id, clk, state in entries:
+            if state is None:
+                self.presence.pop(client_id, None)
+                cleaned.append((client_id, clk, None))
+                continue
+            state = {
+                "cursor": state.get("cursor"),
+                "editingBoxId": state.get("editingBoxId"),
+                "nickname": self.member.nickname,
+                "color": self.member.color,
+            }
+            self.presence[client_id] = (clk, state)
+            cleaned.append((client_id, clk, state))
         await self.channel_layer.group_send(
-            page_group(self.page_id), {"type": "y.awareness", "message": data, "sender": self.channel_name}
+            page_group(self.page_id),
+            {"type": "y.awareness", "message": awareness.encode_message(cleaned), "sender": self.channel_name},
+        )
+
+    async def awareness_query(self, event) -> None:
+        if event["reply_to"] == self.channel_name or not self.presence:
+            return
+        entries = [(cid, clk, state) for cid, (clk, state) in self.presence.items()]
+        await self.channel_layer.send(
+            event["reply_to"],
+            {"type": "y.awareness", "message": awareness.encode_message(entries), "sender": self.channel_name},
         )
 
     async def y_update(self, event) -> None:

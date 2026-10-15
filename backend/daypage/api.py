@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from ninja import NinjaAPI, Schema
 from ninja.security import django_auth
 
-from . import clock, membership
+from . import clock, membership, rooms
 from .models import Note, NoteMember
 
 
@@ -29,8 +29,9 @@ def share_url(note_id: str) -> str:
 
 
 def online_count(note_id: str) -> int:
-    # 실시간 접속 집계는 Presence 단계에서 채운다.
-    return 0
+    """오늘 장에 접속한 사람 수(같은 사람의 여러 탭은 한 명)."""
+    conns = rooms.registry().connections_sync(note_id)
+    return rooms.online_users(conns, clock.today_kst().isoformat())
 
 
 @api.get("/health", auth=None)

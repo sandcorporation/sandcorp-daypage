@@ -17,8 +17,7 @@ type Props = {
 }
 
 export function NoteHeader({ note, pageDate, clockOffset, peers, onRename, onShare, settings }: Props) {
-  const others = peers.filter((p) => !p.isMe)
-  const shown = [{ nickname: note.me.nickname, color: note.me.color, isMe: true }, ...others]
+  const shown = [{ nickname: note.me.nickname, color: note.me.color, isMe: true }, ...peers]
   return (
     <header className="note-header">
       <div className="note-header-left">

@@ -385,3 +385,25 @@
   border-radius: 999px;
   box-shadow: 0 4px 12px rgba(31, 33, 40, 0.08);
 }
+
+.peer-cursor {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  transform-origin: 0 0;
+  pointer-events: none;
+  transition:
+    left 60ms linear,
+    top 60ms linear;
+  z-index: 5;
+}
+.peer-cursor span {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white);
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}

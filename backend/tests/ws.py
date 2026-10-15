@@ -97,3 +97,23 @@ async def join(client, note_id: str, date: str) -> YClient:
 
 def read_update_message(data: bytes) -> bytes:
     return read_message(data[2:])
+
+
+def awareness_message(client_id: int, clock: int, state: dict | None) -> bytes:
+    from daypage.awareness import encode_message
+
+    return encode_message([(client_id, clock, state)])
+
+
+async def next_awareness(y: YClient, timeout: float = 3) -> list[tuple[int, int, dict | None]]:
+    """다음 awareness 메시지를 기다려 풀어서 돌려준다(그 사이 sync 메시지는 처리)."""
+    from daypage.awareness import decode_message
+
+    while True:
+        msg = await y.ws.receive_output(timeout=timeout)
+        if msg["type"] == "websocket.close":
+            raise AssertionError(f"closed: {msg}")
+        data = msg.get("bytes")
+        if data and data[0] == YMessageType.AWARENESS:
+            return decode_message(data)
+        await y._handle(msg)
