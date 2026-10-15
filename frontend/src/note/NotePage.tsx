@@ -13,7 +13,7 @@ import { useEditTools } from '../page/useEditTools'
 import { isTypingTarget, useUndo } from '../page/useUndo'
 import { useNavigate } from 'react-router'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { ErrorScreen } from '../pages/ErrorScreen'
+import { ErrorScreen, MessageCard } from '../pages/ErrorScreen'
 import { ConnectionPill } from './ConnectionPill'
 import { NoteHeader } from './NoteHeader'
 import { Cursors } from './Cursors'
@@ -74,7 +74,7 @@ export function NotePage({ initial }: Props) {
   }, [note.id, note.today])
   useEffect(() => () => window.clearTimeout(retryTimer.current), [])
 
-  const { provider, status, synced, reconnect } = useRealtime({
+  const { provider, status, synced, queuePosition, reconnect } = useRealtime({
     noteId: note.id,
     date: note.today,
     doc,
@@ -82,6 +82,10 @@ export function NotePage({ initial }: Props) {
     onFatal: setFatal,
   })
   reconnectRef.current = reconnect
+  const rejoin = useCallback(() => {
+    setFatal(null)
+    reconnect()
+  }, [reconnect])
   const presence = usePresence(provider, note.me)
   const { setEditing } = presence
 
@@ -189,7 +193,22 @@ export function NotePage({ initial }: Props) {
   }, [note.url, show])
 
   if (fatal === 'crowded') return <ErrorScreen kind="crowded" />
+  // 수용 인원이 가득 찼거나 자리 비움으로 나갔다: 사람이 누를 때만 새로 접속한다.
+  if (fatal === 'full' || fatal === 'away') return <ErrorScreen kind={fatal} onAction={rejoin} />
   if (fatal) return <ErrorScreen kind={fatal === 'notFound' ? 'missing' : 'server'} />
+  if (queuePosition !== null)
+    return (
+      <MessageCard
+        role="status"
+        kicker="잠시만요!"
+        title="사람이 많아 잠시 기다려 주세요"
+        desc={
+          <>
+            지금 <strong>{queuePosition}번째</strong>예요. 차례가 오면 노트가 저절로 열려요.
+          </>
+        }
+      />
+    )
 
   return (
     <div className="note-screen">

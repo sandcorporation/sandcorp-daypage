@@ -133,6 +133,15 @@ PUBLIC_ORIGIN = env("PUBLIC_ORIGIN", "http://localhost:5173")
 # 노트당 동시 접속 상한(서버 보호용, 정원과 별개)
 MAX_CONCURRENT_PER_NOTE = int(env("MAX_CONCURRENT_PER_NOTE", "20"))
 
+# 수용 인원(서비스 전체 실시간 접속 상한) = 백엔드 프로세스마다 CPU 제한(cgroup cpu.max) × 코어당 인원의 합.
+# CPU 제한이 없는 프로세스가 하나라도 있으면(로컬·테스트) 제한을 끈다.
+MAX_ONLINE_PER_CORE = float(env("MAX_ONLINE_PER_CORE", "180"))
+CGROUP_CPU_MAX_PATH = env("CGROUP_CPU_MAX_PATH", "/sys/fs/cgroup/cpu.max")
+# 대기자가 있을 때 이만큼(초) 편집·커서 입력이 없는 사람부터 내보낸다.
+AWAY_AFTER = float(env("AWAY_AFTER", "600"))
+# 대기자에게 순번을 다시 알리고 입장을 다시 판정하는 간격(초)
+QUEUE_POLL_EVERY = float(env("QUEUE_POLL_EVERY", "2"))
+
 CELERY_BROKER_URL = REDIS_URL
 CELERY_TIMEZONE = "Asia/Seoul"
 CELERY_ENABLE_UTC = False

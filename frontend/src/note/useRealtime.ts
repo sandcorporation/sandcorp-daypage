@@ -11,12 +11,27 @@ export const CLOSE = {
   notFound: 4404,
   notToday: 4409,
   crowded: 4429,
+  /** 서비스 수용 인원이 찼고 대기열도 가득 참 */
+  full: 4430,
+  /** 대기자에게 자리를 돌리려고 자리 비움인 사람을 내보냄 */
+  away: 4408,
 } as const
 
 /** 서버 전용 메시지 종류(consumers.py의 MESSAGE_PAGE_ROLLED) */
 export const MESSAGE_PAGE_ROLLED = 100
+/** 수용 인원이 차 대기열에 섰다: {type: 'queued', position} (consumers.py의 MESSAGE_QUEUED) */
+export const MESSAGE_QUEUED = 101
 
-export type FatalReason = 'unauthorized' | 'notFound' | 'crowded'
+/** 다시 연결해도 소용없는 이유. full·away는 사람이 다시 시도할 때까지 접속하지 않는다. */
+export type FatalReason = 'unauthorized' | 'notFound' | 'crowded' | 'full' | 'away'
+
+const FATAL_CODES: Record<number, FatalReason> = {
+  [CLOSE.unauthorized]: 'unauthorized',
+  [CLOSE.notFound]: 'notFound',
+  [CLOSE.crowded]: 'crowded',
+  [CLOSE.full]: 'full',
+  [CLOSE.away]: 'away',
+}
 
 type Options = {
   noteId: string
@@ -37,6 +52,8 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
   const [provider, setProvider] = useState<WebsocketProvider | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [synced, setSynced] = useState(false)
+  // 대기열 순번(1부터). 대기 중이 아니면 null
+  const [queuePosition, setQueuePosition] = useState<number | null>(null)
   // 네트워크가 돌아오면 provider를 새로 만든다. 끊겼던 소켓은 닫기 핸드셰이크가 끝나지 않아
   // 기존 provider로는 한참 동안 다시 붙지 못한다.
   const [generation, setGeneration] = useState(0)
@@ -53,8 +70,14 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
         onNotToday()
       }
     }
+    // 대기열 순번. 차례가 오면 서버가 같은 연결로 sync를 보내고, sync를 받으면 대기를 거둔다.
+    p.messageHandlers[MESSAGE_QUEUED] = (_encoder, decoder) => {
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; position: number }
+      if (msg.type === 'queued') setQueuePosition(msg.position)
+    }
     setProvider(p)
     setSynced(false)
+    setQueuePosition(null)
     setStatus(generation > 0 ? 'reconnecting' : 'connecting')
 
     const onStatus = ({ status: s }: { status: 'connected' | 'disconnected' | 'connecting' }) => {
@@ -67,15 +90,19 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
         setStatus(navigator.onLine ? 'reconnecting' : 'offline')
       }
     }
-    const onSync = (isSynced: boolean) => setSynced(isSynced)
+    const onSync = (isSynced: boolean) => {
+      setSynced(isSynced)
+      if (isSynced) setQueuePosition(null)
+    }
     const onClose = (event: CloseEvent | null) => {
       const code = event?.code
       if (code === CLOSE.notToday) {
         p.shouldConnect = false
         onNotToday()
-      } else if (code === CLOSE.unauthorized || code === CLOSE.notFound || code === CLOSE.crowded) {
+      } else if (code !== undefined && FATAL_CODES[code]) {
         p.shouldConnect = false
-        onFatal(code === CLOSE.unauthorized ? 'unauthorized' : code === CLOSE.notFound ? 'notFound' : 'crowded')
+        setQueuePosition(null)
+        onFatal(FATAL_CODES[code])
       }
     }
     const onOffline = () => setStatus('offline')
@@ -104,5 +131,5 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
   /** 지금 provider를 버리고 새로 붙는다 */
   const reconnect = useCallback(() => setGeneration((g) => g + 1), [])
 
-  return { provider, status, synced, reconnect }
+  return { provider, status, synced, queuePosition, reconnect }
 }

@@ -1,5 +1,6 @@
 # 운영 배포: docker compose -f docker-compose.prod.yml build backend web && docker compose -f docker-compose.prod.yml up -d
 # sub 서버(NPMplus 뒤)에서는 docker-compose.sub.yml을 덧붙인다(Jenkinsfile 참고).
+# 자원 예산: daypage 전체 2 CPU / 약 2.9 GB(sub의 다른 서비스와 함께 쓴다). 서비스마다 cpus·mem_limit으로 나눈다.
 x-backend: &backend
   # 네 서비스가 같은 이미지를 쓴다. backend만 빌드하고 나머지는 이 태그를 그대로 쓴다.
   image: daypage-backend:latest
@@ -21,6 +22,8 @@ services:
     build:
       context: .
       dockerfile: deploy/web.Dockerfile
+    cpus: "0.2"
+    mem_limit: 128m
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-daypage.sandcorp.co.kr}
     ports:
@@ -41,6 +44,9 @@ services:
   # 명령은 한 줄로 쓴다. YAML 접힘(>)에서 더 들여 쓴 줄은 줄바꿈이 남아 첫 줄만 실행됐었다.
   backend:
     <<: *backend
+    # 수용 인원은 이 CPU 제한에서 계산한다(daypage/admission.py). 백엔드를 늘리면 같은 제한을 함께 준다.
+    cpus: "0.65"
+    mem_limit: 768m
     command:
       - sh
       - -c
@@ -52,6 +58,8 @@ services:
 
   backend2:
     <<: *backend
+    cpus: "0.65"
+    mem_limit: 768m
     command: ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]
     healthcheck: *backend-health
     # migrate는 backend가 한다. 끝나고 받기 시작한 뒤에 뜬다.
@@ -61,14 +69,20 @@ services:
 
   worker:
     <<: *backend
+    cpus: "0.03"
+    mem_limit: 256m
     command: celery -A config worker -l info --concurrency 2
 
   beat:
     <<: *backend
+    cpus: "0.02"
+    mem_limit: 128m
     command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
 
   postgres:
     image: postgres:17-alpine
+    cpus: "0.35"
+    mem_limit: 768m
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-daypage}
       POSTGRES_USER: ${POSTGRES_USER:-daypage}
@@ -83,6 +97,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    cpus: "0.1"
+    mem_limit: 128m
     restart: unless-stopped
 
 volumes:
