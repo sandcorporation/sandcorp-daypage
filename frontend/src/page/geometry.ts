@@ -32,3 +32,22 @@ export function rowTop(y: number): number {
   const row = Math.floor(Math.max(0, y) / LINE_GAP)
   return Math.min(row * LINE_GAP, PAGE_HEIGHT - LINE_GAP)
 }
+
+type ClientRect = { left: number; top: number }
+
+/**
+ * 끄기 시작한 뒤의 이동량(장 좌표). 화면 이동량이 아니라 장 위의 위치 차이로 계산해서,
+ * 누른 채 스크롤해 장이 움직여도 끄는 것이 포인터를 따라간다.
+ */
+export function pageDelta(
+  startClient: { x: number; y: number },
+  startRect: ClientRect,
+  client: { x: number; y: number },
+  rect: ClientRect,
+  scale: number,
+): { dx: number; dy: number } {
+  return {
+    dx: (client.x - rect.left - (startClient.x - startRect.left)) / scale,
+    dy: (client.y - rect.top - (startClient.y - startRect.top)) / scale,
+  }
+}

@@ -2,7 +2,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import * as Y from 'yjs'
 import { readTextBox, textBoxContent, textboxesMap, updateTextBox, type TextBox } from './doc'
-import { LINE_GAP, PAGE_WIDTH } from './geometry'
+import { LINE_GAP, PAGE_WIDTH, pageDelta } from './geometry'
 import { textBoxExtensions } from './editorExtensions'
 import { fontOf } from './fonts'
 import { FormatBar } from './FormatBar'
@@ -82,7 +82,16 @@ function TextBoxView({
   const latest = useRef({ me, othersEditing: false })
   latest.current = { me, othersEditing: (editors.get(box.id) ?? []).length > 0 }
   const rootRef = useRef<HTMLDivElement>(null)
-  const dragStart = useRef<{ kind: 'move' | 'resize'; px: number; py: number; box: TextBox } | null>(null)
+  type DragStart = {
+    kind: 'move' | 'resize'
+    client: { x: number; y: number }
+    rect: { left: number; top: number }
+    box: TextBox
+    /** 마지막 포인터 위치(스크롤만 일어났을 때 다시 계산하려고) */
+    last: { x: number; y: number }
+    moved: number
+  }
+  const dragStart = useRef<DragStart | null>(null)
 
   const editor = useEditor(
     {
@@ -153,44 +162,66 @@ function TextBoxView({
   const width = drag?.width ?? box.width
   const others = editors.get(box.id) ?? []
 
+  function frameRect(): { left: number; top: number } {
+    const frame = rootRef.current?.closest('.page-frame')
+    const r = frame?.getBoundingClientRect()
+    return { left: r?.left ?? 0, top: r?.top ?? 0 }
+  }
+
+  /** 장 기준으로 끄는 위치를 다시 잡는다. 누른 채 스크롤해도 포인터를 따라간다. */
+  function applyDrag() {
+    const s = dragStart.current
+    if (!s) return
+    const { dx, dy } = pageDelta(s.client, s.rect, s.last, frameRect(), scale)
+    s.moved = Math.max(s.moved, Math.hypot(dx, dy) * scale)
+    if (s.kind === 'move') setDrag({ x: s.box.x + dx, y: s.box.y + dy, width: s.box.width })
+    else setDrag({ x: s.box.x, y: s.box.y, width: clampBoxWidth(s.box.width + dx, s.box.x) })
+  }
+
+  // 끄는 동안 일어난 스크롤(창·장 가로 스크롤 모두)에도 위치를 다시 잡는다.
+  useEffect(() => {
+    if (!drag) return
+    const onScroll = () => applyDrag()
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => window.removeEventListener('scroll', onScroll, { capture: true })
+  })
+
   function startDrag(kind: 'move' | 'resize', e: ReactPointerEvent<HTMLElement>) {
     e.preventDefault()
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
-    dragStart.current = { kind, px: e.clientX, py: e.clientY, box }
+    const client = { x: e.clientX, y: e.clientY }
+    dragStart.current = { kind, client, rect: frameRect(), box, last: client, moved: 0 }
     setDrag({ x: box.x, y: box.y, width: box.width })
   }
 
   function moveDrag(e: ReactPointerEvent<HTMLElement>) {
     const s = dragStart.current
     if (!s) return
-    const dx = (e.clientX - s.px) / scale
-    const dy = (e.clientY - s.py) / scale
-    if (s.kind === 'move') {
-      setDrag({ x: s.box.x + dx, y: s.box.y + dy, width: s.box.width })
-    } else {
-      setDrag({ x: s.box.x, y: s.box.y, width: clampBoxWidth(s.box.width + dx, s.box.x) })
-    }
+    s.last = { x: e.clientX, y: e.clientY }
+    applyDrag()
   }
 
   /** 끌기를 마친다. 손잡이를 끌지 않고 눌렀다 뗐으면 true(클릭으로 본다). */
   function endDrag(e?: ReactPointerEvent<HTMLElement>): boolean {
     const s = dragStart.current
     dragStart.current = null
-    const clicked = !!s && !!e && Math.hypot(e.clientX - s.px, e.clientY - s.py) < 4
-    if (!s || !drag) {
-      setDrag(null)
-      return clicked
-    }
-    // 클릭만 하고 움직이지 않았으면 쓰지 않는다(빈 되돌리기 단계·불필요한 전송 방지).
-    if (s.kind === 'move') {
-      const p = snapBoxPosition({ x: drag.x, y: drag.y }, s.box.width)
-      if (p.x !== s.box.x || p.y !== s.box.y) updateTextBox(doc, box.id, { x: p.x, y: p.y }, origin)
-    } else if (drag.width !== s.box.width) {
-      updateTextBox(doc, box.id, { width: drag.width }, origin)
-    }
     setDrag(null)
-    return clicked
+    if (!s) return false
+    if (e) s.last = { x: e.clientX, y: e.clientY }
+    // 놓는 순간의 위치를 장 기준으로 직접 계산한다(렌더 상태는 한 박자 늦을 수 있다).
+    const { dx, dy } = pageDelta(s.client, s.rect, s.last, frameRect(), scale)
+    const moved = Math.max(s.moved, Math.hypot(dx, dy) * scale)
+    // 장 위에서 거의 움직이지 않았으면 클릭으로 보고 쓰지 않는다(스크롤로 옮겨진 것도 움직인 것).
+    if (moved < 4) return !!e
+    if (s.kind === 'move') {
+      const p = snapBoxPosition({ x: s.box.x + dx, y: s.box.y + dy }, s.box.width)
+      if (p.x !== s.box.x || p.y !== s.box.y) updateTextBox(doc, box.id, { x: p.x, y: p.y }, origin)
+    } else {
+      const width = clampBoxWidth(s.box.width + dx, s.box.x)
+      if (width !== s.box.width) updateTextBox(doc, box.id, { width }, origin)
+    }
+    return false
   }
 
   return (

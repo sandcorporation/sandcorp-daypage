@@ -8,7 +8,8 @@ import { strokeWidth, type ToolKind, type WidthLevel } from './tools'
 export type PointerTool = {
   /** 이 도구가 포인터를 직접 처리하면 true를 돌려준다. */
   down?: (p: Point, e: PointerEvent<HTMLDivElement>) => boolean
-  move?: (p: Point, e: PointerEvent<HTMLDivElement>) => void
+  /** e는 스크롤로 다시 계산할 때 없다 */
+  move?: (p: Point, e?: PointerEvent<HTMLDivElement>) => void
   up?: (p: Point, e: PointerEvent<HTMLDivElement>) => void
 }
 
@@ -64,6 +65,8 @@ export function PageView({
   const drawing = useRef<Stroke | null>(null)
   // 지금 처리 중인 포인터. 두 번째 손가락·손바닥이 한 획에 섞이지 않게 한다.
   const activePointer = useRef<number | null>(null)
+  // 마지막 포인터 화면 위치. 누른 채 스크롤하면 이 위치로 장 좌표를 다시 계산한다.
+  const lastClient = useRef<{ x: number; y: number } | null>(null)
   const dpr = canvasPixelRatio(PAGE_WIDTH * scale, PAGE_HEIGHT * scale, window.devicePixelRatio || 1)
   const pixelScale = scale * dpr
 
@@ -147,6 +150,7 @@ export function PageView({
     // 글 상자 같은 DOM 위에서 누른 건 그 요소가 처리한다.
     if ((e.target as HTMLElement).closest('[data-page-ui]')) return
     if (activePointer.current !== null) return
+    lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
     onGestureStart?.()
     if (tool === 'pen' || tool === 'highlighter') {
@@ -174,6 +178,7 @@ export function PageView({
 
   function onMove(e: PointerEvent<HTMLDivElement>) {
     if (activePointer.current !== null && e.pointerId !== activePointer.current) return
+    lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
     onPointerMove?.(p)
     const s = drawing.current
@@ -203,6 +208,20 @@ export function PageView({
     pointerTool?.up?.(pagePoint(e), e)
   }
 
+  // 끄는 중(선택 이동·사각형 선택·지우개)에 스크롤하면 포인터 아래의 새 장 위치로 이어 간다.
+  useEffect(() => {
+    const onScroll = () => {
+      const c = lastClient.current
+      const frame = frameRef.current
+      if (!c || !frame) return
+      const p = clampToPage(toPagePoint(c.x, c.y, frame.getBoundingClientRect(), scale))
+      onPointerMove?.(p)
+      if (activePointer.current !== null && !drawing.current) pointerTool?.move?.(p)
+    }
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => window.removeEventListener('scroll', onScroll, { capture: true })
+  }, [scale, pointerTool, onPointerMove])
+
   const width = PAGE_WIDTH * scale
   const height = PAGE_HEIGHT * scale
   const cursor = readOnly ? 'default' : tool === 'text' ? 'text' : tool === 'select' ? 'default' : 'crosshair'
@@ -217,7 +236,10 @@ export function PageView({
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
-        onPointerLeave={() => onPointerMove?.(null)}
+        onPointerLeave={() => {
+          lastClient.current = null
+          onPointerMove?.(null)
+        }}
       >
         <div
           className="page-layer paper"

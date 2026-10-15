@@ -1,6 +1,6 @@
 import * as Y from 'yjs'
 import { addStroke, createPageDoc, readStrokes, type Stroke } from './doc'
-import { PAGE_WIDTH, fitScale, toPagePoint } from './geometry'
+import { PAGE_WIDTH, fitScale, pageDelta, toPagePoint } from './geometry'
 import { orderStrokes } from './render'
 
 function stroke(partial: Partial<Stroke>): Stroke {
@@ -55,5 +55,18 @@ describe('그리는 순서', () => {
       stroke({ id: 'hl-early', tool: 'highlighter', createdAt: 2 }),
     ])
     expect(ordered.map((s) => s.id)).toEqual(['hl-early', 'hl-late', 'pen-1', 'pen-2'])
+  })
+})
+
+describe('끄는 동안의 장 기준 이동량', () => {
+  test('마우스만 움직이면 화면 이동량을 배율로 나눈 만큼', () => {
+    const rect = { left: 100, top: 50 }
+    expect(pageDelta({ x: 200, y: 200 }, rect, { x: 250, y: 300 }, rect, 0.5)).toEqual({ dx: 100, dy: 200 })
+  })
+
+  test('마우스는 그대로인데 스크롤로 장이 올라가면 그만큼 아래로 따라간다', () => {
+    const before = { left: 100, top: 50 }
+    const scrolled = { left: 100, top: -50 } // 화면에서 장이 100px 올라감
+    expect(pageDelta({ x: 200, y: 200 }, before, { x: 200, y: 200 }, scrolled, 0.5)).toEqual({ dx: 0, dy: 200 })
   })
 })
