@@ -15,9 +15,13 @@ compose build backend web
 echo "== 기동(backend가 시작하며 migrate)"
 compose up -d --remove-orphans
 
-echo "== 헬스 확인"
+# Django는 ALLOWED_HOSTS에 없는 Host를 거부하므로 운영 도메인을 Host로 보낸다.
+HOST=$(grep -E '^DJANGO_ALLOWED_HOSTS=' .env | cut -d= -f2 | cut -d, -f1)
+HOST=${HOST:-localhost}
+
+echo "== 헬스 확인 (Host: $HOST)"
 for i in $(seq 1 40); do
-  if compose exec -T web wget -qO- http://localhost/api/health 2>/dev/null | grep -q '"ok"'; then
+  if compose exec -T web wget -qO- --header "Host: $HOST" http://127.0.0.1/api/health 2>/dev/null | grep -q '"ok"'; then
     echo "헬스 OK (${i}회째)"
     compose ps
     exit 0
