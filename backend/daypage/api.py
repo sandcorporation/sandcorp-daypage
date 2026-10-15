@@ -1,6 +1,7 @@
 import datetime as dt
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Count
 from django.http import Http404, HttpResponse
 from django.middleware.csrf import get_token
@@ -60,15 +61,28 @@ def me(request):
             "name": m.note.name,
             "isOwner": m.note.owner_id == request.user.id,
             "memberCount": m.member_count,
-            "memberLimit": None,
+            "memberLimit": m.note.member_limit,
         }
         for m in memberships
     ]
     return {"authenticated": True, "notes": notes}
 
 
+MIN_MEMBER_LIMIT = 2
+MAX_MEMBER_LIMIT = 1000
+
+
 class CreateNoteIn(Schema):
     name: str | None = None
+    memberLimit: int | None = None
+
+
+def clean_limit(limit: int | None) -> int | None:
+    if limit is None:
+        return None
+    if not MIN_MEMBER_LIMIT <= limit <= MAX_MEMBER_LIMIT:
+        raise ApiError(400, "invalid_limit", "정원은 2명 이상이어야 해요.")
+    return limit
 
 
 def clean_name(name: str | None) -> str:
@@ -80,7 +94,9 @@ def clean_name(name: str | None) -> str:
 
 @api.post("/notes")
 def create_note(request, body: CreateNoteIn):
-    note = Note.objects.create(name=clean_name(body.name), owner=request.user)
+    note = Note.objects.create(
+        name=clean_name(body.name), owner=request.user, member_limit=clean_limit(body.memberLimit)
+    )
     membership.join(note, request.user)
     return {"id": note.id, "url": share_url(note.id)}
 
@@ -88,13 +104,16 @@ def create_note(request, body: CreateNoteIn):
 @api.get("/notes/{note_id}/preview", auth=None)
 def preview(request, note_id: str):
     note = get_object_or_404(Note, pk=note_id)
-    return {"name": note.name, "online": online_count(note.id), "isFull": False}
+    return {"name": note.name, "online": online_count(note.id), "isFull": note.is_full()}
 
 
 @api.get("/notes/{note_id}")
 def note_detail(request, note_id: str):
     note = get_object_or_404(Note, pk=note_id)
-    member = membership.join(note, request.user)
+    try:
+        member = membership.join(note, request.user)
+    except membership.NoteFull:
+        raise ApiError(403, "note_full", "이 노트는 정원이 찼어요.")
     return {
         "id": note.id,
         "name": note.name,
@@ -106,12 +125,13 @@ def note_detail(request, note_id: str):
         "me": {"nickname": member.nickname, "color": member.color},
         "online": online_count(note.id),
         "memberCount": note.members.count(),
-        "memberLimit": None,
+        "memberLimit": note.member_limit,
     }
 
 
 class UpdateNoteIn(Schema):
     name: str | None = None
+    memberLimit: int | None = None
 
 
 def owned_note(request, note_id: str) -> Note:
@@ -123,11 +143,20 @@ def owned_note(request, note_id: str) -> Note:
 
 @api.patch("/notes/{note_id}")
 def update_note(request, note_id: str, body: UpdateNoteIn):
-    note = owned_note(request, note_id)
-    if body.name is not None:
-        note.name = clean_name(body.name)
-    note.save()
-    return {"id": note.id, "name": note.name}
+    owned_note(request, note_id)
+    with transaction.atomic():
+        # 입장(membership.join)과 같은 행 잠금 안에서 검사하고 저장해 정원을 넘지 않게 한다.
+        note = Note.objects.select_for_update().get(pk=note_id)
+        if body.name is not None:
+            note.name = clean_name(body.name)
+        # memberLimit은 null(무제한)도 의미가 있으므로 보냈는지 여부로 구분한다.
+        if "memberLimit" in body.model_fields_set:
+            limit = clean_limit(body.memberLimit)
+            if limit is not None and limit < note.members.count():
+                raise ApiError(400, "limit_below_members", "지금 참여자 수보다 적게 줄일 수 없어요.")
+            note.member_limit = limit
+        note.save()
+    return {"id": note.id, "name": note.name, "memberLimit": note.member_limit}
 
 
 def member_note(request, note_id: str) -> Note:

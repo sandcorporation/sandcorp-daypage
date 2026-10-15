@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api } from '../api/client'
+import { api, ApiError } from '../api/client'
 import { useToast } from '../components/Toast'
 import * as Y from 'yjs'
 import { PageView, type PointerTool } from '../page/PageView'
@@ -13,6 +13,7 @@ import { ErrorScreen } from '../pages/ErrorScreen'
 import { ConnectionPill } from './ConnectionPill'
 import { NoteHeader } from './NoteHeader'
 import { Cursors } from './Cursors'
+import { MemberLimitControl } from './MemberLimitControl'
 import { uniquePeople, usePresence } from './usePresence'
 import { useRealtime, type FatalReason } from './useRealtime'
 import type { NoteDetail } from './types'
@@ -104,6 +105,22 @@ export function NotePage({ initial }: Props) {
     [note.id],
   )
 
+  const changeLimit = useCallback(
+    async (memberLimit: number | null) => {
+      try {
+        const res = await api<{ memberLimit: number | null }>(`/api/notes/${note.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ memberLimit }),
+        })
+        setNote((n) => ({ ...n, memberLimit: res.memberLimit }))
+        show(res.memberLimit === null ? '정원을 무제한으로 바꿨어요' : `정원을 ${res.memberLimit}명으로 바꿨어요`)
+      } catch (e) {
+        show(e instanceof ApiError ? e.message : '정원을 바꾸지 못했어요')
+      }
+    },
+    [note.id, show],
+  )
+
   const share = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(note.url)
@@ -125,6 +142,14 @@ export function NotePage({ initial }: Props) {
         peers={uniquePeople(presence.peers)}
         onRename={rename}
         onShare={share}
+        settings={
+          <MemberLimitControl
+            memberCount={note.memberCount}
+            memberLimit={note.memberLimit}
+            editable={note.isOwner}
+            onChange={changeLimit}
+          />
+        }
       />
       <div className="note-body">
         <Toolbar

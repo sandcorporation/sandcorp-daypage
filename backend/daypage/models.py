@@ -39,10 +39,15 @@ class Note(models.Model):
     id = models.CharField(primary_key=True, max_length=32, default=new_note_id, editable=False)
     name = models.CharField(max_length=60, default=DEFAULT_NAME)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_notes")
+    # 정원: 만든 사람을 포함한 참여자 최대 인원. None이면 무제한.
+    member_limit = models.PositiveSmallIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return f"Note({self.id})"
+
+    def is_full(self) -> bool:
+        return self.member_limit is not None and self.members.count() >= self.member_limit
 
 
 class NoteMember(models.Model):
