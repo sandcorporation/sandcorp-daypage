@@ -98,6 +98,29 @@ def note_detail(request, note_id: str):
         "isOwner": note.owner_id == request.user.id,
         "today": clock.today_kst().isoformat(),
         "nextMidnight": clock.next_midnight_kst().isoformat(),
+        "serverNow": clock.now().isoformat(),
         "me": {"nickname": member.nickname, "color": member.color},
         "online": online_count(note.id),
+        "memberCount": note.members.count(),
+        "memberLimit": None,
     }
+
+
+class UpdateNoteIn(Schema):
+    name: str | None = None
+
+
+def owned_note(request, note_id: str) -> Note:
+    note = get_object_or_404(Note, pk=note_id)
+    if note.owner_id != request.user.id:
+        raise ApiError(403, "not_owner", "노트를 만든 사람만 바꿀 수 있어요.")
+    return note
+
+
+@api.patch("/notes/{note_id}")
+def update_note(request, note_id: str, body: UpdateNoteIn):
+    note = owned_note(request, note_id)
+    if body.name is not None:
+        note.name = clean_name(body.name)
+    note.save()
+    return {"id": note.id, "name": note.name}

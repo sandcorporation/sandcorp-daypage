@@ -1,0 +1,280 @@
+.note-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-dark);
+}
+
+.note-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--white);
+  border-bottom: 1.5px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.note-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.icon-link {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.note-title {
+  min-width: 0;
+}
+.note-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-name-btn {
+  display: block;
+  max-width: 100%;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: text;
+  text-align: left;
+}
+.note-name-btn:hover {
+  background: var(--paper-dark);
+}
+.note-name-input {
+  padding: 2px 6px;
+  margin-left: -6px;
+  border: 1.5px solid var(--accent);
+  border-radius: 6px;
+  font-family: inherit;
+  width: min(320px, 60vw);
+}
+.note-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted-2);
+}
+.countdown {
+  color: var(--orange-deep);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.note-header-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.avatars {
+  display: flex;
+  align-items: center;
+}
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--white);
+}
+.avatar + .avatar {
+  margin-left: -8px;
+}
+.avatar-more {
+  background: var(--muted-2);
+  font-size: 12px;
+}
+.me-label {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 0 6px;
+}
+
+.note-body {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px 20px;
+  align-items: flex-start;
+}
+
+/* 도구 막대 */
+.toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--white);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 8px;
+  position: sticky;
+  top: 84px;
+}
+.tool-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.tool-btn:hover {
+  background: var(--paper-dark);
+}
+.tool-btn[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tool-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tool-sep {
+  height: 1px;
+  background: var(--line-soft);
+  margin: 4px 6px;
+}
+.swatch-btn {
+  width: 48px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+.swatch-btn[aria-pressed='true'] .swatch {
+  box-shadow:
+    0 0 0 2px var(--white),
+    0 0 0 4px currentColor;
+}
+.width-dot {
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* 장 */
+.page-viewport {
+  flex: 999 1 560px;
+  min-width: 0;
+}
+.page-frame {
+  position: relative;
+  margin: 0 auto;
+  background-color: var(--white);
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 var(--line),
+    0 12px 30px rgba(31, 33, 40, 0.08);
+  overflow: hidden;
+  touch-action: none;
+}
+.page-frame canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+.page-status {
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  pointer-events: none;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--white);
+  border: 1px solid var(--line-soft);
+  padding: 8px 12px;
+  border-radius: 999px;
+  pointer-events: auto;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.status-dot.connecting {
+  background: var(--yellow);
+}
+.status-dot.offline {
+  background: #b91c1c;
+}
+
+@media (max-width: 720px) {
+  .note-header {
+    padding: 8px 12px;
+  }
+  .me-label {
+    display: none;
+  }
+  .note-body {
+    flex-direction: column;
+    padding: 12px;
+  }
+  .toolbar {
+    position: sticky;
+    top: 64px;
+    z-index: 15;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: center;
+  }
+  .tool-sep {
+    width: 1px;
+    height: auto;
+    margin: 6px 2px;
+  }
+  .tool-btn,
+  .swatch-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .page-viewport {
+    width: 100%;
+  }
+}
