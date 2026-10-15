@@ -4,6 +4,7 @@ import { addStroke, newId, readStrokes, round, strokesMap, type Stroke } from '.
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
 import { canvasPixelRatio, paintStroke, paintStrokes } from './render'
 import { strokeWidth, type ToolKind, type WidthLevel } from './tools'
+import { TouchPan, scrollNearest } from './touchPan'
 
 export type PointerTool = {
   /** 이 도구가 포인터를 직접 처리하면 true를 돌려준다. */
@@ -67,6 +68,8 @@ export function PageView({
   const activePointer = useRef<number | null>(null)
   // 마지막 포인터 화면 위치. 누른 채 스크롤하면 이 위치로 장 좌표를 다시 계산한다.
   const lastClient = useRef<{ x: number; y: number } | null>(null)
+  // 터치: 한 손가락은 그리기(도구 동작), 두 손가락은 스크롤
+  const touchPan = useRef(new TouchPan())
   const dpr = canvasPixelRatio(PAGE_WIDTH * scale, PAGE_HEIGHT * scale, window.devicePixelRatio || 1)
   const pixelScale = scale * dpr
 
@@ -145,8 +148,31 @@ export function PageView({
     return e.pointerType === 'mouse' || e.pressure === 0 ? 0.5 : round(e.pressure)
   }
 
+  /** 두 번째 손가락이 닿으면 막 시작한 획은 버리고, 다른 도구 동작은 그 자리에서 끝낸다. */
+  function cancelGesture(e: PointerEvent<HTMLDivElement>) {
+    if (activePointer.current === null) return
+    activePointer.current = null
+    if (drawing.current) {
+      drawing.current = null
+      paintLive()
+      return
+    }
+    const c = lastClient.current
+    const frame = frameRef.current
+    if (c && frame) pointerTool?.up?.(clampToPage(toPagePoint(c.x, c.y, frame.getBoundingClientRect(), scale)), e)
+  }
+
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     if (readOnly || e.button > 0) return
+    if (e.pointerType === 'touch') {
+      const pan = touchPan.current
+      if (pan.down(e.pointerId, e.clientX, e.clientY)) cancelGesture(e)
+      if (pan.active) {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        e.preventDefault()
+        return
+      }
+    }
     // 글 상자 같은 DOM 위에서 누른 건 그 요소가 처리한다.
     if ((e.target as HTMLElement).closest('[data-page-ui]')) return
     if (activePointer.current !== null) return
@@ -177,6 +203,13 @@ export function PageView({
   }
 
   function onMove(e: PointerEvent<HTMLDivElement>) {
+    if (e.pointerType === 'touch') {
+      const d = touchPan.current.move(e.pointerId, e.clientX, e.clientY)
+      if (touchPan.current.active) {
+        if (d && frameRef.current) scrollNearest(frameRef.current, -d.dx, -d.dy)
+        return
+      }
+    }
     if (activePointer.current !== null && e.pointerId !== activePointer.current) return
     lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
@@ -196,6 +229,7 @@ export function PageView({
   }
 
   function onUp(e: PointerEvent<HTMLDivElement>) {
+    if (e.pointerType === 'touch') touchPan.current.up(e.pointerId)
     if (e.pointerId !== activePointer.current) return
     activePointer.current = null
     const s = drawing.current
