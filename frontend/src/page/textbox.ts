@@ -61,3 +61,18 @@ export function snapBoxPosition(p: Point, width: number = MIN_BOX_WIDTH): Point 
     y: Math.min(snapToLine(p.y), PAGE_HEIGHT - LINE_GAP),
   }
 }
+
+const NUDGE_X = 8
+
+/** 옮기기 손잡이에서 화살표 키로 옮길 위치. 화살표가 아니면 null. */
+export function nudgeBox(box: { x: number; y: number; width: number }, key: string): Point | null {
+  const step: Record<string, [number, number]> = {
+    ArrowLeft: [-NUDGE_X, 0],
+    ArrowRight: [NUDGE_X, 0],
+    ArrowUp: [0, -LINE_GAP],
+    ArrowDown: [0, LINE_GAP],
+  }
+  const d = step[key]
+  if (!d) return null
+  return snapBoxPosition({ x: box.x + d[0], y: box.y + d[1] }, box.width)
+}

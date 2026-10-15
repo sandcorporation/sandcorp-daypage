@@ -6,7 +6,7 @@ import { LINE_GAP, PAGE_WIDTH } from './geometry'
 import { textBoxExtensions } from './editorExtensions'
 import { fontOf } from './fonts'
 import { FormatBar } from './FormatBar'
-import { clampBoxWidth, removeIfEmpty, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
+import { clampBoxWidth, nudgeBox, removeIfEmpty, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
 import type { ToolKind } from './tools'
 
 /** 서식 막대의 화면 폭(px, 대략). 장 오른쪽 끝에서 잘리지 않게 자리를 정할 때 쓴다. */
@@ -186,6 +186,29 @@ function TextBoxView({
           below={y * scale < 56}
           alignRight={x + FORMAT_BAR_WIDTH / scale > PAGE_WIDTH}
         />}
+      {interactive && (
+        <button
+          type="button"
+          className={`textbox-grip${x * scale < 36 ? ' inside' : ''}`}
+          aria-label="글 상자 옮기기 (끌거나 화살표 키)"
+          title="끌어서 옮기기 · 화살표 키로 한 칸씩"
+          style={{ transform: `scale(${1 / scale})` }}
+          onPointerDown={(e) => startDrag('move', e)}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onKeyDown={(e) => {
+            const next = nudgeBox(box, e.key)
+            if (!next) return
+            e.preventDefault()
+            if (next.x !== box.x || next.y !== box.y) updateTextBox(doc, box.id, next, origin)
+          }}
+        >
+          <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true">
+            {[3, 8, 13].flatMap((cy) => [2, 8].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.6" fill="currentColor" />))}
+          </svg>
+        </button>
+      )}
       <EditorContent editor={editor} />
       {interactive && (
         <span

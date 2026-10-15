@@ -670,3 +670,53 @@
     bottom: 12px;
   }
 }
+
+/* 글 상자 옮기기 손잡이: 화면에서 일정한 크기로 보이도록 장 배율을 거꾸로 적용한다 */
+.textbox-grip {
+  position: absolute;
+  right: 100%;
+  top: -2px;
+  margin-right: 4px;
+  transform-origin: 100% 0;
+  width: 24px;
+  height: 36px;
+  padding: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  opacity: 0;
+  box-shadow: 0 2px 6px rgba(31, 33, 40, 0.1);
+}
+.textbox-grip:active {
+  cursor: grabbing;
+}
+.textbox-grip.inside {
+  right: auto;
+  left: 2px;
+  top: 2px;
+  margin: 0;
+  transform-origin: 0 0;
+}
+.textbox.is-focused .textbox-grip,
+.textbox.is-interactive:hover .textbox-grip,
+.textbox-grip:focus-visible {
+  opacity: 1;
+}
+.textbox-grip:hover,
+.textbox-grip:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: none;
+}
+@media (hover: none) {
+  /* 터치 기기에는 마우스 올림이 없으니 글씨·선택 도구에서는 늘 보인다 */
+  .textbox.is-interactive .textbox-grip {
+    opacity: 1;
+  }
+}
