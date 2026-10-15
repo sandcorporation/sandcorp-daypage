@@ -19,6 +19,19 @@ def test_channel_layer_has_room_for_bursts():
     assert project_settings.CHANNEL_LAYERS["default"]["CONFIG"]["capacity"] >= 1000
 
 
+def test_process_channel_has_more_room_than_a_connection():
+    """프로세스 채널(hub)은 나뉜 장 여러 개의 편집을 함께 받으므로 연결 한도보다 넉넉해야 한다."""
+    from channels_redis.core import RedisChannelLayer
+
+    from config import settings as project_settings
+
+    config = project_settings.CHANNEL_LAYERS["default"]["CONFIG"]
+    layer = RedisChannelLayer(**config)
+    hub_channel = "daypage-hub.abc!def"  # new_channel("daypage-hub")가 만드는 모양
+    assert layer.get_capacity(hub_channel) >= 10000
+    assert layer.get_capacity("specific.abc!def") == config["capacity"]
+
+
 def test_database_connections_are_reused():
     """웹소켓 DB 작업마다 연결을 새로 열면 Postgres가 연결 생성에 CPU를 다 쓴다."""
     from config import settings as project_settings

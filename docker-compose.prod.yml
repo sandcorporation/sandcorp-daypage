@@ -32,17 +32,32 @@ services:
       - caddy_config:/config
     depends_on:
       - backend
+      - backend2
     restart: unless-stopped
 
+  # 백엔드는 단일 프로세스 uvicorn을 CPU 수만큼(지금 2개) 띄운다. Caddy가 웹소켓을 노트 경로로
+  # 나눠(uri_hash) 같은 장의 연결이 한 프로세스에 모이고, 방 안 전달은 메모리에서 끝난다(daypage/hub.py).
+  # 늘리려면 backend3…을 같은 모양으로 더하고 deploy/Caddyfile의 upstream 목록에도 넣는다.
+  # 명령은 한 줄로 쓴다. YAML 접힘(>)에서 더 들여 쓴 줄은 줄바꿈이 남아 첫 줄만 실행됐었다.
   backend:
     <<: *backend
-    # 웹소켓 메시지는 Redis 채널 레이어로 워커 사이에 오가므로 CPU 수만큼 워커를 둘 수 있다.
-    # 한 줄로 쓴다. YAML 접힘(>)에서 더 들여 쓴 줄은 줄바꿈이 남아, 첫 줄만 실행되고
-    # --workers·--proxy-headers가 빠졌었다.
     command:
       - sh
       - -c
-      - "python manage.py migrate --noinput && exec uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --workers $${UVICORN_WORKERS:-2} --proxy-headers --forwarded-allow-ips '*'"
+      - "python manage.py migrate --noinput && exec uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips '*'"
+    healthcheck: &backend-health
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 2)"]
+      interval: 3s
+      retries: 40
+
+  backend2:
+    <<: *backend
+    command: ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    healthcheck: *backend-health
+    # migrate는 backend가 한다. 끝나고 받기 시작한 뒤에 뜬다.
+    depends_on:
+      backend:
+        condition: service_healthy
 
   worker:
     <<: *backend

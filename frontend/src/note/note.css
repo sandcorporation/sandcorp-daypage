@@ -408,8 +408,8 @@
   transform-origin: 0 0;
   pointer-events: none;
   transition:
-    left 60ms linear,
-    top 60ms linear;
+    left 120ms linear,
+    top 120ms linear;
   z-index: 5;
 }
 .peer-cursor span {
@@ -755,8 +755,8 @@
   pointer-events: none;
   z-index: 5;
   transition:
-    left 60ms linear,
-    top 60ms linear;
+    left 120ms linear,
+    top 120ms linear;
 }
 
 /* 굵게·기울임·글자 크기 같은 서식 글자가 줄 높이(32px)를 밀어 올리지 않게 한다.

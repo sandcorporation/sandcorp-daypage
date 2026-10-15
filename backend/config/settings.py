@@ -94,6 +94,9 @@ CHANNEL_LAYERS = {
             "hosts": [{"address": REDIS_URL, "socket_timeout": 30}],
             # 연결마다 쌓일 수 있는 메시지 수. 기본값(100)이면 부하 때 ChannelFull로 연결이 끊긴다.
             "capacity": 1000,
+            # 프로세스 채널(daypage/hub.py)은 한 장이 여러 프로세스에 나뉘었을 때 그 장들의 편집·커서를
+            # 모두 받는다. 편집이 버려지지 않게 넉넉히 둔다.
+            "channel_capacity": {"daypage-hub.*": 20000},
         },
     }
 }

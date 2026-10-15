@@ -22,6 +22,8 @@ class YClient:
         self.ws = communicator
         self.doc = Doc()
         self.texts: list[dict] = []
+        # sync 중에 먼저 도착한 awareness 메시지(next_awareness가 먼저 꺼낸다)
+        self.awareness: list[bytes] = []
 
     async def sync(self) -> None:
         """서버 step1에 답하고 내 step1을 보내 서버 문서를 받아온다."""
@@ -37,6 +39,9 @@ class YClient:
             self.texts.append(json.loads(msg["text"]))
             return None
         data = msg["bytes"]
+        if data[0] == YMessageType.AWARENESS:
+            self.awareness.append(data)
+            return None
         if data[0] != YMessageType.SYNC:
             return None
         reply = handle_sync_message(data[1:], self.doc)
@@ -109,6 +114,8 @@ async def next_awareness(y: YClient, timeout: float = 3) -> list[tuple[int, int,
     """다음 awareness 메시지를 기다려 풀어서 돌려준다(그 사이 sync 메시지는 처리)."""
     from daypage.awareness import decode_message
 
+    if y.awareness:
+        return decode_message(y.awareness.pop(0))
     while True:
         msg = await y.ws.receive_output(timeout=timeout)
         if msg["type"] == "websocket.close":

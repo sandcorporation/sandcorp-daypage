@@ -31,5 +31,5 @@ done
 
 echo "헬스 확인 실패" >&2
 compose ps >&2
-compose logs --tail 80 backend web >&2
+compose logs --tail 80 backend backend2 web >&2
 exit 1

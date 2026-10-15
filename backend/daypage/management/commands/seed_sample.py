@@ -537,6 +537,6 @@ class Command(BaseCommand):
         pages.compact(page.id)
         # 접속해 있는 사람에게도 바로 보이게 한다.
         async_to_sync(get_channel_layer().group_send)(
-            page_group(page.id), {"type": "y.update", "update": update, "sender": "seed_sample"}
+            page_group(page.id), {"type": "hub.update", "page": page.id, "update": update, "from": "seed_sample"}
         )
         self.stdout.write(f"'{note.name}'({note.id}) {page.date} 장: 글 상자 {len(box_specs)}개, 낙서 {len(stroke_specs)}획")

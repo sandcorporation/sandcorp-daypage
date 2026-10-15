@@ -10,7 +10,8 @@ type State = {
   editingBoxId?: string | null
 }
 
-const CURSOR_INTERVAL = 50
+// 커서 위치를 보내는 최소 간격(ms). 받는 쪽은 CSS 전환으로 이어 붙여 부드럽게 보인다(.peer-cursor).
+const CURSOR_INTERVAL = 100
 
 /** 접속자들의 커서·닉네임·편집 중 상자. 닉네임·색은 서버가 덮어쓴 값을 쓴다. */
 export function usePresence(provider: WebsocketProvider | null, me: { nickname: string; color: string }) {
