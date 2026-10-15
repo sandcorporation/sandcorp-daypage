@@ -84,7 +84,9 @@ COMPACT_EVERY = int(env("COMPACT_EVERY", "200"))
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {"hosts": [REDIS_URL]},
+        # redis-py 8의 기본 소켓 타임아웃(5초)이 channels_redis의 5초 BZPOPMIN 대기와 같아
+        # 대기 중에 읽기 타임아웃이 나며 consumer가 죽는다. 대기보다 길게 잡는다.
+        "CONFIG": {"hosts": [{"address": REDIS_URL, "socket_timeout": 30}]},
     }
 }
 
