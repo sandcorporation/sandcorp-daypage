@@ -98,3 +98,18 @@ def test_new_option_creates_a_note_for_the_same_owner():
     assert new.members.filter(user_id=template.owner_id).exists()
     assert len(today_doc(new.id).get("textboxes", type=Map)) >= 10
     assert not Page.objects.filter(note_id=note_id).exists()  # 템플릿 노트는 건드리지 않는다
+
+
+def test_dense_style_uses_four_columns_each_filled_top_to_bottom():
+    note_id = create_note(login_as(1))
+    call_command("seed_sample", note_id, "--style", "dense")
+    boxes = list(today_doc(note_id).get("textboxes", type=Map).values())
+    starts = [80, 457, 834, 1211]
+    for m in boxes:
+        assert any(s <= m.get("x") <= s + 24 for s in starts), m.get("x")
+        assert m.get("x") + m.get("width") <= 1600
+    for s in starts:
+        col = [m for m in boxes if s <= m.get("x") <= s + 24]
+        assert len(col) >= 40
+        assert min(m.get("y") for m in col) <= 64
+        assert max(m.get("y") for m in col) >= 2400 - 32 * 6

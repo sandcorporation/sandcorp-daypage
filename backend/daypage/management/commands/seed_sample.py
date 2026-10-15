@@ -367,94 +367,125 @@ class Occupancy:
         return segs
 
 
+COLUMNS = [80, 457, 834, 1211]  # '내 생각 해'처럼 장을 4칸으로 나눈다
+COL_W = 360  # 글 상자 기본 폭
+
+
+def lines_needed(paragraphs, font: str, width: int) -> int:
+    """폭 안에서 문단들이 차지하는 줄 수(넘치면 접힌다)."""
+    inner = width - 4 - 12  # 테두리·편집기 여백
+    total = 0
+    for para in paragraphs:
+        runs = [(para, None)] if isinstance(para, str) else para
+        # 손글씨 글꼴은 글자마다 폭이 들쭉날쭉해 여유를 넉넉히 둔다(접힘을 덜 세면 아래 메모와 겹친다)
+        w = sum(glyphs_width(t, font, 1.15 if a == "big" else 1.0) for t, a in runs) * 1.3
+        total += max(1, math.ceil(w / inner))
+    return total
+
+
+def dense_flow():
+    """칸에 채울 순서: 제목 → 대화(이야기가 바뀌면 한 줄 띄움, 관련 목록을 끼움) → 안내."""
+    from ._sample_dense import CHAT, LIST_BEFORE, LISTS, THREAD_STARTS
+
+    before = {text: idx for idx, text in LIST_BEFORE.items()}
+    flow = [("list", LISTS[0])]
+    for who, text in CHAT:
+        if text in THREAD_STARTS:
+            flow.append(("gap",))
+        if text in before:
+            flow.append(("list", LISTS[before[text]]))
+            flow.append(("gap",))
+        flow.append(("chat", who, text))
+    flow.append(("gap",))
+    flow.append(("list", LISTS[-1]))
+    return flow
+
+
+def place_columns(flow, use_gap: bool):
+    """흐름을 칸에 채운다. 다 들어가지 못하면 (None, 남은 개수)."""
+    rows_total = PAGE_H // ROW
+    out = []
+    col, row = 0, 0
+    for i, it in enumerate(flow):
+        if it[0] == "gap":
+            if use_gap and row > 0:
+                row += 1
+            continue
+        if it[0] == "chat":
+            n = lines_needed([it[2]], "pen", COL_W)
+        else:
+            n = lines_needed(it[1][5], it[1][3], COL_W)
+        if row + n > rows_total:
+            col, row = col + 1, 0
+            if col >= len(COLUMNS):
+                return None, sum(1 for rest in flow[i:] if rest[0] != "gap")
+        out.append((it, col, row, n))
+        row += n
+    return out, 0
+
+
 def dense_layout(me: str):
-    """(글 상자 명세들, 낙서들). 목록 메모를 먼저 놓고, 남은 자리를 위에서부터 대화 메모로 고르게 채운다."""
-    from ._sample_dense import CHAT, LISTS
-
-    occ = Occupancy()
-    specs = []
-    for x, y, width, font, who, paras in LISTS:
-        width = min(max(width, box_width(paras, font)), RIGHT - x)
-        color = INK_BLUE if who == "A" else ORANGE
-        specs.append((x, y, width, font, color, ME if who == "A" else FRIEND, [para_runs(p) for p in paras]))
-        for r in range(y // ROW, y // ROW + len(paras)):
-            occ.take(r, x - 12, x + width + 12)
-
-    rows_total = PAGE_H // ROW - 1  # 맨 아래 칸은 비워 둔다
-    queue = [(who, text, box_width([text], "pen")) for who, text in CHAT]
-    # 전체 글 양을 장의 빈 자리에 고르게 나눈다: 줄마다 같은 비율만큼 촘촘히 채운다.
-    free_of = {r: sum(b - a for a, b in occ.segments(r)) for r in range(rows_total)}
-    need = sum(w + 28 for _, _, w in queue)
-    free_left = sum(free_of.values())
-    placed = []
-    for row in range(rows_total):
-        if not queue:
+    """칸마다 다른 대화: 왼쪽 칸부터 위에서 아래로 채우고, 칸이 차면 다음 칸으로 넘어간다."""
+    flow = dense_flow()
+    # 넘치면 이야기 사이 빈 줄을 먼저 없애고, 그래도 넘치면 맨 끝 안내는 두고 대화 끝부터 덜어 낸다.
+    for use_gap in (True, False):
+        slots, _ = place_columns(flow, use_gap)
+        if slots:
             break
-        budget = free_of[row] * min(1.0, need / max(1, free_left)) * rng.uniform(0.9, 1.1)
-        free_left -= free_of[row]
-        used = 0.0
-        for a, b in occ.segments(row):
-            cursor = a + rng.uniform(6, 30)
-            while queue and used < budget:
-                who, text, width = queue[0]
-                if cursor + width > b - 8:
-                    break
-                queue.pop(0)
-                x = round(cursor)
-                if who == "A":
-                    color = INK_BLUE if rng.random() < 0.55 else PENCIL
-                else:
-                    color = ORANGE if rng.random() < 0.75 else PENCIL
-                specs.append((x, row * ROW, width, "pen", color, ME if who == "A" else FRIEND, [[(text, None)]]))
-                occ.take(row, x - 8, x + width + 8)
-                placed.append((x, row * ROW, width))
-                gap = rng.uniform(14, 46)
-                used += width + gap
-                need -= width + 28
-                cursor += width + gap
-    return specs, dense_doodles(placed, occ)
+    while not slots:
+        last_chat = max(i for i, it in enumerate(flow) if it[0] == "chat")
+        flow.pop(last_chat)
+        slots, _ = place_columns(flow, False)
 
-
-def dense_doodles(boxes, occ: Occupancy):
-    s = []
-    picks = rng.sample(boxes, min(len(boxes), 30))
-    # 상자 몇 개에 형광펜(글 아래)·물결 밑줄·동그라미
-    for x, y, w in picks[:14]:
-        s.append(("highlighter", YELLOW, 22, line(x + 6, y + 20, x + min(w - 8, 150), y + 19)))
-    for x, y, w in picks[14:22]:
-        s.append(("pen", rng.choice([ORANGE, INK_BLUE]), 3, wave(x + 6, x + w - 10, y + 30, amp=3, period=22)))
-    for x, y, w in picks[22:28]:
-        s.append(("pen", rng.choice([ORANGE, INK_BLUE, PENCIL]), 3, ellipse(x + w / 2, y + 16, w / 2 + 8, 19)))
-    # 빈 틈에 작은 낙서(하트·별·웃는 얼굴·체크)
-    drawn = 0
-    for row in rng.sample(range(2, PAGE_H // ROW - 3), PAGE_H // ROW - 5):
-        if drawn >= 26:
-            break
-        for a, b in occ.segments(row):
-            if b - a < 90:
-                continue
-            cx = rng.uniform(a + 40, b - 40)
-            if not (occ.free(row, cx - 34, cx + 34) and occ.free(row + 1, cx - 34, cx + 34)):
-                continue
-            cy = row * ROW + 30
-            kind = rng.choice(["heart", "star", "smile", "check", "heart", "star"])
-            if kind == "heart":
-                s.append(("pen", ORANGE, 6, heart(cx, cy, 18)))
-            elif kind == "star":
-                s.append(("pen", YELLOW, 6, star(cx, cy, 18)))
-            elif kind == "smile":
-                s.append(("pen", PENCIL, 3, ellipse(cx, cy, 16, 16, sweep=2.05 * math.pi, n=32)))
-                s.append(("pen", PENCIL, 3, ellipse(cx - 6, cy - 4, 1.5, 1.5, sweep=2 * math.pi, n=6)))
-                s.append(("pen", PENCIL, 3, ellipse(cx + 6, cy - 4, 1.5, 1.5, sweep=2 * math.pi, n=6)))
-                s.append(("pen", PENCIL, 3, ellipse(cx, cy + 3, 8, 6, start=0.2, sweep=math.pi - 0.4, n=12)))
+    specs, placed = [], []
+    for it, col, row, n in slots:
+        if it[0] == "chat":
+            _, who, text = it
+            font, paras = "pen", [[(text, None)]]
+            if who == "A":
+                color = INK_BLUE if rng.random() < 0.55 else PENCIL
             else:
-                s.append(("pen", INK_BLUE, 6, check(cx - 12, cy, 1.0)))
-            occ.take(row, cx - 34, cx + 34)
-            occ.take(row + 1, cx - 34, cx + 34)
-            drawn += 1
-            break
-    # 맨 위 제목에 형광펜
-    s.append(("highlighter", YELLOW, 24, line(100, 22, 470, 20)))
+                color = ORANGE if rng.random() < 0.75 else PENCIL
+        else:
+            _x, _y, _w, font, who, raw = it[1]
+            paras = [para_runs(p) for p in raw]
+            color = INK_BLUE if who == "A" else ORANGE
+        # 손으로 붙인 듯 칸 안에서 살짝 들쭉날쭉하게(옆 칸을 넘지 않을 만큼)
+        x = COLUMNS[col] + round(rng.uniform(0, 12))
+        width = min(COL_W, 1600 - x)
+        specs.append((x, row * ROW, width, font, color, ME if who == "A" else FRIEND, paras))
+        placed.append((x, row * ROW, width, n))
+    return specs, column_doodles(placed)
+
+
+def column_doodles(placed):
+    """메모 오른쪽 빈 자리·띄운 줄에 형광펜·밑줄·하트·별을 곁들인다."""
+    s = []
+    singles = [(x, y, w) for x, y, w, n in placed if n == 1]
+    picks = rng.sample(singles, min(len(singles), 60))
+    for x, y, w in picks[:16]:
+        s.append(("highlighter", YELLOW, 22, line(x + 6, y + 20, x + 150, y + 19)))
+    for x, y, w in picks[16:26]:
+        s.append(("pen", rng.choice([ORANGE, INK_BLUE]), 3, wave(x + 6, x + 200, y + 30, amp=3, period=22)))
+    for x, y, w in picks[26:32]:
+        s.append(("pen", rng.choice([ORANGE, INK_BLUE, PENCIL]), 3, ellipse(x + 110, y + 16, 112, 19)))
+    # 칸 안 메모의 오른쪽 끝(글이 짧아 비는 자리)에 작은 낙서
+    for x, y, w in picks[32:56]:
+        cx, cy = x + w - 34, y + 16
+        kind = rng.choice(["heart", "star", "check", "heart", "star", "smile"])
+        if kind == "heart":
+            s.append(("pen", ORANGE, 6, heart(cx, cy, 13)))
+        elif kind == "star":
+            s.append(("pen", YELLOW, 6, star(cx, cy, 13)))
+        elif kind == "check":
+            s.append(("pen", INK_BLUE, 6, check(cx - 12, cy, 0.9)))
+        else:
+            s.append(("pen", PENCIL, 3, ellipse(cx, cy, 12, 12, sweep=2.05 * math.pi, n=28)))
+            s.append(("pen", PENCIL, 3, ellipse(cx - 4, cy - 3, 1.2, 1.2, sweep=2 * math.pi, n=6)))
+            s.append(("pen", PENCIL, 3, ellipse(cx + 4, cy - 3, 1.2, 1.2, sweep=2 * math.pi, n=6)))
+            s.append(("pen", PENCIL, 3, ellipse(cx, cy + 2, 6, 4, start=0.2, sweep=math.pi - 0.4, n=10)))
+    # 제목 형광펜
+    s.append(("highlighter", YELLOW, 24, line(86, 22, 400, 20)))
     return s
 
 
