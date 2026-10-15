@@ -1,4 +1,4 @@
-# sub 서버용 덮어쓰기. sub의 80·443은 NPMplus(Nginx Proxy Manager)가 쓰고 TLS도 거기서 끝난다.
+# oracle 서버용 덮어쓰기. oracle의 80·443은 NPMplus(Nginx Proxy Manager)가 쓰고 TLS도 거기서 끝난다.
 # Caddy는 HTTP로만 받고 docker 브리지 게이트웨이(172.17.0.1)에만 묶는다. 외부에는 열리지 않고,
 # NPMplus 프록시 호스트가 daypage.sandcorp.co.kr → http://172.17.0.1:${HTTP_PORT} (웹소켓 허용)로 넘긴다.
 services:

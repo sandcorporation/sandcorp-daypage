@@ -1,6 +1,6 @@
 # 운영 배포: docker compose -f docker-compose.prod.yml build backend web && docker compose -f docker-compose.prod.yml up -d
-# sub 서버(NPMplus 뒤)에서는 docker-compose.sub.yml을 덧붙인다(Jenkinsfile 참고).
-# 자원 예산: daypage 전체 2 CPU / 약 2.9 GB(sub의 다른 서비스와 함께 쓴다). 서비스마다 cpus·mem_limit으로 나눈다.
+# oracle 서버(NPMplus 뒤)에서는 docker-compose.oracle.yml을 덧붙인다(Jenkinsfile 참고).
+# 자원 예산: daypage 전체 2 CPU / 약 2.9 GB(oracle의 다른 서비스와 함께 쓴다). 서비스마다 cpus·mem_limit으로 나눈다.
 x-backend: &backend
   # 네 서비스가 같은 이미지를 쓴다. backend만 빌드하고 나머지는 이 태그를 그대로 쓴다.
   image: daypage-backend:latest

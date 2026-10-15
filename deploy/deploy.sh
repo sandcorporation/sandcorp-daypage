@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Jenkins(sub의 built-in 노드)에서 부른다. 워크스페이스의 .env를 쓴다(저장소에는 없음).
+# Jenkins(oracle 에이전트)에서 부른다. 워크스페이스의 .env를 쓴다(저장소에는 없음).
 set -euo pipefail
 
 if [ ! -f .env ]; then
