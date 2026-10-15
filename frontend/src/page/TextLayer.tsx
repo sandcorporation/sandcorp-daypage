@@ -11,6 +11,8 @@ import type { ToolKind } from './tools'
 
 /** 서식 막대의 화면 폭(px, 대략). 장 오른쪽 끝에서 잘리지 않게 자리를 정할 때 쓴다. */
 const FORMAT_BAR_WIDTH = 480
+/** '○○ 이어 쓰는 중'이 상자 오른쪽에 들어갈 화면 폭(px, 대략) */
+const EDITING_LABEL_ROOM = 170
 
 type Props = {
   doc: Y.Doc
@@ -73,6 +75,8 @@ function TextBoxView({
 }: ViewProps) {
   const fragment = textBoxContent(doc, box.id)
   const [focused, setFocused] = useState(false)
+  // 서식 막대는 옮기기 손잡이를 (끌지 않고) 눌렀을 때만 연다.
+  const [formatOpen, setFormatOpen] = useState(false)
   const [drag, setDrag] = useState<{ x: number; y: number; width: number } | null>(null)
   // 편집기 콜백은 처음 만들 때 고정되므로 최신 값은 ref로 읽는다.
   const latest = useRef({ me, othersEditing: false })
@@ -96,6 +100,7 @@ function TextBoxView({
       },
       onBlur: () => {
         setFocused(false)
+        setFormatOpen(false)
         onEditing(null)
         // 내가 만든 빈 상자이고 다른 사람이 쓰고 있지 않으면 지운다.
         window.setTimeout(() => {
@@ -115,6 +120,18 @@ function TextBoxView({
   }, [editor, focusId, box.id, onFocusHandled])
 
   const interactive = !readOnly && (tool === 'text' || tool === 'select')
+  useEffect(() => {
+    if (!interactive) setFormatOpen(false)
+  }, [interactive])
+
+  function toggleFormat() {
+    if (!editor || readOnly) return
+    setFormatOpen((open) => {
+      // 서식은 편집기에 적용되므로, 열 때 아직 편집 중이 아니면 편집을 시작한다.
+      if (!open && !editor.isFocused) editor.commands.focus('end')
+      return !open
+    })
+  }
   const x = drag?.x ?? box.x
   const y = drag?.y ?? box.y
   const width = drag?.width ?? box.width
@@ -140,10 +157,15 @@ function TextBoxView({
     }
   }
 
-  function endDrag() {
+  /** 끌기를 마친다. 손잡이를 끌지 않고 눌렀다 뗐으면 true(클릭으로 본다). */
+  function endDrag(e?: ReactPointerEvent<HTMLElement>): boolean {
     const s = dragStart.current
     dragStart.current = null
-    if (!s || !drag) return setDrag(null)
+    const clicked = !!s && !!e && Math.hypot(e.clientX - s.px, e.clientY - s.py) < 4
+    if (!s || !drag) {
+      setDrag(null)
+      return clicked
+    }
     // 클릭만 하고 움직이지 않았으면 쓰지 않는다(빈 되돌리기 단계·불필요한 전송 방지).
     if (s.kind === 'move') {
       const p = snapBoxPosition({ x: drag.x, y: drag.y }, s.box.width)
@@ -152,11 +174,13 @@ function TextBoxView({
       updateTextBox(doc, box.id, { width: drag.width }, origin)
     }
     setDrag(null)
+    return clicked
   }
 
   return (
     <div
       className={`textbox${focused ? ' is-focused' : ''}${interactive ? ' is-interactive' : ''}${tool === 'select' ? ' is-select' : ''}`}
+      data-box-id={box.id}
       {...(interactive ? { 'data-page-ui': '' } : {})}
       style={{
         left: x,
@@ -172,15 +196,18 @@ function TextBoxView({
         if (tool === 'select' && !focused) startDrag('move', e)
       }}
       onPointerMove={moveDrag}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
+      onPointerUp={(e) => void endDrag(e)}
+      onPointerCancel={() => void endDrag()}
     >
       {others.length > 0 && (
-        <span className="textbox-editing" style={{ color: others[0].color }}>
+        <span
+          className={`textbox-editing${x + width + EDITING_LABEL_ROOM / scale > PAGE_WIDTH ? ' below' : ''}`}
+          style={{ color: others[0].color, transform: `scale(${1 / scale})` }}
+        >
           {others.map((o) => o.nickname).join(', ')} 이어 쓰는 중
         </span>
       )}
-      {focused && editor && !readOnly && <FormatBar
+      {formatOpen && editor && !readOnly && <FormatBar
           editor={editor}
           scale={scale}
           below={y * scale < 56}
@@ -190,13 +217,20 @@ function TextBoxView({
         <button
           type="button"
           className={`textbox-grip${x * scale < 36 ? ' inside' : ''}`}
-          aria-label="글 상자 옮기기 (끌거나 화살표 키)"
-          title="끌어서 옮기기 · 화살표 키로 한 칸씩"
+          aria-label="글 상자 옮기기·서식 (끌어서 옮기기, 눌러서 서식)"
+          title="끌어서 옮기기 · 눌러서 서식 · 화살표 키로 한 칸씩"
           style={{ transform: `scale(${1 / scale})` }}
+          aria-expanded={formatOpen}
           onPointerDown={(e) => startDrag('move', e)}
           onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          onPointerUp={(e) => {
+            if (endDrag(e)) toggleFormat()
+          }}
+          onPointerCancel={() => void endDrag()}
+          onClick={(e) => {
+            // 키보드(Enter·Space)로 누른 경우. 마우스·터치는 pointerup에서 처리한다.
+            if (e.detail === 0) toggleFormat()
+          }}
           onKeyDown={(e) => {
             const next = nudgeBox(box, e.key)
             if (!next) return
@@ -218,8 +252,8 @@ function TextBoxView({
           aria-label="글 상자 폭 조절"
           onPointerDown={(e) => startDrag('resize', e)}
           onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          onPointerUp={(e) => void endDrag(e)}
+          onPointerCancel={() => void endDrag()}
         />
       )}
     </div>

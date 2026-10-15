@@ -6,9 +6,9 @@ import { PageView, type PointerTool } from '../page/PageView'
 import { TextLayer } from '../page/TextLayer'
 import { createTextBoxAt } from '../page/textbox'
 import { updateTextBox } from '../page/doc'
-import { DEFAULT_FONT, fontOf } from '../page/fonts'
+import { fontOf } from '../page/fonts'
 import { Toolbar } from '../page/Toolbar'
-import { INKS, type ToolKind, type WidthLevel } from '../page/tools'
+import type { ToolKind, WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
 import { isTypingTarget, useUndo } from '../page/useUndo'
 import { ErrorScreen } from '../pages/ErrorScreen'
@@ -16,6 +16,7 @@ import { ConnectionPill } from './ConnectionPill'
 import { NoteHeader } from './NoteHeader'
 import { Cursors } from './Cursors'
 import { MemberLimitControl } from './MemberLimitControl'
+import { loadToolPrefs, saveToolPrefs } from './toolPrefs'
 import { ZoomControl, type Zoom } from './ZoomControl'
 import { uniquePeople, usePresence } from './usePresence'
 import { useRealtime, type FatalReason } from './useRealtime'
@@ -30,11 +31,13 @@ export function NotePage({ initial }: Props) {
   const [fatal, setFatal] = useState<FatalReason | null>(null)
   const { toast, show } = useToast()
 
-  // 도구 상태
-  const [tool, setTool] = useState<ToolKind>('pen')
-  const [ink, setInk] = useState<string>(INKS[0].color)
-  const [widthLevel, setWidthLevel] = useState<WidthLevel>(1)
-  const [font, setFont] = useState<string>(DEFAULT_FONT.id)
+  // 도구 상태. 마지막으로 고른 값을 이 브라우저에 기억해 새로고침·재방문 때 되살린다.
+  const [prefs] = useState(loadToolPrefs)
+  const [tool, setTool] = useState<ToolKind>(prefs.tool)
+  const [ink, setInk] = useState<string>(prefs.ink)
+  const [widthLevel, setWidthLevel] = useState<WidthLevel>(prefs.widthLevel)
+  const [font, setFont] = useState<string>(prefs.font)
+  useEffect(() => saveToolPrefs({ tool, ink, widthLevel, font }), [tool, ink, widthLevel, font])
   const [scale, setScale] = useState(0.5)
   const [zoom, setZoom] = useState<Zoom>('fit')
   const [focusId, setFocusId] = useState<string | null>(null)

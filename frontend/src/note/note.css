@@ -359,15 +359,25 @@
   opacity: 1;
 }
 .textbox-editing {
+  /* 글을 가리지 않게 상자 오른쪽 바깥(폭 손잡이 너머)에 둔다 */
   position: absolute;
-  left: 0;
-  bottom: 100%;
-  margin-bottom: 4px;
+  left: calc(100% + 16px);
+  top: 4px;
+  transform-origin: 0 0;
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 1.5px currentColor;
+  pointer-events: none;
+}
+.textbox-editing.below {
+  left: 0;
+  top: calc(100% + 6px);
 }
 
 .connection-pill {
@@ -561,10 +571,6 @@
   background: var(--line-soft);
   margin: 0 3px;
 }
-.textbox-editing + .format-bar,
-.textbox.is-focused .textbox-editing {
-  display: none;
-}
 .format-bar.below {
   bottom: auto;
   top: calc(100% + 6px);
@@ -719,4 +725,21 @@
   .textbox.is-interactive .textbox-grip {
     opacity: 1;
   }
+}
+
+/* 글 상자 위에 있는 커서의 닉네임: 상자 바깥으로 밀려난 꼬리표 */
+.peer-cursor-label {
+  position: absolute;
+  transform-origin: 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white);
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+  transition:
+    left 60ms linear,
+    top 60ms linear;
 }
