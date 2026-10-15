@@ -305,3 +305,66 @@
   background: var(--accent-soft);
   color: var(--accent) !important;
 }
+
+/* 글 상자 */
+.textbox {
+  position: absolute;
+  font-family: var(--hand);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  margin: -2px 0 0 -2px;
+  min-height: 32px;
+}
+.textbox.is-interactive {
+  cursor: text;
+}
+.textbox.is-interactive:hover {
+  border-color: rgba(42, 71, 176, 0.25);
+}
+.textbox.is-select {
+  cursor: move;
+}
+.textbox.is-focused {
+  border-color: currentColor !important;
+  background: rgba(255, 255, 255, 0.92);
+}
+.textbox-editor {
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  padding: 0 6px;
+}
+.textbox-editor p {
+  margin: 0;
+  min-height: 32px;
+}
+.textbox-handle {
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  width: 12px;
+  height: 30px;
+  margin-top: -15px;
+  border-radius: 4px;
+  background: var(--white);
+  border: 2px solid currentColor;
+  cursor: ew-resize;
+  opacity: 0;
+  touch-action: none;
+}
+.textbox.is-focused .textbox-handle,
+.textbox.is-interactive:hover .textbox-handle {
+  opacity: 1;
+}
+.textbox-editing {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 4px;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}

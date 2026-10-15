@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { useToast } from '../components/Toast'
 import { createPageDoc } from '../page/doc'
-import { PageView } from '../page/PageView'
+import { PageView, type PointerTool } from '../page/PageView'
+import { TextLayer } from '../page/TextLayer'
+import { createTextBoxAt } from '../page/textbox'
 import { Toolbar } from '../page/Toolbar'
 import { INKS, type ToolKind, type WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
@@ -24,6 +26,21 @@ export function NotePage({ initial }: Props) {
   const origin = useMemo(() => ({ local: true }), [])
   const history = useUndo(doc, origin)
   const edit = useEditTools(doc, tool, origin)
+  const [scale, setScale] = useState(0.5)
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const [, setEditingBoxId] = useState<string | null>(null)
+  const clearFocus = useCallback(() => setFocusId(null), [])
+
+  const textTool = useMemo<PointerTool>(
+    () => ({
+      down(p) {
+        const id = createTextBoxAt(doc, p, { color: ink, author: note.me.nickname }, origin)
+        setFocusId(id)
+        return true
+      },
+    }),
+    [doc, ink, note.me.nickname, origin],
+  )
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -95,11 +112,24 @@ export function NotePage({ initial }: Props) {
           widthLevel={widthLevel}
           author={note.me.nickname}
           origin={origin}
-          pointerTool={edit.pointerTool}
+          pointerTool={tool === 'text' ? textTool : edit.pointerTool}
+          onScale={setScale}
           overlay={edit.overlay}
           overlayVersion={edit.overlayVersion}
           onGestureStart={history.stopCapturing}
-        />
+        >
+          <TextLayer
+            doc={doc}
+            tool={tool}
+            scale={scale}
+            readOnly={false}
+            origin={origin}
+            focusId={focusId}
+            onFocusHandled={clearFocus}
+            onEditing={setEditingBoxId}
+            editors={new Map()}
+          />
+        </PageView>
       </div>
       {toast}
     </div>
