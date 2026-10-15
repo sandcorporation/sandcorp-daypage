@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core'
-import { textBoxExtensions, TEXT_SIZES } from './editorExtensions'
+import { TEXT_LIMIT, textBoxExtensions, TEXT_SIZES } from './editorExtensions'
 import { textStyle } from './textStyle'
 
 function editorWith(html: string) {
@@ -46,4 +46,34 @@ test('PNG 렌더용 스타일은 서식 마크를 반영한다', () => {
   )
   expect(style).toMatchObject({ bold: true, italic: true, underline: true, color: '#E0603A', size: 32 })
   expect(style.canvasFont).toBe("italic 700 32px 'Nanum Pen Script', cursive")
+})
+
+describe('글 상자 1000자 제한', () => {
+  test('1000자가 차면 더 입력할 수 없다', () => {
+    const editor = editorWith('<p>' + '가'.repeat(TEXT_LIMIT - 1) + '</p>')
+    editor.commands.focus('end')
+    editor.commands.insertContent('나')
+    expect(editor.getText().length).toBe(TEXT_LIMIT)
+    editor.commands.insertContent('다')
+    expect(editor.getText().length).toBe(TEXT_LIMIT)
+    editor.destroy()
+  })
+
+  test('긴 글을 붙여넣으면 1000자까지만 들어간다', () => {
+    const editor = editorWith('<p>앞</p>')
+    editor.commands.focus('end')
+    editor.view.pasteText('다'.repeat(5000))
+    expect(editor.getText().length).toBe(TEXT_LIMIT)
+    expect(editor.getText().startsWith('앞다')).toBe(true)
+    editor.destroy()
+  })
+
+  test('1000자 안에서는 자유롭게 쓰고 지울 수 있다', () => {
+    const editor = editorWith('<p>' + '라'.repeat(TEXT_LIMIT) + '</p>')
+    editor.commands.selectAll()
+    editor.commands.deleteSelection()
+    editor.commands.insertContent('다시 써요')
+    expect(editor.getText()).toBe('다시 써요')
+    editor.destroy()
+  })
 })

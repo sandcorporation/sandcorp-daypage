@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { HomePage } from './HomePage'
@@ -59,4 +59,43 @@ test('새 노트를 만들면 그 노트로 이동한다', async () => {
   expect(await screen.findByText('노트 화면')).toBeInTheDocument()
   const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/notes')!
   expect(JSON.parse(String(init?.body))).toEqual({ name: '캠핑 준비', memberLimit: 4 })
+})
+
+test('내가 만든 노트만 지울 수 있고, 확인하면 지운 뒤 목록에서 사라진다', async () => {
+  let notes = [
+    { id: 'mine', name: '우리집 노트', isOwner: true, memberCount: 2, memberLimit: null },
+    { id: 'theirs', name: '남의 노트', isOwner: false, memberCount: 3, memberLimit: null },
+  ]
+  const fetchMock = mockApi((url, init) => {
+    if (url === '/api/notes/mine' && init?.method === 'DELETE') {
+      notes = notes.filter((n) => n.id !== 'mine')
+      return null
+    }
+    return { authenticated: true, notes }
+  })
+  renderHome()
+  expect(await screen.findByText('우리집 노트')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '노트 삭제: 남의 노트' })).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: '노트 삭제: 우리집 노트' }))
+  const dialog = screen.getByRole('alertdialog')
+  expect(dialog).toHaveTextContent('되돌릴 수 없어요')
+  expect(dialog).toHaveTextContent('참여자 1명') // 2명 중 나를 뺀 사람
+  await userEvent.click(screen.getByRole('button', { name: '삭제' }))
+
+  expect(fetchMock).toHaveBeenCalledWith('/api/notes/mine', expect.objectContaining({ method: 'DELETE' }))
+  await waitFor(() => expect(screen.queryByText('우리집 노트')).not.toBeInTheDocument())
+  expect(screen.getByText('남의 노트')).toBeInTheDocument()
+})
+
+test('삭제 확인 창에서 취소하면 지우지 않는다', async () => {
+  const fetchMock = mockApi(() => ({
+    authenticated: true,
+    notes: [{ id: 'mine', name: '우리집 노트', isOwner: true, memberCount: 1, memberLimit: null }],
+  }))
+  renderHome()
+  await userEvent.click(await screen.findByRole('button', { name: '노트 삭제: 우리집 노트' }))
+  await userEvent.click(screen.getByRole('button', { name: '취소' }))
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
 })

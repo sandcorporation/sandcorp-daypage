@@ -764,3 +764,38 @@
 .textbox-editor p :is(strong, em, u, s, span) {
   line-height: 0;
 }
+.member-delete {
+  margin-top: 12px;
+  width: 100%;
+  min-height: 40px;
+  border: 1.5px solid #f3c4c4;
+  border-radius: 10px;
+  background: var(--white);
+  color: #b91c1c;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.member-delete:hover {
+  background: #fde8e8;
+}
+
+.char-counter {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  transform-origin: 100% 0;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.char-counter.is-full {
+  color: #b91c1c;
+}

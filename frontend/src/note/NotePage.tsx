@@ -11,6 +11,8 @@ import { Toolbar } from '../page/Toolbar'
 import type { ToolKind, WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
 import { isTypingTarget, useUndo } from '../page/useUndo'
+import { useNavigate } from 'react-router'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ErrorScreen } from '../pages/ErrorScreen'
 import { ConnectionPill } from './ConnectionPill'
 import { NoteHeader } from './NoteHeader'
@@ -30,6 +32,9 @@ export function NotePage({ initial }: Props) {
   const [clockOffset] = useState(() => new Date(initial.serverNow).getTime() - Date.now())
   const [fatal, setFatal] = useState<FatalReason | null>(null)
   const { toast, show } = useToast()
+  const navigate = useNavigate()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // 도구 상태. 마지막으로 고른 값을 이 브라우저에 기억해 새로고침·재방문 때 되살린다.
   const [prefs] = useState(loadToolPrefs)
@@ -162,6 +167,18 @@ export function NotePage({ initial }: Props) {
     [note.id, show],
   )
 
+  const deleteNote = useCallback(async () => {
+    setDeleting(true)
+    try {
+      await api<void>(`/api/notes/${note.id}`, { method: 'DELETE' })
+      navigate('/')
+    } catch {
+      setDeleting(false)
+      setConfirmDelete(false)
+      show('노트를 지우지 못했어요')
+    }
+  }, [note.id, navigate, show])
+
   const share = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(note.url)
@@ -189,6 +206,7 @@ export function NotePage({ initial }: Props) {
             memberLimit={note.memberLimit}
             editable={note.isOwner}
             onChange={changeLimit}
+            onDelete={note.isOwner ? () => setConfirmDelete(true) : undefined}
           />
         }
       />
@@ -241,6 +259,18 @@ export function NotePage({ initial }: Props) {
       </div>
       <ConnectionPill status={status} synced={synced} />
       <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`‘${note.name}’을 지울까요?`}
+          confirmLabel="삭제"
+          busy={deleting}
+          onConfirm={deleteNote}
+          onCancel={() => setConfirmDelete(false)}
+        >
+          <p>오늘 장과 지난 기록까지 모두 바로 사라지고, 되돌릴 수 없어요.</p>
+          {note.memberCount > 1 && <p>함께 쓰던 참여자 {note.memberCount - 1}명도 더는 볼 수 없어요.</p>}
+        </ConfirmDialog>
+      )}
       {toast}
     </div>
   )

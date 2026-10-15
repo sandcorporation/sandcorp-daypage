@@ -5,6 +5,7 @@ import { readTextBox, textBoxContent, textboxesMap, updateTextBox, type TextBox 
 import { LINE_GAP, PAGE_WIDTH, pageDelta } from './geometry'
 import { textBoxExtensions } from './editorExtensions'
 import { fontOf } from './fonts'
+import { CharCounter } from './CharCounter'
 import { FormatBar } from './FormatBar'
 import { clampBoxWidth, fitBoxInPage, nudgeBox, removeIfEmpty, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
 import type { ToolKind } from './tools'
@@ -292,6 +293,7 @@ function TextBoxView({
         </button>
       )}
       <EditorContent editor={editor} />
+      {focused && editor && !readOnly && <CharCounter editor={editor} scale={scale} />}
       {interactive && (
         <span
           className="textbox-handle"

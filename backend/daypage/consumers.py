@@ -27,7 +27,7 @@ from pycrdt import (
 )
 
 from . import awareness, clock, pages, rooms
-from .models import Note, NoteMember
+from .models import Note, NoteMember, Page
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ class PageConsumer(AsyncWebsocketConsumer):
         self.heartbeat: asyncio.Task | None = None
         # 이 연결이 보낸 awareness 상태: clientID -> (clock, state)
         self.presence: dict[int, tuple[int, dict]] = {}
+        self.note_gone = False
         # 닫는 코드를 전하려면 먼저 수락해야 한다.
         await self.accept()
 
@@ -139,7 +140,7 @@ class PageConsumer(AsyncWebsocketConsumer):
         await registry.remove(self.note_id, self.conn)
         await self.on_left()
         remaining = [c for c in await registry.connections(self.note_id) if c.date == self.conn.date]
-        if not remaining:
+        if not remaining and not self.note_gone:
             await database_sync_to_async(pages.compact)(self.page_id)
 
     async def on_left(self) -> None:
@@ -174,6 +175,9 @@ class PageConsumer(AsyncWebsocketConsumer):
             pending = await database_sync_to_async(pages.append_update)(self.page_id, update, clock.now())
         except pages.PageSealed:
             await self.close(code=CLOSE_NOT_TODAY)
+            return
+        except Page.DoesNotExist:  # 그사이 노트가 지워졌다
+            await self.close(code=CLOSE_NOT_FOUND)
             return
         self.ydoc.apply_update(update)
         await self.channel_layer.group_send(
@@ -235,3 +239,8 @@ class PageConsumer(AsyncWebsocketConsumer):
         payload = json.dumps({"type": "page_rolled", "date": event["date"]}, separators=(",", ":")).encode()
         await self.send(bytes_data=bytes([MESSAGE_PAGE_ROLLED]) + write_message(payload))
         await self.close(code=CLOSE_NOT_TODAY)
+
+    async def note_deleted(self, event) -> None:
+        """만든 사람이 노트를 지웠다. 장도 함께 사라졌으니 스냅샷은 합치지 않고 닫는다."""
+        self.note_gone = True
+        await self.close(code=CLOSE_NOT_FOUND)

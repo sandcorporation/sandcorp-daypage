@@ -6,6 +6,8 @@ type Props = {
   memberLimit: number | null
   editable: boolean
   onChange: (limit: number | null) => Promise<void>
+  /** 만든 사람이 노트를 지우려 할 때(확인 창은 부르는 쪽에서) */
+  onDelete?: () => void
 }
 
 export function memberLabel(count: number, limit: number | null): string {
@@ -13,7 +15,7 @@ export function memberLabel(count: number, limit: number | null): string {
 }
 
 /** 헤더의 정원 표시. 만든 사람은 눌러서 정원을 바꾼다. */
-export function MemberLimitControl({ memberCount, memberLimit, editable, onChange }: Props) {
+export function MemberLimitControl({ memberCount, memberLimit, editable, onChange, onDelete }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -55,6 +57,18 @@ export function MemberLimitControl({ memberCount, memberLimit, editable, onChang
             }}
           />
           <p className="member-help">지금 참여자({memberCount}명)보다 적게는 줄일 수 없어요.</p>
+          {onDelete && (
+            <button
+              type="button"
+              className="member-delete"
+              onClick={() => {
+                setOpen(false)
+                onDelete()
+              }}
+            >
+              이 노트 삭제
+            </button>
+          )}
         </div>
       )}
     </div>

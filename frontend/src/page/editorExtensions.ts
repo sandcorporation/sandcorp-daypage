@@ -3,6 +3,9 @@ import Collaboration from '@tiptap/extension-collaboration'
 import { Color, FontSize, TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
 import type * as Y from 'yjs'
+import { TextLimit } from './textLimit'
+
+export { TEXT_LIMIT } from './textLimit'
 
 /** 글자 크기 3단계. 줄 높이는 32px로 고정이라 크게도 장 줄과 어긋나지 않는다. */
 export const TEXT_SIZES = [
@@ -43,6 +46,7 @@ export function textBoxExtensions(fragment?: Y.XmlFragment): Extensions {
     TextStyle,
     Color,
     FontSize,
+    TextLimit,
   ]
   if (fragment) extensions.push(Collaboration.configure({ fragment }))
   return extensions

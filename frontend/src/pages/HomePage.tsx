@@ -3,13 +3,14 @@ import { Link, useNavigate } from 'react-router'
 import { api } from '../api/client'
 import { logout, useMe, type MyNote } from '../auth/me'
 import { Brand, KakaoIcon, kakaoLoginHref } from '../components/Brand'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { MemberLimitPicker } from '../components/MemberLimitPicker'
 import './home.css'
 
 export function HomePage() {
   const { me, reload } = useMe()
   if (!me) return <div className="grid-bg" />
-  return me.authenticated ? <MyNotes notes={me.notes} onLogout={reload} /> : <Landing />
+  return me.authenticated ? <MyNotes notes={me.notes} onChanged={reload} /> : <Landing />
 }
 
 function Landing() {
@@ -102,12 +103,29 @@ function Landing() {
   )
 }
 
-function MyNotes({ notes, onLogout }: { notes: MyNote[]; onLogout: () => void }) {
+function MyNotes({ notes, onChanged }: { notes: MyNote[]; onChanged: () => void }) {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [memberLimit, setMemberLimit] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<MyNote | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function confirmDelete() {
+    if (!deleting) return
+    setBusy(true)
+    try {
+      await api<void>(`/api/notes/${deleting.id}`, { method: 'DELETE' })
+      setDeleting(null)
+      onChanged()
+    } catch {
+      setError('노트를 지우지 못했어요. 잠시 후 다시 시도해 주세요.')
+      setDeleting(null)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function create(e: FormEvent) {
     e.preventDefault()
@@ -127,7 +145,7 @@ function MyNotes({ notes, onLogout }: { notes: MyNote[]; onLogout: () => void })
 
   async function doLogout() {
     await logout()
-    onLogout()
+    onChanged()
   }
 
   return (
@@ -169,7 +187,7 @@ function MyNotes({ notes, onLogout }: { notes: MyNote[]; onLogout: () => void })
           ) : (
             <ul>
               {notes.map((n) => (
-                <li key={n.id}>
+                <li key={n.id} className="note-item">
                   <Link to={`/note/${n.id}`} className="note-card">
                     <span className="note-card-thumb" aria-hidden="true" />
                     <span className="note-card-body">
@@ -180,12 +198,37 @@ function MyNotes({ notes, onLogout }: { notes: MyNote[]; onLogout: () => void })
                       </span>
                     </span>
                   </Link>
+                  {n.isOwner && (
+                    <button
+                      type="button"
+                      className="note-delete"
+                      aria-label={`노트 삭제: ${n.name}`}
+                      title="노트 삭제"
+                      onClick={() => setDeleting(n)}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                        <path d="M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </section>
       </main>
+      {deleting && (
+        <ConfirmDialog
+          title={`‘${deleting.name}’을 지울까요?`}
+          confirmLabel="삭제"
+          busy={busy}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        >
+          <p>오늘 장과 지난 기록까지 모두 바로 사라지고, 되돌릴 수 없어요.</p>
+          {deleting.memberCount > 1 && <p>함께 쓰던 참여자 {deleting.memberCount - 1}명도 더는 볼 수 없어요.</p>}
+        </ConfirmDialog>
+      )}
     </div>
   )
 }

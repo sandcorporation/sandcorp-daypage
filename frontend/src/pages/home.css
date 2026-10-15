@@ -297,3 +297,30 @@
   color: var(--muted-2);
   font-size: 15px;
 }
+.note-item {
+  position: relative;
+}
+.note-delete {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.note-delete:hover,
+.note-delete:focus-visible {
+  background: #fde8e8;
+  color: #b91c1c;
+}
+.note-item .note-card {
+  padding-right: 56px;
+}

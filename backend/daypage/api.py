@@ -188,3 +188,22 @@ def sealed_page_snapshot(request, note_id: str, date: str):
     # 봉인된 장은 바뀌지 않는다.
     res["Cache-Control"] = "private, max-age=86400, immutable"
     return res
+
+
+@api.delete("/notes/{note_id}")
+def delete_note(request, note_id: str):
+    """만든 사람만 지운다. 참여자가 있어도 지우고, 장·기록까지 모두 바로 없앤다(보관하지 않음)."""
+    note = owned_note(request, note_id)
+    note.delete()
+    # 접속해 있던 사람들의 방을 닫아 '노트를 찾을 수 없어요'로 보낸다.
+    transaction.on_commit(lambda: announce_note_deleted(note_id))
+    return HttpResponse(status=204)
+
+
+def announce_note_deleted(note_id: str) -> None:
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    from .consumers import note_group
+
+    async_to_sync(get_channel_layer().group_send)(note_group(note_id), {"type": "note.deleted"})

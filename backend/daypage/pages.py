@@ -73,7 +73,9 @@ def _merge(page: Page) -> Doc:
 def compact(page_id: int) -> None:
     """쌓인 증분을 스냅샷에 합친다."""
     with transaction.atomic():
-        page = Page.objects.select_for_update().get(pk=page_id)
+        page = Page.objects.select_for_update().filter(pk=page_id).first()
+        if page is None:  # 노트가 지워져 장도 없다
+            return
         _merge(page)
         page.save(update_fields=["state"])
 
