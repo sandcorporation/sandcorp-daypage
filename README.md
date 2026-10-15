@@ -20,6 +20,15 @@ pnpm install
 pnpm dev                        # http://localhost:5173
 ```
 
+자정 봉인 작업(Celery)은 필요할 때만 띄운다. 매시 정각에 지난 장을 봉인하고 접속자에게 새 장을 알린다.
+
+```bash
+cd backend
+uv run celery -A config worker --pool=solo -l info   # Windows는 --pool=solo
+uv run celery -A config beat -l info
+uv run python manage.py seal_pages                  # 손으로 한 번 돌리기
+```
+
 Vite 개발 서버가 `/api`, `/auth`, `/ws`를 Django(8000)로 프록시하므로 브라우저에서는 5173 하나만 쓴다.
 
 ## 테스트

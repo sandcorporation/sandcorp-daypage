@@ -9,6 +9,7 @@
 
 import asyncio
 import datetime as dt
+import json
 import logging
 
 from channels.db import database_sync_to_async
@@ -21,6 +22,7 @@ from pycrdt import (
     create_update_message,
     handle_sync_message,
     read_message,
+    write_message,
 )
 
 from . import awareness, clock, pages, rooms
@@ -34,6 +36,10 @@ CLOSE_NOT_TODAY = 4409
 CLOSE_CROWDED = 4429
 
 EMPTY_UPDATE = b"\x00\x00"
+
+# y-websocket 메시지 종류 0(sync)·1(awareness) 외의 Daypage 전용 메시지.
+# 텍스트 프레임은 y-websocket 클라이언트가 바이너리로 읽다 깨지므로 바이너리로 보낸다.
+MESSAGE_PAGE_ROLLED = 100
 
 
 def page_group(page_id: int) -> str:
@@ -216,3 +222,11 @@ class PageConsumer(AsyncWebsocketConsumer):
         if event["sender"] == self.channel_name:
             return
         await self.send(bytes_data=event["message"])
+
+    async def page_rolled(self, event) -> None:
+        """자정 교체: 새 장 날짜를 알리고 이 방을 닫는다. 클라이언트는 새 날짜 방으로 옮겨 간다."""
+        if event["date"] == self.date.isoformat():
+            return
+        payload = json.dumps({"type": "page_rolled", "date": event["date"]}, separators=(",", ":")).encode()
+        await self.send(bytes_data=bytes([MESSAGE_PAGE_ROLLED]) + write_message(payload))
+        await self.close(code=CLOSE_NOT_TODAY)

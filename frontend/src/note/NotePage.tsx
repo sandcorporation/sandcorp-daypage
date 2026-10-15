@@ -47,6 +47,13 @@ export function NotePage({ initial }: Props) {
     onFatal: setFatal,
   })
   const presence = usePresence(provider, note.me)
+
+  // 서버 알림을 놓쳐도 자정이 지나면 스스로 오늘 장을 다시 확인한다.
+  useEffect(() => {
+    const wait = new Date(note.nextMidnight).getTime() - (Date.now() + clockOffset) + 3000
+    const timer = window.setTimeout(refreshToday, Math.max(1000, wait))
+    return () => window.clearTimeout(timer)
+  }, [note.nextMidnight, clockOffset, refreshToday])
   const { toast, show } = useToast()
   const origin = useMemo(() => ({ local: true }), [])
   const history = useUndo(doc, origin)

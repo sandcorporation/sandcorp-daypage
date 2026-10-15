@@ -1,3 +1,4 @@
+import * as decoding from 'lib0/decoding'
 import { useEffect, useState } from 'react'
 import { WebsocketProvider } from 'y-websocket'
 import * as Y from 'yjs'
@@ -11,6 +12,9 @@ export const CLOSE = {
   notToday: 4409,
   crowded: 4429,
 } as const
+
+/** 서버 전용 메시지 종류(consumers.py의 MESSAGE_PAGE_ROLLED) */
+export const MESSAGE_PAGE_ROLLED = 100
 
 export type FatalReason = 'unauthorized' | 'notFound' | 'crowded'
 
@@ -38,6 +42,14 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
     // 같은 브라우저의 다른 탭과 직접 주고받지 않고 항상 서버를 거친다(서버가 봉인·권한을 판단).
     const p = new WebsocketProvider(wsBaseUrl(noteId), date, doc, { disableBc: true, maxBackoffTime: 5000 })
     let everConnected = false
+    // 자정 교체 알림: 새 날짜의 빈 장으로 옮겨 간다.
+    p.messageHandlers[MESSAGE_PAGE_ROLLED] = (_encoder, decoder) => {
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; date: string }
+      if (msg.type === 'page_rolled') {
+        p.shouldConnect = false
+        onNotToday()
+      }
+    }
     setProvider(p)
     setSynced(false)
     setStatus('connecting')
