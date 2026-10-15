@@ -164,6 +164,7 @@ function SealedPageView({ noteId, noteName, date }: { noteId: string; noteName: 
             onFocusHandled={noop}
             onEditing={noop}
             editors={NO_EDITORS}
+            me=""
           />
         </PageView>
       )}

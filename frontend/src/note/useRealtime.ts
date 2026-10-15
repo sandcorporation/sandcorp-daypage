@@ -1,5 +1,5 @@
 import * as decoding from 'lib0/decoding'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { WebsocketProvider } from 'y-websocket'
 import * as Y from 'yjs'
 
@@ -101,5 +101,8 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId, date, doc, generation])
 
-  return { provider, status, synced }
+  /** 지금 provider를 버리고 새로 붙는다 */
+  const reconnect = useCallback(() => setGeneration((g) => g + 1), [])
+
+  return { provider, status, synced, reconnect }
 }

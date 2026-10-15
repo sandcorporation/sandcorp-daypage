@@ -4,6 +4,15 @@ import { LINE_GAP, MARGIN_X, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 
 export const HIGHLIGHTER_ALPHA = 0.45
 
+/** 캔버스 한 장의 최대 픽셀 수. iOS Safari 한도(약 16.7M)보다 여유 있게 잡는다. */
+export const MAX_CANVAS_PIXELS = 12_000_000
+
+/** 화면 크기(CSS px)와 기기 배율로 캔버스 배율을 정한다. 너무 크면 선명도를 낮춰 상한 안에 맞춘다. */
+export function canvasPixelRatio(cssWidth: number, cssHeight: number, dpr: number): number {
+  const fit = Math.floor(Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, cssWidth * cssHeight)) * 1000) / 1000
+  return Math.min(dpr, fit)
+}
+
 /** 형광펜이 항상 펜 아래에 오도록, 같은 도구 안에서는 그린 순서대로. */
 export function orderStrokes(strokes: Stroke[]): Stroke[] {
   const rank = (s: Stroke) => (s.tool === 'highlighter' ? 0 : 1)

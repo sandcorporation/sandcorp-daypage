@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useToast } from '../components/Toast'
 import * as Y from 'yjs'
@@ -48,22 +48,32 @@ export function NotePage({ initial }: Props) {
   const history = useUndo(doc, origin)
   const edit = useEditTools(doc, tool, origin)
 
+  // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
+  const reconnectRef = useRef<() => void>(() => {})
+  const retryTimer = useRef<number | undefined>(undefined)
   const refreshToday = useCallback(async () => {
+    window.clearTimeout(retryTimer.current)
     try {
       const fresh = await api<NoteDetail>(`/api/notes/${note.id}`)
-      setNote((n) => (fresh.today === n.today ? n : fresh))
-    } catch {
-      setFatal('notFound')
+      if (fresh.today !== note.today) setNote(fresh)
+      // 날짜가 그대로면(시계 차이 등) 잠시 뒤 같은 장으로 다시 붙는다.
+      else retryTimer.current = window.setTimeout(() => reconnectRef.current(), 3000)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return setFatal('notFound')
+      // 네트워크 오류는 화면을 굳히지 않고 다시 시도한다.
+      retryTimer.current = window.setTimeout(() => void refreshToday(), 5000)
     }
-  }, [note.id])
+  }, [note.id, note.today])
+  useEffect(() => () => window.clearTimeout(retryTimer.current), [])
 
-  const { provider, status, synced } = useRealtime({
+  const { provider, status, synced, reconnect } = useRealtime({
     noteId: note.id,
     date: note.today,
     doc,
     onNotToday: refreshToday,
     onFatal: setFatal,
   })
+  reconnectRef.current = reconnect
   const presence = usePresence(provider, note.me)
   const { setEditing } = presence
 
@@ -208,6 +218,7 @@ export function NotePage({ initial }: Props) {
           onPointerMove={presence.setCursor}
           overlay={edit.overlay}
           overlayVersion={edit.overlayVersion}
+          preview={edit.preview}
           onGestureStart={history.stopCapturing}
         >
           <TextLayer
@@ -220,6 +231,7 @@ export function NotePage({ initial }: Props) {
             onFocusHandled={clearFocus}
             onEditing={onEditing}
             editors={presence.editors}
+            me={note.me.nickname}
           />
           <Cursors peers={presence.peers} scale={scale} />
         </PageView>

@@ -21,14 +21,35 @@ class Conn:
     date: str
     channel: str
     user_id: int
+    # 처음 접속한 시각. 하트비트로 바뀌지 않아 입장 순서를 정하는 데 쓴다.
+    joined: float = 0.0
 
     def encode(self) -> str:
-        return f"{self.date}|{self.user_id}|{self.channel}"
+        return f"{self.date}|{self.user_id}|{self.joined!r}|{self.channel}"
 
     @staticmethod
     def decode(raw: str) -> "Conn":
-        date, user_id, channel = raw.split("|", 2)
-        return Conn(date, channel, int(user_id))
+        date, user_id, joined, channel = raw.split("|", 3)
+        return Conn(date, channel, int(user_id), float(joined))
+
+
+def admitted(conns: list[Conn], user_id: int, limit: int) -> bool:
+    """입장 순서상 앞선 limit명 안에 드는지. 먼저 등록한 뒤 판정하므로 동시에 와도 모두 같은 결론을 낸다."""
+    first_seen: dict[int, float] = {}
+    for c in conns:
+        first_seen[c.user_id] = min(c.joined, first_seen.get(c.user_id, c.joined))
+    order = sorted(first_seen, key=lambda u: (first_seen[u], u))
+    return user_id in order[:limit]
+
+
+def _decode_all(raws) -> list[Conn]:
+    conns = []
+    for raw in raws:
+        try:
+            conns.append(Conn.decode(raw))
+        except ValueError:
+            continue  # 옛 형식 항목은 만료될 때까지 무시한다
+    return conns
 
 
 def _key(note_id: str) -> str:
@@ -47,7 +68,7 @@ class MemoryRegistry:
             for raw, ts in list(entries.items()):
                 if now - ts > STALE_AFTER:
                     del entries[raw]
-            return [Conn.decode(raw) for raw in entries]
+            return _decode_all(entries)
 
     async def add(self, note_id: str, conn: Conn) -> None:
         with self._lock:
@@ -95,11 +116,11 @@ class RedisRegistry:
     async def connections(self, note_id: str) -> list[Conn]:
         async with self._async() as r:
             await r.zremrangebyscore(_key(note_id), 0, time.time() - STALE_AFTER)
-            return [Conn.decode(raw) for raw in await r.zrange(_key(note_id), 0, -1)]
+            return _decode_all(await r.zrange(_key(note_id), 0, -1))
 
     def connections_sync(self, note_id: str) -> list[Conn]:
         self._sync.zremrangebyscore(_key(note_id), 0, time.time() - STALE_AFTER)
-        return [Conn.decode(raw) for raw in self._sync.zrange(_key(note_id), 0, -1)]
+        return _decode_all(self._sync.zrange(_key(note_id), 0, -1))
 
 
 _registry: MemoryRegistry | RedisRegistry | None = None

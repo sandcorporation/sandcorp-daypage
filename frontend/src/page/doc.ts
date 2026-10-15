@@ -153,8 +153,14 @@ export function textBoxText(doc: Y.Doc, id: string): string {
 }
 
 function xmlText(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
-  if (node instanceof Y.XmlText) return node.toString().replace(/<[^>]+>/g, '')
-  if (node instanceof Y.XmlElement) return node.toArray().map((c) => xmlText(c as Y.XmlElement | Y.XmlText)).join('')
+  // toString()은 서식을 태그로 감싸므로, 사용자가 쓴 꺾쇠와 구분되게 델타에서 글자만 모은다.
+  if (node instanceof Y.XmlText) {
+    return (node.toDelta() as { insert: unknown }[]).map((op) => (typeof op.insert === 'string' ? op.insert : '')).join('')
+  }
+  if (node instanceof Y.XmlElement) {
+    if (node.nodeName === 'hardBreak') return '\n'
+    return node.toArray().map((c) => xmlText(c as Y.XmlElement | Y.XmlText)).join('')
+  }
   return ''
 }
 

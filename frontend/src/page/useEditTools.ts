@@ -2,19 +2,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Y from 'yjs'
 import { deleteStrokes, moveStrokes, readStrokes } from './doc'
 import type { Point } from './geometry'
-import { normalizeRect, strokeBounds, strokesHitBy, strokesInRect, topStrokeAt, unionRect, type Rect } from './hit'
+import {
+  clampMoveDelta,
+  normalizeRect,
+  strokeBounds,
+  strokesHitBy,
+  strokesInRect,
+  topStrokeAt,
+  unionRect,
+  type Rect,
+} from './hit'
 import type { PointerTool } from './PageView'
 import type { ToolKind } from './tools'
 
 const ERASER_RADIUS = 10
 const PICK_TOLERANCE = 8
 
-type Drag = { kind: 'move'; ids: string[]; last: Point } | { kind: 'band'; start: Point; end: Point } | { kind: 'erase'; last: Point }
+type Drag = { kind: 'move'; ids: string[]; start: Point; bounds: Rect } | { kind: 'band'; start: Point; end: Point } | { kind: 'erase'; last: Point }
 
 /** 지우개와 선택·이동 도구. 그리기·글씨는 다른 곳에서 처리한다. */
 export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
   const [selected, setSelected] = useState<string[]>([])
   const [version, setVersion] = useState(0)
+  // 끄는 동안에는 문서에 쓰지 않고 화면에서만 옮겨 보인다. 놓을 때 한 번만 저장한다.
+  const [preview, setPreview] = useState<{ ids: string[]; dx: number; dy: number } | null>(null)
   const drag = useRef<Drag | null>(null)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
 
@@ -59,7 +70,9 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
           if (hit) {
             const ids = selected.includes(hit.id) ? selected : [hit.id]
             setSelected(ids)
-            drag.current = { kind: 'move', ids, last: p }
+            const byId = new Map(strokes.map((st) => [st.id, st]))
+            const bounds = unionRect(ids.flatMap((id) => (byId.has(id) ? [strokeBounds(byId.get(id)!)] : [])))
+            drag.current = { kind: 'move', ids, start: p, bounds: bounds ?? { x: p.x, y: p.y, width: 0, height: 0 } }
           } else {
             setSelected([])
             drag.current = { kind: 'band', start: p, end: p }
@@ -70,17 +83,21 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
           const d = drag.current
           if (!d) return
           if (d.kind === 'move') {
-            moveStrokes(doc, d.ids, p.x - d.last.x, p.y - d.last.y, origin)
-            bump()
-            d.last = p
+            const { dx, dy } = clampMoveDelta(d.bounds, p.x - d.start.x, p.y - d.start.y)
+            setPreview({ ids: d.ids, dx, dy })
           } else if (d.kind === 'band') {
             d.end = p
             bump()
           }
         },
-        up() {
+        up(p) {
           const d = drag.current
           drag.current = null
+          if (d?.kind === 'move') {
+            const { dx, dy } = clampMoveDelta(d.bounds, p.x - d.start.x, p.y - d.start.y)
+            moveStrokes(doc, d.ids, dx, dy, origin)
+            setPreview(null)
+          }
           if (d?.kind === 'band') {
             setSelected(strokesInRect(readStrokes(doc), normalizeRect(d.start, d.end)))
             bump()
@@ -104,7 +121,8 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
       else if (selected.length) {
         const byId = new Map(readStrokes(doc).map((s) => [s.id, s]))
         rect = unionRect(selected.flatMap((id) => (byId.has(id) ? [strokeBounds(byId.get(id)!)] : [])))
-        if (rect) rect = { x: rect.x - 6, y: rect.y - 6, width: rect.width + 12, height: rect.height + 12 }
+        const off = preview ?? { dx: 0, dy: 0 }
+        if (rect) rect = { x: rect.x - 6 + off.dx, y: rect.y - 6 + off.dy, width: rect.width + 12, height: rect.height + 12 }
       }
       if (!rect) return
       ctx.save()
@@ -116,8 +134,8 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
       ctx.strokeRect(rect.x, rect.y, rect.width, rect.height)
       ctx.restore()
     },
-    [doc, selected],
+    [doc, selected, preview],
   )
 
-  return { pointerTool, overlay, overlayVersion: version, selected, deleteSelected }
+  return { pointerTool, overlay, overlayVersion: version, selected, deleteSelected, preview }
 }

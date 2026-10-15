@@ -28,6 +28,19 @@ export function paragraphsOf(doc: Y.Doc, boxId: string): Run[][] {
   })
 }
 
+/** 문단의 서식 조각을 줄바꿈(Shift+Enter) 기준으로 나눈다. */
+export function linesOf(runs: Run[]): Run[][] {
+  const lines: Run[][] = [[]]
+  for (const run of runs) {
+    const parts = run.text.split('\n')
+    parts.forEach((part, i) => {
+      if (i > 0) lines.push([])
+      if (part) lines[lines.length - 1].push({ text: part, marks: run.marks })
+    })
+  }
+  return lines
+}
+
 /** 한 줄을 폭에 맞춰 접는다. 공백에서 먼저 끊고, 한 단어가 너무 길면 글자 단위로 자른다. */
 export function wrapLine(text: string, maxWidth: number, measure: (s: string) => number): string[] {
   if (text === '') return ['']
@@ -71,7 +84,8 @@ function wrapRuns(ctx: CanvasRenderingContext2D, runs: Run[], box: TextBox, maxW
   const breaks = new Set<number>()
   let pos = 0
   for (const l of plainLines.slice(0, -1)) {
-    pos += l.length
+    // 서식 조각은 코드 포인트 단위로 세므로 여기서도 같은 단위로 센다(이모지 등 서로게이트 쌍).
+    pos += Array.from(l).length
     breaks.add(pos)
   }
   let index = 0
@@ -95,7 +109,8 @@ function paintTextBox(ctx: CanvasRenderingContext2D, doc: Y.Doc, box: TextBox): 
   const padding = 6
   const maxWidth = box.width - padding * 2
   let y = box.y
-  for (const runs of paragraphsOf(doc, box.id)) {
+  const hardLines = paragraphsOf(doc, box.id).flatMap(linesOf)
+  for (const runs of hardLines) {
     for (const line of runs.length ? wrapRuns(ctx, runs, box, maxWidth) : [[]]) {
       let x = box.x + padding
       for (const piece of line) {

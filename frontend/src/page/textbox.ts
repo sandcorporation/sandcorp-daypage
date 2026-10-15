@@ -1,6 +1,6 @@
 import * as Y from 'yjs'
-import { addTextBox, deleteTextBox, newId, round, textBoxText } from './doc'
-import { PAGE_WIDTH, snapToLine, type Point } from './geometry'
+import { addTextBox, deleteTextBox, newId, readTextBoxes, round, textBoxText } from './doc'
+import { LINE_GAP, PAGE_HEIGHT, PAGE_WIDTH, snapToLine, type Point } from './geometry'
 import { fontOf } from './fonts'
 
 export const DEFAULT_BOX_WIDTH = 360
@@ -36,6 +36,16 @@ export function createTextBoxAt(
   return id
 }
 
+/**
+ * 편집을 마칠 때 지워도 되는 빈 상자인지. 내가 만든 상자이고, 다른 사람이 지금 쓰고 있지 않을 때만.
+ * (남이 막 만든 빈 상자를 내가 눌렀다 떼도 지워지지 않게)
+ */
+export function shouldRemoveOnBlur(doc: Y.Doc, id: string, me: string, othersEditing: boolean): boolean {
+  const box = readTextBoxes(doc).find((b) => b.id === id)
+  if (!box || box.author !== me || othersEditing) return false
+  return textBoxText(doc, id).trim() === ''
+}
+
 /** 내용이 비었으면 상자를 지우고 true. */
 export function removeIfEmpty(doc: Y.Doc, id: string, origin?: unknown): boolean {
   if (textBoxText(doc, id).trim() !== '') return false
@@ -43,6 +53,11 @@ export function removeIfEmpty(doc: Y.Doc, id: string, origin?: unknown): boolean
   return true
 }
 
-export function snapBoxPosition(p: Point): Point {
-  return { x: round(Math.max(0, Math.min(p.x, PAGE_WIDTH - MIN_BOX_WIDTH))), y: snapToLine(p.y) }
+/** 옮긴 상자 위치: 줄에 맞추고, 상자 폭까지 장 안에 들어오게 한다. */
+export function snapBoxPosition(p: Point, width: number = MIN_BOX_WIDTH): Point {
+  const maxX = Math.max(0, PAGE_WIDTH - width)
+  return {
+    x: round(Math.max(0, Math.min(p.x, maxX))),
+    y: Math.min(snapToLine(p.y), PAGE_HEIGHT - LINE_GAP),
+  }
 }

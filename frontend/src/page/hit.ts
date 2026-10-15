@@ -1,5 +1,5 @@
 import type { Stroke } from './doc'
-import type { Point } from './geometry'
+import { PAGE_HEIGHT, PAGE_WIDTH, type Point } from './geometry'
 import { orderStrokes } from './render'
 
 export type Rect = { x: number; y: number; width: number; height: number }
@@ -87,4 +87,13 @@ export function normalizeRect(a: Point, b: Point): Rect {
 
 export function strokesInRect(strokes: Stroke[], rect: Rect): string[] {
   return strokes.filter((s) => rectsOverlap(strokeBounds(s), rect)).map((s) => s.id)
+}
+
+/** 묶음 경계가 장 밖으로 나가지 않게 이동량을 줄인다. */
+export function clampMoveDelta(bounds: Rect, dx: number, dy: number): { dx: number; dy: number } {
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+  return {
+    dx: clamp(dx, -bounds.x, PAGE_WIDTH - (bounds.x + bounds.width)),
+    dy: clamp(dy, -bounds.y, PAGE_HEIGHT - (bounds.y + bounds.height)),
+  }
 }

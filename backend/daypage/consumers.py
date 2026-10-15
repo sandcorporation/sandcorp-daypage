@@ -10,6 +10,7 @@
 import asyncio
 import datetime as dt
 import json
+import time
 import logging
 
 from channels.db import database_sync_to_async
@@ -88,22 +89,24 @@ class PageConsumer(AsyncWebsocketConsumer):
         if date != clock.today_kst():
             return await self.close(code=CLOSE_NOT_TODAY)
 
-        # 상한은 사람 수로 센다. 이미 들어와 있는 사람의 새 탭·재연결은 받는다.
+        # 상한은 사람 수로 센다. 먼저 등록한 뒤 입장 순서로 판정해야 동시에 와도 상한을 넘지 않는다.
+        # 이미 들어와 있는 사람의 새 탭·재연결은 그 사람의 첫 입장 순서를 따른다.
         registry = rooms.registry()
-        people = {c.user_id for c in await registry.connections(self.note_id)}
-        if user.id not in people and len(people) >= settings.MAX_CONCURRENT_PER_NOTE:
+        conn = rooms.Conn(date.isoformat(), self.channel_name, user.id, time.time())
+        await registry.add(self.note_id, conn)
+        if not rooms.admitted(await registry.connections(self.note_id), user.id, settings.MAX_CONCURRENT_PER_NOTE):
+            await registry.remove(self.note_id, conn)
             return await self.close(code=CLOSE_CROWDED)
 
         page = await database_sync_to_async(pages.get_or_create_page)(note, date)
         self.page_id = page.id
         self.member = member
         self.date = date
-        self.conn = rooms.Conn(date.isoformat(), self.channel_name, user.id)
+        self.conn = conn
 
         # 그룹에 먼저 들어간 뒤 문서를 읽어, 그 사이의 변경을 놓치지 않는다(중복 적용은 무해).
         await self.channel_layer.group_add(page_group(page.id), self.channel_name)
         await self.channel_layer.group_add(note_group(self.note_id), self.channel_name)
-        await registry.add(self.note_id, self.conn)
         # pycrdt Doc은 만든 스레드에서만 쓸 수 있으므로 DB에서는 바이트만 읽고 여기서 만든다.
         self.ydoc = pages.build_doc(await database_sync_to_async(pages.load_updates)(page.id))
         self.heartbeat = asyncio.create_task(self._heartbeat())

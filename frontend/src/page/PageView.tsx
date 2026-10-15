@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import * as Y from 'yjs'
 import { addStroke, newId, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
-import { paintStroke, paintStrokes } from './render'
+import { canvasPixelRatio, paintStroke, paintStrokes } from './render'
 import { strokeWidth, type ToolKind, type WidthLevel } from './tools'
 
 export type PointerTool = {
@@ -34,6 +34,8 @@ type Props = {
   /** 선택 표시 등 획 위에 겹쳐 그리는 오버레이 */
   overlay?: (ctx: CanvasRenderingContext2D) => void
   overlayVersion?: number
+  /** 끄는 중인 획을 문서에 쓰기 전에 옮겨 보여 준다(놓을 때 한 번만 저장) */
+  preview?: { ids: string[]; dx: number; dy: number } | null
 }
 
 export function PageView({
@@ -52,6 +54,7 @@ export function PageView({
   children,
   overlay,
   overlayVersion,
+  preview,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -59,7 +62,10 @@ export function PageView({
   const liveCanvasRef = useRef<HTMLCanvasElement>(null)
   const [scale, setScale] = useState(0.5)
   const drawing = useRef<Stroke | null>(null)
-  const pixelScale = scale * (window.devicePixelRatio || 1)
+  // 지금 처리 중인 포인터. 두 번째 손가락·손바닥이 한 획에 섞이지 않게 한다.
+  const activePointer = useRef<number | null>(null)
+  const dpr = canvasPixelRatio(PAGE_WIDTH * scale, PAGE_HEIGHT * scale, window.devicePixelRatio || 1)
+  const pixelScale = scale * dpr
 
   useLayoutEffect(() => {
     const el = viewportRef.current
@@ -81,12 +87,21 @@ export function PageView({
     if (!canvas || !ctx) return
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    paintStrokes(ctx, readStrokes(doc), pixelScale)
+    let strokes = readStrokes(doc)
+    if (preview && (preview.dx || preview.dy)) {
+      const moving = new Set(preview.ids)
+      strokes = strokes.map((st) =>
+        moving.has(st.id)
+          ? { ...st, points: st.points.map((v, i) => (i % 3 === 0 ? v + preview.dx : i % 3 === 1 ? v + preview.dy : v)) }
+          : st,
+      )
+    }
+    paintStrokes(ctx, strokes, pixelScale)
     if (overlay) {
       ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
       overlay(ctx)
     }
-  }, [doc, pixelScale, overlay])
+  }, [doc, pixelScale, overlay, preview])
 
   // 문서가 바뀌면 다음 프레임에 한 번만 다시 그린다.
   useEffect(() => {
@@ -131,10 +146,12 @@ export function PageView({
     if (readOnly || e.button > 0) return
     // 글 상자 같은 DOM 위에서 누른 건 그 요소가 처리한다.
     if ((e.target as HTMLElement).closest('[data-page-ui]')) return
+    if (activePointer.current !== null) return
     const p = pagePoint(e)
     onGestureStart?.()
     if (tool === 'pen' || tool === 'highlighter') {
       e.currentTarget.setPointerCapture(e.pointerId)
+      activePointer.current = e.pointerId
       drawing.current = {
         id: newId(),
         tool,
@@ -150,11 +167,13 @@ export function PageView({
     }
     if (pointerTool?.down?.(p, e)) {
       e.currentTarget.setPointerCapture(e.pointerId)
+      activePointer.current = e.pointerId
       e.preventDefault()
     }
   }
 
   function onMove(e: PointerEvent<HTMLDivElement>) {
+    if (activePointer.current !== null && e.pointerId !== activePointer.current) return
     const p = pagePoint(e)
     onPointerMove?.(p)
     const s = drawing.current
@@ -172,6 +191,8 @@ export function PageView({
   }
 
   function onUp(e: PointerEvent<HTMLDivElement>) {
+    if (e.pointerId !== activePointer.current) return
+    activePointer.current = null
     const s = drawing.current
     if (s) {
       drawing.current = null
@@ -204,15 +225,15 @@ export function PageView({
         />
         <canvas
           ref={inkCanvasRef}
-          width={Math.round(width * (window.devicePixelRatio || 1))}
-          height={Math.round(height * (window.devicePixelRatio || 1))}
+          width={Math.round(width * dpr)}
+          height={Math.round(height * dpr)}
           style={{ width, height }}
           aria-hidden="true"
         />
         <canvas
           ref={liveCanvasRef}
-          width={Math.round(width * (window.devicePixelRatio || 1))}
-          height={Math.round(height * (window.devicePixelRatio || 1))}
+          width={Math.round(width * dpr)}
+          height={Math.round(height * dpr)}
           style={{ width, height }}
           aria-hidden="true"
         />

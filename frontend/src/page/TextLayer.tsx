@@ -6,7 +6,7 @@ import { LINE_GAP, PAGE_WIDTH } from './geometry'
 import { textBoxExtensions } from './editorExtensions'
 import { fontOf } from './fonts'
 import { FormatBar } from './FormatBar'
-import { clampBoxWidth, removeIfEmpty, snapBoxPosition } from './textbox'
+import { clampBoxWidth, removeIfEmpty, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
 import type { ToolKind } from './tools'
 
 /** 서식 막대의 화면 폭(px, 대략). 장 오른쪽 끝에서 잘리지 않게 자리를 정할 때 쓴다. */
@@ -25,6 +25,8 @@ type Props = {
   onEditing: (boxId: string | null) => void
   /** 다른 사람이 이어 쓰는 중인 상자 → 닉네임 목록 */
   editors: Map<string, { nickname: string; color: string }[]>
+  /** 내 닉네임(내가 만든 빈 상자만 지우려고) */
+  me: string
 }
 
 function useTextBoxes(doc: Y.Doc): TextBox[] {
@@ -67,10 +69,14 @@ function TextBoxView({
   onFocusHandled,
   onEditing,
   editors,
+  me,
 }: ViewProps) {
   const fragment = textBoxContent(doc, box.id)
   const [focused, setFocused] = useState(false)
   const [drag, setDrag] = useState<{ x: number; y: number; width: number } | null>(null)
+  // 편집기 콜백은 처음 만들 때 고정되므로 최신 값은 ref로 읽는다.
+  const latest = useRef({ me, othersEditing: false })
+  latest.current = { me, othersEditing: (editors.get(box.id) ?? []).length > 0 }
   const dragStart = useRef<{ kind: 'move' | 'resize'; px: number; py: number; box: TextBox } | null>(null)
 
   const editor = useEditor(
@@ -91,8 +97,11 @@ function TextBoxView({
       onBlur: () => {
         setFocused(false)
         onEditing(null)
-        // 포커스를 잃었을 때 내용이 비었으면 지운다.
-        window.setTimeout(() => removeIfEmpty(doc, box.id, origin), 0)
+        // 내가 만든 빈 상자이고 다른 사람이 쓰고 있지 않으면 지운다.
+        window.setTimeout(() => {
+          const { me: mine, othersEditing } = latest.current
+          if (shouldRemoveOnBlur(doc, box.id, mine, othersEditing)) removeIfEmpty(doc, box.id, origin)
+        }, 0)
       },
     },
     [fragment, readOnly],
@@ -135,10 +144,11 @@ function TextBoxView({
     const s = dragStart.current
     dragStart.current = null
     if (!s || !drag) return setDrag(null)
+    // 클릭만 하고 움직이지 않았으면 쓰지 않는다(빈 되돌리기 단계·불필요한 전송 방지).
     if (s.kind === 'move') {
-      const p = snapBoxPosition({ x: drag.x, y: drag.y })
-      updateTextBox(doc, box.id, { x: p.x, y: p.y }, origin)
-    } else {
+      const p = snapBoxPosition({ x: drag.x, y: drag.y }, s.box.width)
+      if (p.x !== s.box.x || p.y !== s.box.y) updateTextBox(doc, box.id, { x: p.x, y: p.y }, origin)
+    } else if (drag.width !== s.box.width) {
       updateTextBox(doc, box.id, { width: drag.width }, origin)
     }
     setDrag(null)
