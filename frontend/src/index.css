@@ -1,0 +1,155 @@
+:root {
+  --ink: #1f2128;
+  --ink-soft: #3b3f4a;
+  --muted: #4a4e5a;
+  --muted-2: #5e6270;
+  --line: #d5d8e0;
+  --line-soft: #e2e4ea;
+  --grid: #e4e6ec;
+  --paper: #f7f6f1;
+  --paper-dark: #ecebe5;
+  --white: #ffffff;
+  --accent: #2a47b0;
+  --accent-hover: #1c3285;
+  --accent-soft: #e6eaf7;
+  --orange: #e0603a;
+  --orange-deep: #c2410c;
+  --yellow: #f2c230;
+  --green: #16794f;
+  --kakao: #fee500;
+
+  --sans: 'Gothic A1', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --hand: 'Nanum Pen Script', cursive;
+
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  min-width: 320px;
+}
+
+a {
+  color: var(--accent);
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+button {
+  font-family: inherit;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 모눈 배경 */
+.grid-bg {
+  min-height: 100vh;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.hand {
+  font-family: var(--hand);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:hover {
+  color: var(--ink);
+  border-color: #b9bdc9;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-primary {
+  border: 0;
+  background: var(--accent);
+  color: var(--white);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  color: var(--white);
+}
+.btn-kakao {
+  border: 0;
+  background: var(--kakao);
+  color: rgba(0, 0, 0, 0.85);
+}
+.btn-kakao:hover {
+  color: rgba(0, 0, 0, 0.85);
+  filter: brightness(0.97);
+}
+.btn-lg {
+  min-height: 56px;
+  padding: 0 26px;
+  border-radius: 12px;
+  font-size: 17px;
+}
+
+.card {
+  background: var(--white);
+  border: 2px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 8px 8px 0 var(--ink);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--white);
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 100;
+}
