@@ -368,3 +368,20 @@
   line-height: 1.2;
   white-space: nowrap;
 }
+
+.connection-pill {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--white);
+  border: 1px solid var(--line-soft);
+  padding: 8px 12px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(31, 33, 40, 0.08);
+}

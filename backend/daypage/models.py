@@ -60,3 +60,28 @@ class NoteMember(models.Model):
             models.UniqueConstraint(fields=["note", "user"], name="uniq_member_note_user"),
             models.UniqueConstraint(fields=["note", "nickname"], name="uniq_member_note_nickname"),
         ]
+
+
+class Page(models.Model):
+    """노트의 하루치 장. 내용은 Yjs 문서 바이너리(스냅샷 + 증분)로 저장한다."""
+
+    note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="pages")
+    date = models.DateField()
+    state = models.BinaryField(default=b"")
+    sealed_at = models.DateTimeField(null=True, blank=True)
+    stroke_count = models.PositiveIntegerField(default=0)
+    participant_count = models.PositiveIntegerField(default=0)
+    is_empty = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["note", "date"], name="uniq_page_note_date")]
+        indexes = [models.Index(fields=["sealed_at", "date"])]
+
+
+class PageUpdate(models.Model):
+    """스냅샷 이후 쌓인 Yjs 증분. 주기적으로 스냅샷에 합치고 지운다."""
+
+    page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name="updates")
+    update = models.BinaryField()
+    created_at = models.DateTimeField(auto_now_add=True)

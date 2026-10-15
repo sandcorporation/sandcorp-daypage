@@ -75,6 +75,12 @@ DATABASES = {
 
 REDIS_URL = env("REDIS_URL", "redis://127.0.0.1:6379/0")
 
+# 접속 중인 연결 목록(Presence·동시 접속 상한). 비우면 프로세스 메모리를 쓴다.
+ROOM_REGISTRY_URL = env("ROOM_REGISTRY_URL", REDIS_URL)
+
+# 증분이 이만큼 쌓이면 스냅샷으로 합친다.
+COMPACT_EVERY = int(env("COMPACT_EVERY", "200"))
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",

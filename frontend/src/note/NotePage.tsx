@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { useToast } from '../components/Toast'
-import { createPageDoc } from '../page/doc'
+import * as Y from 'yjs'
 import { PageView, type PointerTool } from '../page/PageView'
 import { TextLayer } from '../page/TextLayer'
 import { createTextBoxAt } from '../page/textbox'
@@ -9,7 +9,10 @@ import { Toolbar } from '../page/Toolbar'
 import { INKS, type ToolKind, type WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
 import { isTypingTarget, useUndo } from '../page/useUndo'
+import { ErrorScreen } from '../pages/ErrorScreen'
+import { ConnectionPill } from './ConnectionPill'
 import { NoteHeader } from './NoteHeader'
+import { useRealtime, type FatalReason } from './useRealtime'
 import type { NoteDetail } from './types'
 import './note.css'
 
@@ -21,7 +24,26 @@ export function NotePage({ initial }: Props) {
   const [tool, setTool] = useState<ToolKind>('pen')
   const [ink, setInk] = useState<string>(INKS[0].color)
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(1)
-  const doc = useMemo(() => createPageDoc(note.today), [note.today])
+  // 장(날짜)마다 새 문서. 자정 교체 때 날짜가 바뀌면 새 방으로 옮겨 간다.
+  const doc = useMemo(() => new Y.Doc(), [note.today]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [fatal, setFatal] = useState<FatalReason | null>(null)
+
+  const refreshToday = useCallback(async () => {
+    try {
+      const fresh = await api<NoteDetail>(`/api/notes/${note.id}`)
+      setNote((n) => (fresh.today === n.today ? n : fresh))
+    } catch {
+      setFatal('notFound')
+    }
+  }, [note.id])
+
+  const { status, synced } = useRealtime({
+    noteId: note.id,
+    date: note.today,
+    doc,
+    onNotToday: refreshToday,
+    onFatal: setFatal,
+  })
   const { toast, show } = useToast()
   const origin = useMemo(() => ({ local: true }), [])
   const history = useUndo(doc, origin)
@@ -82,6 +104,9 @@ export function NotePage({ initial }: Props) {
     }
   }, [note.url, show])
 
+  if (fatal === 'crowded') return <ErrorScreen kind="crowded" />
+  if (fatal) return <ErrorScreen kind={fatal === 'notFound' ? 'missing' : 'server'} />
+
   return (
     <div className="note-screen">
       <NoteHeader
@@ -131,6 +156,7 @@ export function NotePage({ initial }: Props) {
           />
         </PageView>
       </div>
+      <ConnectionPill status={status} synced={synced} />
       {toast}
     </div>
   )
