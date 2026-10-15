@@ -1,4 +1,5 @@
 import type { TextBox } from './doc'
+import { fontOf } from './fonts'
 
 type Marks = Record<string, Record<string, unknown> | undefined>
 
@@ -14,8 +15,8 @@ export type ResolvedStyle = {
 }
 
 /** 글 상자 속성과 서식 마크를 합쳐 실제 글자 모양을 정한다(화면·PNG 공용). */
-export function textStyle(box: Pick<TextBox, 'color' | 'fontSize'>, marks: Marks): ResolvedStyle {
-  const family = "'Nanum Pen Script', cursive"
+export function textStyle(box: Pick<TextBox, 'color' | 'fontSize' | 'font'>, marks: Marks): ResolvedStyle {
+  const family = fontOf(box.font).family
   const size = box.fontSize
   const bold = !!marks.bold
   const italic = !!marks.italic

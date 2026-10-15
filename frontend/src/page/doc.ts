@@ -4,7 +4,7 @@ import * as Y from 'yjs'
  * 장 하나의 Yjs 문서 구조.
  *
  * strokes:   Y.Map<strokeId, Y.Map{ tool, color, width, points: number[], author, createdAt }>
- * textboxes: Y.Map<boxId, Y.Map{ x, y, width, color, fontSize, content: Y.XmlFragment, author }>
+ * textboxes: Y.Map<boxId, Y.Map{ x, y, width, color, fontSize, font, content: Y.XmlFragment, author }>
  * meta:      Y.Map{ date }
  */
 
@@ -28,6 +28,8 @@ export type TextBox = {
   width: number
   color: string
   fontSize: number
+  /** 글꼴 id(fonts.ts). 없으면 기본 글꼴 */
+  font?: string
   author: string
 }
 
@@ -113,6 +115,7 @@ export function addTextBox(doc: Y.Doc, box: TextBox, origin?: unknown): void {
     m.set('width', box.width)
     m.set('color', box.color)
     m.set('fontSize', box.fontSize)
+    if (box.font) m.set('font', box.font)
     m.set('author', box.author)
     m.set('content', new Y.XmlFragment())
     textboxesMap(doc).set(box.id, m)
@@ -127,6 +130,7 @@ export function readTextBox(id: string, m: Y.Map<unknown>): TextBox {
     width: m.get('width') as number,
     color: m.get('color') as string,
     fontSize: m.get('fontSize') as number,
+    font: (m.get('font') as string | undefined) ?? undefined,
     author: m.get('author') as string,
   }
 }
@@ -157,7 +161,7 @@ function xmlText(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
 export function updateTextBox(
   doc: Y.Doc,
   id: string,
-  patch: Partial<Pick<TextBox, 'x' | 'y' | 'width'>>,
+  patch: Partial<Pick<TextBox, 'x' | 'y' | 'width' | 'font' | 'fontSize' | 'color'>>,
   origin?: unknown,
 ): void {
   const m = textboxesMap(doc).get(id)

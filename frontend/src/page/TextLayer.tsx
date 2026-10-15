@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import * as Y from 'yjs'
 import { readTextBox, textBoxContent, textboxesMap, updateTextBox, type TextBox } from './doc'
 import { LINE_GAP } from './geometry'
+import { fontOf } from './fonts'
 import { clampBoxWidth, removeIfEmpty, snapBoxPosition } from './textbox'
 import type { ToolKind } from './tools'
 
@@ -165,6 +166,7 @@ function TextBoxView({
         top: y,
         width,
         color: box.color,
+        fontFamily: fontOf(box.font).family,
         fontSize: box.fontSize,
         lineHeight: `${LINE_GAP}px`,
         borderColor: others[0]?.color,

@@ -17,5 +17,3 @@ const HIGHLIGHTER_WIDTHS = [14, 24, 36]
 export function strokeWidth(tool: 'pen' | 'highlighter', level: WidthLevel): number {
   return (tool === 'pen' ? PEN_WIDTHS : HIGHLIGHTER_WIDTHS)[level]
 }
-
-export const TEXT_FONT_SIZE = 28

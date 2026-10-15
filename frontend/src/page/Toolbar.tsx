@@ -1,3 +1,4 @@
+import { FontPicker } from './FontPicker'
 import { INKS, WIDTH_NAMES, type ToolKind, type WidthLevel } from './tools'
 
 type Props = {
@@ -11,6 +12,10 @@ type Props = {
   onWidth: (level: WidthLevel) => void
   onUndo: () => void
   onRedo: () => void
+  font: string
+  onFont: (id: string) => void
+  /** 글씨 도구이거나 글 상자를 편집 중일 때 글꼴 선택을 보인다 */
+  showFont: boolean
 }
 
 const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
@@ -22,7 +27,7 @@ const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
 ]
 
 export function Toolbar(props: Props) {
-  const { tool, ink, widthLevel, canUndo, canRedo, onTool, onInk, onWidth, onUndo, onRedo } = props
+  const { tool, ink, widthLevel, canUndo, canRedo, onTool, onInk, onWidth, onUndo, onRedo, font, onFont, showFont } = props
   return (
     <nav aria-label="도구" className="toolbar">
       {TOOLS.map((t) => (
@@ -40,6 +45,7 @@ export function Toolbar(props: Props) {
           </svg>
         </button>
       ))}
+      {showFont && <FontPicker font={font} onFont={onFont} />}
       <div className="tool-sep" />
       {INKS.map((c) => (
         <button

@@ -5,6 +5,8 @@ import * as Y from 'yjs'
 import { PageView, type PointerTool } from '../page/PageView'
 import { TextLayer } from '../page/TextLayer'
 import { createTextBoxAt } from '../page/textbox'
+import { updateTextBox } from '../page/doc'
+import { DEFAULT_FONT, fontOf } from '../page/fonts'
 import { Toolbar } from '../page/Toolbar'
 import { INKS, type ToolKind, type WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
@@ -24,12 +26,25 @@ type Props = { initial: NoteDetail }
 export function NotePage({ initial }: Props) {
   const [note, setNote] = useState(initial)
   const [clockOffset] = useState(() => new Date(initial.serverNow).getTime() - Date.now())
+  const [fatal, setFatal] = useState<FatalReason | null>(null)
+  const { toast, show } = useToast()
+
+  // 도구 상태
   const [tool, setTool] = useState<ToolKind>('pen')
   const [ink, setInk] = useState<string>(INKS[0].color)
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(1)
+  const [font, setFont] = useState<string>(DEFAULT_FONT.id)
+  const [scale, setScale] = useState(0.5)
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const [editingBoxId, setEditingBoxId] = useState<string | null>(null)
+  const clearFocus = useCallback(() => setFocusId(null), [])
+
   // 장(날짜)마다 새 문서. 자정 교체 때 날짜가 바뀌면 새 방으로 옮겨 간다.
   const doc = useMemo(() => new Y.Doc(), [note.today]) // eslint-disable-line react-hooks/exhaustive-deps
-  const [fatal, setFatal] = useState<FatalReason | null>(null)
+  // 내 변경에 붙이는 표식(되돌리기는 이것만 추적한다)
+  const origin = useMemo(() => ({ local: true }), [])
+  const history = useUndo(doc, origin)
+  const edit = useEditTools(doc, tool, origin)
 
   const refreshToday = useCallback(async () => {
     try {
@@ -48,6 +63,7 @@ export function NotePage({ initial }: Props) {
     onFatal: setFatal,
   })
   const presence = usePresence(provider, note.me)
+  const { setEditing } = presence
 
   // 서버 알림을 놓쳐도 자정이 지나면 스스로 오늘 장을 다시 확인한다.
   useEffect(() => {
@@ -55,23 +71,33 @@ export function NotePage({ initial }: Props) {
     const timer = window.setTimeout(refreshToday, Math.max(1000, wait))
     return () => window.clearTimeout(timer)
   }, [note.nextMidnight, clockOffset, refreshToday])
-  const { toast, show } = useToast()
-  const origin = useMemo(() => ({ local: true }), [])
-  const history = useUndo(doc, origin)
-  const edit = useEditTools(doc, tool, origin)
-  const [scale, setScale] = useState(0.5)
-  const [focusId, setFocusId] = useState<string | null>(null)
-  const clearFocus = useCallback(() => setFocusId(null), [])
+
+  const onEditing = useCallback(
+    (boxId: string | null) => {
+      setEditingBoxId(boxId)
+      setEditing(boxId)
+    },
+    [setEditing],
+  )
+
+  const chooseFont = useCallback(
+    (id: string) => {
+      setFont(id)
+      // 편집 중인 상자가 있으면 그 상자에도 바로 적용한다(내 작업이라 되돌릴 수 있음).
+      if (editingBoxId) updateTextBox(doc, editingBoxId, { font: id, fontSize: fontOf(id).size }, origin)
+    },
+    [doc, editingBoxId, origin],
+  )
 
   const textTool = useMemo<PointerTool>(
     () => ({
       down(p) {
-        const id = createTextBoxAt(doc, p, { color: ink, author: note.me.nickname }, origin)
+        const id = createTextBoxAt(doc, p, { color: ink, author: note.me.nickname, font }, origin)
         setFocusId(id)
         return true
       },
     }),
-    [doc, ink, note.me.nickname, origin],
+    [doc, ink, note.me.nickname, origin, font],
   )
 
   useEffect(() => {
@@ -163,6 +189,9 @@ export function NotePage({ initial }: Props) {
           onWidth={setWidthLevel}
           onUndo={history.undo}
           onRedo={history.redo}
+          font={font}
+          onFont={chooseFont}
+          showFont={tool === 'text' || editingBoxId !== null}
         />
         <PageView
           doc={doc}
@@ -186,7 +215,7 @@ export function NotePage({ initial }: Props) {
             origin={origin}
             focusId={focusId}
             onFocusHandled={clearFocus}
-            onEditing={presence.setEditing}
+            onEditing={onEditing}
             editors={presence.editors}
           />
           <Cursors peers={presence.peers} scale={scale} />

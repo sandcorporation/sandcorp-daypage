@@ -1,7 +1,7 @@
 import * as Y from 'yjs'
 import { addTextBox, deleteTextBox, newId, round, textBoxText } from './doc'
 import { PAGE_WIDTH, snapToLine, type Point } from './geometry'
-import { TEXT_FONT_SIZE } from './tools'
+import { fontOf } from './fonts'
 
 export const DEFAULT_BOX_WIDTH = 360
 export const MIN_BOX_WIDTH = 120
@@ -14,7 +14,7 @@ export function clampBoxWidth(width: number, x: number): number {
 export function createTextBoxAt(
   doc: Y.Doc,
   p: Point,
-  opts: { color: string; author: string },
+  opts: { color: string; author: string; font?: string },
   origin?: unknown,
 ): string {
   const id = newId()
@@ -27,7 +27,8 @@ export function createTextBoxAt(
       y: snapToLine(p.y),
       width: clampBoxWidth(DEFAULT_BOX_WIDTH, x),
       color: opts.color,
-      fontSize: TEXT_FONT_SIZE,
+      fontSize: fontOf(opts.font).size,
+      font: fontOf(opts.font).id,
       author: opts.author,
     },
     origin,
