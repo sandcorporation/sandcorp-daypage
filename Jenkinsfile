@@ -3,8 +3,9 @@
 // .env는 여기서 만들지 않는다. 워크스페이스에 놓아 둔 것을 compose가 ./.env로 읽는다.
 // 저장소에는 없고(.gitignore), checkout은 추적하지 않는 파일을 지우지 않아 빌드 사이에 남는다.
 //
-// sub의 80·443은 NPMplus가 쓰므로 Caddy는 127.0.0.1:${HTTP_PORT}(기본 18090)에만 묶는다.
-// NPMplus 프록시 호스트: daypage.sandcorp.co.kr → http://127.0.0.1:18090, 웹소켓 허용, Let's Encrypt.
+// sub에 배포한 것이 운영(prod)이다. sub의 80·443은 NPMplus가 쓰므로 Caddy는 docker 브리지
+// 게이트웨이 172.17.0.1:${HTTP_PORT}(기본 18090)에만 묶는다.
+// NPMplus 프록시 호스트: daypage.sandcorp.co.kr → http://172.17.0.1:18090, 웹소켓 허용, Let's Encrypt.
 //
 // 테스트는 로컬에서만 돌린다(CI 없음). 이 잡은 빌드·배포·헬스 확인만 한다.
 
