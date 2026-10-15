@@ -37,11 +37,12 @@ services:
   backend:
     <<: *backend
     # 웹소켓 메시지는 Redis 채널 레이어로 워커 사이에 오가므로 CPU 수만큼 워커를 둘 수 있다.
-    command: >
-      sh -c "python manage.py migrate --noinput &&
-             uvicorn config.asgi:application --host 0.0.0.0 --port 8000
-             --workers $${UVICORN_WORKERS:-2}
-             --proxy-headers --forwarded-allow-ips '*'"
+    # 한 줄로 쓴다. YAML 접힘(>)에서 더 들여 쓴 줄은 줄바꿈이 남아, 첫 줄만 실행되고
+    # --workers·--proxy-headers가 빠졌었다.
+    command:
+      - sh
+      - -c
+      - "python manage.py migrate --noinput && exec uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --workers $${UVICORN_WORKERS:-2} --proxy-headers --forwarded-allow-ips '*'"
 
   worker:
     <<: *backend
