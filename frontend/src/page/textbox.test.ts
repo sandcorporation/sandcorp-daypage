@@ -2,11 +2,11 @@ import * as Y from 'yjs'
 import { createPageDoc, readTextBoxes, textBoxContent } from './doc'
 import { createTextBoxAt, removeIfEmpty, MIN_BOX_WIDTH, clampBoxWidth, nudgeBox } from './textbox'
 
-test('글 상자 위치는 32px 줄에 맞춰진다', () => {
+test('글 상자 위치는 32px 칸에 맞춰진다', () => {
   const doc = createPageDoc('2026-10-15')
   const id = createTextBoxAt(doc, { x: 210.4, y: 117 }, { color: '#2A47B0', author: '졸린 수달' })
   const box = readTextBoxes(doc).find((b) => b.id === id)!
-  expect(box.y).toBe(128)
+  expect(box.y).toBe(96) // 117은 96~127 칸 안
   expect(box.y % 32).toBe(0)
   expect(box.x).toBe(210)
 })
@@ -47,4 +47,27 @@ test('손잡이에서 화살표로 옮기면 좌우 8px, 위아래 한 줄씩 �
   expect(nudgeBox({ x: 0, y: 0, width: 360 }, 'ArrowLeft')).toEqual({ x: 0, y: 0 })
   expect(nudgeBox({ x: 0, y: 0, width: 360 }, 'ArrowUp')).toEqual({ x: 0, y: 0 })
   expect(nudgeBox(box, 'Enter')).toBeNull()
+})
+
+describe('누른 칸에 상자가 생긴다', () => {
+  // 종이 줄은 y = 31 + 32k 에 그려진다. k번째 칸은 32k ~ 32k+31.
+  const topAt = (y: number) => {
+    const doc = createPageDoc('2026-10-15')
+    const id = createTextBoxAt(doc, { x: 100, y }, { color: '#000', author: 'a' })
+    return readTextBoxes(doc).find((b) => b.id === id)!.y
+  }
+
+  test('칸의 위쪽·가운데·아래쪽 어디를 눌러도 그 칸', () => {
+    expect(topAt(96 + 2)).toBe(96)
+    expect(topAt(96 + 16)).toBe(96)
+    expect(topAt(96 + 29)).toBe(96)
+  })
+
+  test('줄 바로 아래를 누르면 아래 칸', () => {
+    expect(topAt(128 + 1)).toBe(128)
+  })
+
+  test('장 맨 아래 칸보다 아래로는 가지 않는다', () => {
+    expect(topAt(2399)).toBe(2400 - 32)
+  })
 })

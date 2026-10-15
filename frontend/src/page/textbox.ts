@@ -1,6 +1,6 @@
 import * as Y from 'yjs'
 import { addTextBox, deleteTextBox, newId, readTextBoxes, round, textBoxText } from './doc'
-import { LINE_GAP, PAGE_HEIGHT, PAGE_WIDTH, snapToLine, type Point } from './geometry'
+import { LINE_GAP, PAGE_HEIGHT, PAGE_WIDTH, rowTop, snapToLine, type Point } from './geometry'
 import { fontOf } from './fonts'
 
 export const DEFAULT_BOX_WIDTH = 360
@@ -10,7 +10,7 @@ export function clampBoxWidth(width: number, x: number): number {
   return Math.round(Math.max(MIN_BOX_WIDTH, Math.min(width, PAGE_WIDTH - x)))
 }
 
-/** 누른 자리에 글 상자를 만든다. 세로 위치는 줄에 맞춘다. */
+/** 누른 자리에 글 상자를 만든다. 세로 위치는 누른 칸의 위쪽 경계. */
 export function createTextBoxAt(
   doc: Y.Doc,
   p: Point,
@@ -24,7 +24,7 @@ export function createTextBoxAt(
     {
       id,
       x,
-      y: snapToLine(p.y),
+      y: rowTop(p.y),
       width: clampBoxWidth(DEFAULT_BOX_WIDTH, x),
       color: opts.color,
       fontSize: fontOf(opts.font).size,
