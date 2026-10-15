@@ -1,13 +1,16 @@
-import Collaboration from '@tiptap/extension-collaboration'
 import { EditorContent, useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import * as Y from 'yjs'
 import { readTextBox, textBoxContent, textboxesMap, updateTextBox, type TextBox } from './doc'
-import { LINE_GAP } from './geometry'
+import { LINE_GAP, PAGE_WIDTH } from './geometry'
+import { textBoxExtensions } from './editorExtensions'
 import { fontOf } from './fonts'
+import { FormatBar } from './FormatBar'
 import { clampBoxWidth, removeIfEmpty, snapBoxPosition } from './textbox'
 import type { ToolKind } from './tools'
+
+/** 서식 막대의 화면 폭(px, 대략). 장 오른쪽 끝에서 잘리지 않게 자리를 정할 때 쓴다. */
+const FORMAT_BAR_WIDTH = 480
 
 type Props = {
   doc: Y.Doc
@@ -73,23 +76,7 @@ function TextBoxView({
   const editor = useEditor(
     {
       editable: !readOnly,
-      extensions: [
-        StarterKit.configure({
-          undoRedo: false,
-          heading: false,
-          bulletList: false,
-          orderedList: false,
-          listItem: false,
-          blockquote: false,
-          codeBlock: false,
-          code: false,
-          horizontalRule: false,
-          link: false,
-          dropcursor: false,
-          gapcursor: false,
-        }),
-        Collaboration.configure({ fragment }),
-      ],
+      extensions: textBoxExtensions(fragment),
       editorProps: {
         attributes: {
           class: 'textbox-editor',
@@ -183,6 +170,12 @@ function TextBoxView({
           {others.map((o) => o.nickname).join(', ')} 이어 쓰는 중
         </span>
       )}
+      {focused && editor && !readOnly && <FormatBar
+          editor={editor}
+          scale={scale}
+          below={y * scale < 56}
+          alignRight={x + FORMAT_BAR_WIDTH / scale > PAGE_WIDTH}
+        />}
       <EditorContent editor={editor} />
       {interactive && (
         <span

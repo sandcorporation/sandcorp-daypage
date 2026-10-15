@@ -504,3 +504,84 @@
     top: calc(100% + 8px);
   }
 }
+
+/* 서식 막대 */
+.format-bar {
+  position: absolute;
+  left: -2px;
+  bottom: calc(100% + 6px);
+  transform-origin: 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--white);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(31, 33, 40, 0.12);
+  font-family: var(--sans);
+  white-space: nowrap;
+  z-index: 10;
+  cursor: default;
+}
+.format-btn {
+  min-width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.format-btn:hover {
+  background: var(--paper-dark);
+}
+.format-btn[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.format-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+.format-btn[aria-pressed='true'] .format-swatch {
+  box-shadow:
+    0 0 0 2px var(--white),
+    0 0 0 3.5px currentColor;
+}
+.format-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--line-soft);
+  margin: 0 3px;
+}
+.textbox-editing + .format-bar,
+.textbox.is-focused .textbox-editing {
+  display: none;
+}
+.format-bar.below {
+  bottom: auto;
+  top: calc(100% + 6px);
+  transform-origin: 0 0;
+}
+.format-bar.align-right {
+  left: auto;
+  right: -2px;
+  transform-origin: 100% 100%;
+}
+.format-bar.below.align-right {
+  transform-origin: 100% 0;
+}
+@media (max-width: 720px) {
+  .format-bar {
+    flex-wrap: wrap;
+    max-width: 260px;
+    white-space: normal;
+  }
+}
