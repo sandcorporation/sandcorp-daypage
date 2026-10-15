@@ -1,6 +1,6 @@
 import * as Y from 'yjs'
 import { createPageDoc, readTextBoxes, textBoxContent } from './doc'
-import { createTextBoxAt, removeIfEmpty, MIN_BOX_WIDTH, clampBoxWidth, nudgeBox } from './textbox'
+import { createTextBoxAt, removeIfEmpty, MIN_BOX_WIDTH, clampBoxWidth, nudgeBox, fitBoxInPage } from './textbox'
 
 test('글 상자 위치는 32px 칸에 맞춰진다', () => {
   const doc = createPageDoc('2026-10-15')
@@ -69,5 +69,20 @@ describe('누른 칸에 상자가 생긴다', () => {
 
   test('장 맨 아래 칸보다 아래로는 가지 않는다', () => {
     expect(topAt(2399)).toBe(2400 - 32)
+  })
+})
+
+describe('장 아래로 넘친 상자', () => {
+  test('넘치지 않으면 그대로', () => {
+    expect(fitBoxInPage(2304, 64)).toBe(2304)
+  })
+
+  test('줄이 늘어 장 아래로 넘치면 칸 단위로 끌어올린다', () => {
+    expect(fitBoxInPage(2368, 64)).toBe(2336)
+    expect(fitBoxInPage(2368, 70)).toBe(2304) // 줄 높이가 칸에 딱 맞지 않아도 넘친 만큼 칸 단위로
+  })
+
+  test('장보다 큰 상자는 맨 위에 붙인다', () => {
+    expect(fitBoxInPage(500, 3000)).toBe(0)
   })
 })

@@ -201,6 +201,9 @@
     0 1px 0 var(--line),
     0 12px 30px rgba(31, 33, 40, 0.08);
   overflow: hidden;
+  /* clip은 스크립트로도 스크롤되지 않는다. 편집기가 커서를 따라 장 밖을 몰래 스크롤하면
+     쓰는 사람에게만 보이는 글이 생긴다. */
+  overflow: clip;
   touch-action: none;
 }
 .page-frame canvas {
@@ -680,9 +683,12 @@
 /* 글 상자 옮기기 손잡이: 화면에서 일정한 크기로 보이도록 장 배율을 거꾸로 적용한다 */
 .textbox-grip {
   position: absolute;
+  /* 다른 글 상자보다 위층에 그려 가려지지 않게 한다(.textbox는 쌓임 맥락을 만들지 않는다) */
+  z-index: 20;
   right: 100%;
   top: -2px;
-  margin-right: 4px;
+  /* 상자에 딱 붙여, 손잡이로 가는 사이 다른 상자를 지나며 마우스 올림이 풀리지 않게 */
+  margin-right: 0;
   transform-origin: 100% 0;
   width: 24px;
   height: 36px;
@@ -697,6 +703,12 @@
   cursor: grab;
   touch-action: none;
   opacity: 0;
+  /* 숨은 손잡이가 아래를 막지 않게 visibility로 숨기고, 마우스가 잠깐 벗어나도
+     바로 사라지지 않게 숨길 때만 늦춘다(visibility는 지연 뒤에 바뀐다) */
+  visibility: hidden;
+  transition:
+    opacity 120ms ease 400ms,
+    visibility 0s linear 520ms;
   box-shadow: 0 2px 6px rgba(31, 33, 40, 0.1);
 }
 .textbox-grip:active {
@@ -713,6 +725,8 @@
 .textbox.is-interactive:hover .textbox-grip,
 .textbox-grip:focus-visible {
   opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
 }
 .textbox-grip:hover,
 .textbox-grip:focus-visible {
@@ -724,6 +738,7 @@
   /* 터치 기기에는 마우스 올림이 없으니 글씨·선택 도구에서는 늘 보인다 */
   .textbox.is-interactive .textbox-grip {
     opacity: 1;
+    visibility: visible;
   }
 }
 

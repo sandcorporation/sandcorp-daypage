@@ -6,7 +6,7 @@ import { LINE_GAP, PAGE_WIDTH } from './geometry'
 import { textBoxExtensions } from './editorExtensions'
 import { fontOf } from './fonts'
 import { FormatBar } from './FormatBar'
-import { clampBoxWidth, nudgeBox, removeIfEmpty, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
+import { clampBoxWidth, fitBoxInPage, nudgeBox, removeIfEmpty, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
 import type { ToolKind } from './tools'
 
 /** 서식 막대의 화면 폭(px, 대략). 장 오른쪽 끝에서 잘리지 않게 자리를 정할 때 쓴다. */
@@ -81,6 +81,7 @@ function TextBoxView({
   // 편집기 콜백은 처음 만들 때 고정되므로 최신 값은 ref로 읽는다.
   const latest = useRef({ me, othersEditing: false })
   latest.current = { me, othersEditing: (editors.get(box.id) ?? []).length > 0 }
+  const rootRef = useRef<HTMLDivElement>(null)
   const dragStart = useRef<{ kind: 'move' | 'resize'; px: number; py: number; box: TextBox } | null>(null)
 
   const editor = useEditor(
@@ -120,6 +121,21 @@ function TextBoxView({
   }, [editor, focusId, box.id, onFocusHandled])
 
   const interactive = !readOnly && (tool === 'text' || tool === 'select')
+
+  // 내가 쓰는 동안 줄이 늘어 장 아래로 넘치면 상자를 칸 단위로 끌어올린다.
+  // (장 밖은 잘려서 다른 사람에게 보이지 않는다. 옮긴 위치는 동기화된다.)
+  useEffect(() => {
+    const content = rootRef.current?.querySelector<HTMLElement>('.textbox-editor')
+    if (!focused || readOnly || !content) return
+    const check = () => {
+      const next = fitBoxInPage(box.y, content.offsetHeight)
+      if (next !== box.y) updateTextBox(doc, box.id, { y: next }, origin)
+    }
+    check()
+    const observer = new ResizeObserver(check)
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [focused, readOnly, box.y, box.id, doc, origin])
   useEffect(() => {
     if (!interactive) setFormatOpen(false)
   }, [interactive])
@@ -180,6 +196,7 @@ function TextBoxView({
   return (
     <div
       className={`textbox${focused ? ' is-focused' : ''}${interactive ? ' is-interactive' : ''}${tool === 'select' ? ' is-select' : ''}`}
+      ref={rootRef}
       data-box-id={box.id}
       {...(interactive ? { 'data-page-ui': '' } : {})}
       style={{

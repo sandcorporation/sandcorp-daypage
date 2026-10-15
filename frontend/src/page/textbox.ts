@@ -76,3 +76,12 @@ export function nudgeBox(box: { x: number; y: number; width: number }, key: stri
   if (!d) return null
   return snapBoxPosition({ x: box.x + d[0], y: box.y + d[1] }, box.width)
 }
+
+/**
+ * 줄이 늘어 장 아래로 넘친 상자의 새 위쪽 위치. 넘치지 않으면 그대로 두고,
+ * 넘치면 칸 단위로 끌어올린다(장 밖의 글은 누구에게도 보이지 않으므로).
+ */
+export function fitBoxInPage(y: number, height: number): number {
+  if (y + height <= PAGE_HEIGHT) return y
+  return Math.max(0, Math.floor((PAGE_HEIGHT - height) / LINE_GAP) * LINE_GAP)
+}
