@@ -14,6 +14,7 @@ import time
 import logging
 
 from channels.db import database_sync_to_async
+from channels.exceptions import ChannelFull
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from pycrdt import (
@@ -22,6 +23,7 @@ from pycrdt import (
     create_sync_message,
     create_update_message,
     handle_sync_message,
+    merge_updates,
     read_message,
     write_message,
 )
@@ -38,9 +40,18 @@ CLOSE_CROWDED = 4429
 
 EMPTY_UPDATE = b"\x00\x00"
 
+
+def db(fn):
+    """DB 작업을 스레드 풀에서 돌린다. 기본(thread_sensitive)은 모든 연결의 DB 작업이 스레드 하나에
+    줄을 서서, 편집이 몰리면 연결들이 멈추고 메시지가 쌓여 끊겼다. 장 단위 행 잠금이 순서를 지킨다."""
+    return database_sync_to_async(fn, thread_sensitive=False)
+
 # y-websocket 메시지 종류 0(sync)·1(awareness) 외의 Daypage 전용 메시지.
 # 텍스트 프레임은 y-websocket 클라이언트가 바이너리로 읽다 깨지므로 바이너리로 보낸다.
 MESSAGE_PAGE_ROLLED = 100
+
+# 편집을 모았다가 저장하는 간격(초). 실시간 전달과 저장을 떼어 DB가 밀려도 전달이 멈추지 않게 한다.
+FLUSH_EVERY = 0.3
 
 
 def page_group(page_id: int) -> str:
@@ -69,6 +80,10 @@ class PageConsumer(AsyncWebsocketConsumer):
         # 이 연결이 보낸 awareness 상태: clientID -> (clock, state)
         self.presence: dict[int, tuple[int, dict]] = {}
         self.note_gone = False
+        # 아직 저장하지 않은 편집(잠시 모았다가 한 번에 저장)
+        self.pending: list[bytes] = []
+        self.pending_at = None
+        self.flusher: asyncio.Task | None = None
         # 닫는 코드를 전하려면 먼저 수락해야 한다.
         await self.accept()
 
@@ -99,7 +114,7 @@ class PageConsumer(AsyncWebsocketConsumer):
             await registry.remove(self.note_id, conn)
             return await self.close(code=CLOSE_CROWDED)
 
-        page = await database_sync_to_async(pages.get_or_create_page)(note, date)
+        page = await db(pages.get_or_create_page)(note, date)
         self.page_id = page.id
         self.member = member
         self.date = date
@@ -109,7 +124,7 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(page_group(page.id), self.channel_name)
         await self.channel_layer.group_add(note_group(self.note_id), self.channel_name)
         # pycrdt Doc은 만든 스레드에서만 쓸 수 있으므로 DB에서는 바이트만 읽고 여기서 만든다.
-        self.ydoc = pages.build_doc(await database_sync_to_async(pages.load_updates)(page.id))
+        self.ydoc = pages.build_doc(await db(pages.load_updates)(page.id))
         self.heartbeat = asyncio.create_task(self._heartbeat())
         await self.send(bytes_data=create_sync_message(self.ydoc))
         await self.on_joined()
@@ -132,6 +147,9 @@ class PageConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, code) -> None:
         if self.heartbeat:
             self.heartbeat.cancel()
+        if self.flusher:
+            self.flusher.cancel()
+        await self.flush()
         if self.page_id is None or self.conn is None:
             return
         await self.channel_layer.group_discard(page_group(self.page_id), self.channel_name)
@@ -141,7 +159,7 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.on_left()
         remaining = [c for c in await registry.connections(self.note_id) if c.date == self.conn.date]
         if not remaining and not self.note_gone:
-            await database_sync_to_async(pages.compact)(self.page_id)
+            await db(pages.compact)(self.page_id)
 
     async def on_left(self) -> None:
         # 이 연결이 보낸 Presence를 다른 사람 화면에서 지운다.
@@ -164,6 +182,8 @@ class PageConsumer(AsyncWebsocketConsumer):
     async def _receive_sync(self, data: bytes) -> None:
         sync_type = data[1]
         if sync_type == YSyncMessageType.SYNC_STEP1:
+            # 동기화를 요청받으면 쌓아 둔 편집부터 저장한다(저장된 상태와 보내는 상태를 맞춘다).
+            await self.flush()
             reply = handle_sync_message(data[1:], self.ydoc)
             if reply is not None:
                 await self.send(bytes_data=reply)
@@ -171,20 +191,42 @@ class PageConsumer(AsyncWebsocketConsumer):
         update = read_message(data[2:])
         if not update or update == EMPTY_UPDATE:
             return
+        # 자정 경계는 받은 시각으로 바로 판정한다(DB를 기다리지 않는다).
+        received_at = clock.now()
+        if clock.kst_date_of(received_at) != self.date:
+            await self.close(code=CLOSE_NOT_TODAY)
+            return
+        # 실시간 전달은 저장을 기다리지 않는다. 저장은 잠시 모았다가 한 번에(flush) 한다.
+        self.ydoc.apply_update(update)
+        await self.channel_layer.group_send(
+            page_group(self.page_id), {"type": "y.update", "update": update, "sender": self.channel_name}
+        )
+        self.pending.append(update)
+        self.pending_at = self.pending_at or received_at
+        if self.flusher is None or self.flusher.done():
+            self.flusher = asyncio.create_task(self._flush_later())
+
+    async def _flush_later(self) -> None:
+        await asyncio.sleep(FLUSH_EVERY)
+        await self.flush()
+
+    async def flush(self) -> None:
+        """모아 둔 편집을 하나로 합쳐 저장한다. 봉인됐거나 노트가 지워졌으면 저장하지 않고 닫는다."""
+        if not self.pending or self.page_id is None or self.note_gone:
+            return
+        updates, received_at = self.pending, self.pending_at
+        self.pending, self.pending_at = [], None
+        merged = updates[0] if len(updates) == 1 else merge_updates(*updates)
         try:
-            pending = await database_sync_to_async(pages.append_update)(self.page_id, update, clock.now())
+            pending = await db(pages.append_update)(self.page_id, merged, received_at)
         except pages.PageSealed:
             await self.close(code=CLOSE_NOT_TODAY)
             return
         except Page.DoesNotExist:  # 그사이 노트가 지워졌다
             await self.close(code=CLOSE_NOT_FOUND)
             return
-        self.ydoc.apply_update(update)
-        await self.channel_layer.group_send(
-            page_group(self.page_id), {"type": "y.update", "update": update, "sender": self.channel_name}
-        )
         if pages.should_compact(pending):
-            await database_sync_to_async(pages.compact)(self.page_id)
+            await db(pages.compact)(self.page_id)
 
     async def receive_awareness(self, data: bytes) -> None:
         """닉네임·색은 클라이언트가 보낸 값 대신 서버가 배정한 값으로 바꿔 퍼뜨린다."""
@@ -207,7 +249,7 @@ class PageConsumer(AsyncWebsocketConsumer):
             }
             self.presence[client_id] = (clk, state)
             cleaned.append((client_id, clk, state))
-        await self.channel_layer.group_send(
+        await self.send_volatile(
             page_group(self.page_id),
             {"type": "y.awareness", "message": awareness.encode_message(cleaned), "sender": self.channel_name},
         )
@@ -216,10 +258,20 @@ class PageConsumer(AsyncWebsocketConsumer):
         if event["reply_to"] == self.channel_name or not self.presence:
             return
         entries = [(cid, clk, state) for cid, (clk, state) in self.presence.items()]
-        await self.channel_layer.send(
-            event["reply_to"],
-            {"type": "y.awareness", "message": awareness.encode_message(entries), "sender": self.channel_name},
-        )
+        try:
+            await self.channel_layer.send(
+                event["reply_to"],
+                {"type": "y.awareness", "message": awareness.encode_message(entries), "sender": self.channel_name},
+            )
+        except ChannelFull:
+            pass  # 새로 온 사람이 밀려 있으면 다음 커서 움직임 때 받는다
+
+    async def send_volatile(self, group: str, message: dict) -> None:
+        """커서처럼 잠깐 쓰고 버리는 메시지. 받는 쪽이 밀려 있으면 버리고 연결은 유지한다."""
+        try:
+            await self.channel_layer.group_send(group, message)
+        except ChannelFull:
+            pass
 
     async def y_update(self, event) -> None:
         if event["sender"] == self.channel_name:

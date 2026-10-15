@@ -70,6 +70,10 @@ DATABASES = {
         "PASSWORD": env("POSTGRES_PASSWORD", "daypage"),
         "HOST": env("POSTGRES_HOST", "127.0.0.1"),
         "PORT": env("POSTGRES_PORT", "5432"),
+        # 연결을 재사용한다. 0(기본값)이면 웹소켓의 DB 작업마다 연결을 새로 열어
+        # Postgres가 연결마다 프로세스를 띄우느라 CPU를 다 쓴다.
+        "CONN_MAX_AGE": int(env("DB_CONN_MAX_AGE", "60")),
+        "CONN_HEALTH_CHECKS": True,
     }
 }
 
@@ -86,7 +90,11 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         # redis-py 8의 기본 소켓 타임아웃(5초)이 channels_redis의 5초 BZPOPMIN 대기와 같아
         # 대기 중에 읽기 타임아웃이 나며 consumer가 죽는다. 대기보다 길게 잡는다.
-        "CONFIG": {"hosts": [{"address": REDIS_URL, "socket_timeout": 30}]},
+        "CONFIG": {
+            "hosts": [{"address": REDIS_URL, "socket_timeout": 30}],
+            # 연결마다 쌓일 수 있는 메시지 수. 기본값(100)이면 부하 때 ChannelFull로 연결이 끊긴다.
+            "capacity": 1000,
+        },
     }
 }
 
