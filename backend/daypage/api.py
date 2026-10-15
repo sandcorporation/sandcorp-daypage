@@ -1,12 +1,15 @@
+import datetime as dt
+
 from django.conf import settings
 from django.db.models import Count
+from django.http import Http404, HttpResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from ninja import NinjaAPI, Schema
 from ninja.security import django_auth
 
 from . import clock, membership, rooms
-from .models import Note, NoteMember
+from .models import Note, NoteMember, Page
 
 
 class ApiError(Exception):
@@ -125,3 +128,34 @@ def update_note(request, note_id: str, body: UpdateNoteIn):
         note.name = clean_name(body.name)
     note.save()
     return {"id": note.id, "name": note.name}
+
+
+def member_note(request, note_id: str) -> Note:
+    note = get_object_or_404(Note, pk=note_id)
+    if not NoteMember.objects.filter(note=note, user=request.user).exists():
+        raise ApiError(403, "not_member", "이 노트의 참여자만 볼 수 있어요.")
+    return note
+
+
+@api.get("/notes/{note_id}/pages")
+def sealed_pages(request, note_id: str):
+    note = member_note(request, note_id)
+    pages = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date")
+    return [
+        {"date": p.date.isoformat(), "participantCount": p.participant_count, "strokeCount": p.stroke_count}
+        for p in pages
+    ]
+
+
+@api.get("/notes/{note_id}/pages/{date}")
+def sealed_page_snapshot(request, note_id: str, date: str):
+    note = member_note(request, note_id)
+    try:
+        day = dt.date.fromisoformat(date)
+    except ValueError:
+        raise Http404
+    page = get_object_or_404(Page, note=note, date=day, sealed_at__isnull=False, is_empty=False)
+    res = HttpResponse(bytes(page.state), content_type="application/octet-stream")
+    # 봉인된 장은 바뀌지 않는다.
+    res["Cache-Control"] = "private, max-age=86400, immutable"
+    return res
