@@ -1,0 +1,25 @@
+{$SITE_ADDRESS:daypage.sandcorp.co.kr} {
+	encode zstd gzip
+
+	# API·카카오 로그인·웹소켓은 Django(uvicorn)로
+	@backend path /api/* /auth/* /ws/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+
+	# 나머지는 SPA. 없는 경로는 index.html로(React Router가 처리)
+	handle {
+		root * /srv
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		X-Frame-Options "DENY"
+	}
+}

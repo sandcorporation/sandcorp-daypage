@@ -39,3 +39,20 @@ CI 없이 로컬에서만 돌린다. 백엔드 테스트는 `docker compose`의 
 cd backend && uv run pytest
 cd frontend && pnpm typecheck && pnpm test
 ```
+
+## 운영 배포
+
+`docker-compose.prod.yml`이 Caddy(HTTPS·WSS, 정적 파일) + Uvicorn(Django) + Celery worker·beat + Postgres + Redis를 띄운다.
+
+1. DNS에서 `daypage.sandcorp.co.kr`의 A 레코드를 서버로 향하게 하고 80·443 포트를 연다.
+2. 서버의 저장소 루트에 `.env`를 만든다(`.env.example`의 운영 항목 참고: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `KAKAO_*`, `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD`).
+3. 띄운다. 마이그레이션은 backend 컨테이너가 시작할 때 자동으로 돈다.
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml logs -f backend
+```
+
+- 데이터: `pgdata`(DB), `caddy_data`(인증서) 볼륨에 남는다. 재시작·재배포해도 유지된다.
+- Caddy가 `/api/*`, `/auth/*`, `/ws/*`는 Django로, 나머지는 SPA(`index.html` fallback)로 보낸다.
+- 로컬에서 운영 구성을 시험할 때는 `SITE_ADDRESS=:80`, `HTTP_PORT=8088`처럼 HTTP로 띄우고 `ENV_FILE`로 env 파일을 바꿀 수 있다.
