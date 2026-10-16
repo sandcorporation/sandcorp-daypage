@@ -130,7 +130,8 @@
   border-radius: 14px;
   padding: 8px;
   position: sticky;
-  top: 84px;
+  /* 머리글(높이는 NoteHeader가 --note-header-h로 알린다) 바로 아래에 붙는다 */
+  top: calc(var(--note-header-h, 72px) + 12px);
   z-index: 25;
 }
 .tool-btn {
@@ -278,7 +279,7 @@
   }
   .toolbar {
     position: sticky;
-    top: 64px;
+    top: var(--note-header-h, 64px);
     z-index: 15;
     flex-direction: row;
     flex-wrap: wrap;

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Logo } from '../components/Brand'
 import { Countdown } from './Countdown'
@@ -18,8 +18,23 @@ type Props = {
 
 export function NoteHeader({ note, pageDate, clockOffset, peers, onRename, onShare, settings }: Props) {
   const shown = [{ nickname: note.me.nickname, color: note.me.color, isMe: true }, ...peers]
+  const ref = useRef<HTMLElement>(null)
+  // 머리글 높이를 --note-header-h로 알린다. 툴바가 이 아래에 붙는다(휴대폰에서는 머리글이 두 줄로 높아진다).
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const root = document.documentElement
+    const update = () => root.style.setProperty('--note-header-h', `${el.offsetHeight}px`)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--note-header-h')
+    }
+  }, [])
   return (
-    <header className="note-header">
+    <header ref={ref} className="note-header">
       <div className="note-header-left">
         <Link to="/" aria-label="Daypage 홈" className="icon-link">
           <Logo size={28} />
