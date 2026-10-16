@@ -84,15 +84,16 @@ test('자리를 비워 내보내지면 자동으로 다시 붙지 않고, 다시
 test('노트 색이 바뀌었다는 알림(102)을 받으면 도구 막대가 바로 바뀐다', async () => {
   renderNote()
   act(() => latest().receive(102, { type: 'note_colors', colors: ['#16794f'] }))
+  await userEvent.click(screen.getByRole('button', { name: /^잉크:/ }))
   expect(screen.getByRole('button', { name: '노트 색 #16794f' })).toBeInTheDocument()
 })
 
 test('고르고 있던 노트 색이 빠지면 기본 잉크로 돌아간다', async () => {
   renderNote()
   act(() => latest().receive(102, { type: 'note_colors', colors: ['#16794f'] }))
+  await userEvent.click(screen.getByRole('button', { name: /^잉크:/ }))
   await userEvent.click(screen.getByRole('button', { name: '노트 색 #16794f' }))
-  expect(screen.getByRole('button', { name: '노트 색 #16794f' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: '잉크: 노트 색 #16794f' })).toBeInTheDocument()
   act(() => latest().receive(102, { type: 'note_colors', colors: [] }))
-  expect(screen.queryByRole('button', { name: '노트 색 #16794f' })).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '잉크 파랑' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: '잉크: 잉크 파랑' })).toBeInTheDocument()
 })

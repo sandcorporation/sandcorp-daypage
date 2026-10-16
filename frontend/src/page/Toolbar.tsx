@@ -1,9 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { ToolPopover } from '../components/ToolPopover'
 import { BrushPicker } from './BrushPicker'
-import { ColorPicker } from './ColorPicker'
+import { InkControl } from './InkControl'
 import { FontPicker } from './FontPicker'
-import { BRUSHES, INKS, WIDTH_NAMES, type Brush, type ToolKind, type WidthLevel } from './tools'
+import { BRUSHES, WIDTH_NAMES, type Brush, type ToolKind, type WidthLevel } from './tools'
 
 type Props = {
   tool: ToolKind
@@ -43,10 +43,8 @@ const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
 export function Toolbar(props: Props) {
   const { tool, ink, widthLevel, canUndo, canRedo, onTool, onInk, onWidth, onUndo, onRedo, font, onFont, showFont } = props
   const { brush, onBrush, pressure, onPressure, noteColors, onAddColor, onRemoveColor, layerPanel } = props
-  const [colorOpen, setColorOpen] = useState(false)
   const [layersOpen, setLayersOpen] = useState(false)
   const layersRef = useRef<HTMLButtonElement>(null)
-  const addColorRef = useRef<HTMLButtonElement>(null)
   const [brushOpen, setBrushOpen] = useState(false)
   const penRef = useRef<HTMLButtonElement>(null)
   const brushName = BRUSHES.find((b) => b.id === brush)?.name ?? BRUSHES[0].name
@@ -107,63 +105,7 @@ export function Toolbar(props: Props) {
       )}
       {showFont && <FontPicker font={font} onFont={onFont} />}
       <div className="tool-sep" />
-      {INKS.map((c) => (
-        <button
-          key={c.color}
-          type="button"
-          className="swatch-btn"
-          aria-label={c.name}
-          title={c.name}
-          aria-pressed={ink === c.color}
-          style={{ color: c.color }}
-          onClick={() => onInk(c.color)}
-        >
-          <span className="swatch" style={{ background: c.color }} />
-        </button>
-      ))}
-      {noteColors.map((c) => (
-        <button
-          key={c}
-          type="button"
-          className="swatch-btn"
-          aria-label={`노트 색 ${c}`}
-          title={`노트 색 ${c}`}
-          aria-pressed={ink.toLowerCase() === c}
-          style={{ color: c }}
-          onClick={() => onInk(c)}
-        >
-          <span className="swatch" style={{ background: c }} />
-        </button>
-      ))}
-      <div className="tool-anchor">
-        <button
-          ref={addColorRef}
-          type="button"
-          className="swatch-btn"
-          aria-label="색 추가"
-          title="색 추가"
-          aria-haspopup="dialog"
-          aria-expanded={colorOpen}
-          onClick={() => setColorOpen((v) => !v)}
-        >
-          <span className="swatch swatch-add" aria-hidden="true">
-            +
-          </span>
-        </button>
-        {colorOpen && (
-          <ToolPopover title="새 색 만들기" anchor={addColorRef} onClose={() => setColorOpen(false)}>
-            <ColorPicker
-              noteColors={noteColors}
-              onRemove={onRemoveColor}
-              onAdd={async (c) => {
-                await onAddColor(c)
-                onInk(c)
-                setColorOpen(false)
-              }}
-            />
-          </ToolPopover>
-        )}
-      </div>
+      <InkControl ink={ink} onInk={onInk} noteColors={noteColors} onAddColor={onAddColor} onRemoveColor={onRemoveColor} />
       <div className="tool-sep" />
       {WIDTH_NAMES.map((name, i) => (
         <button

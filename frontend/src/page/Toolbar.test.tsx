@@ -71,29 +71,52 @@ describe('펜 종류', () => {
   })
 })
 
-describe('노트 색', () => {
-  test('노트 색이 기본 잉크 아래에 보이고 고를 수 있다', async () => {
-    const props = setup({ noteColors: ['#16794f', '#8b5cf6'], ink: '#8b5cf6' })
-    const green = screen.getByRole('button', { name: '노트 색 #16794f' })
-    expect(screen.getByRole('button', { name: '노트 색 #8b5cf6' })).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(green)
-    expect(props.onInk).toHaveBeenCalledWith('#16794f')
+describe('잉크(색)', () => {
+  const openInk = () => userEvent.click(screen.getByRole('button', { name: /^잉크:/ }))
+
+  test('도구 막대에는 지금 고른 잉크 하나만 보인다', () => {
+    setup({ noteColors: ['#16794f', '#8b5cf6'], ink: '#8b5cf6' })
+    expect(screen.getByRole('button', { name: '잉크: 노트 색 #8b5cf6' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '잉크 파랑' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '노트 색 #16794f' })).not.toBeInTheDocument()
   })
 
-  test('"+"로 색 만들기 창을 열고, 색 코드를 넣어 노트 색으로 더한다', async () => {
+  test('잉크 창에서 기본 잉크와 노트 색을 고른다. 고르면 창이 닫힌다', async () => {
+    const props = setup({ noteColors: ['#16794f', '#8b5cf6'], ink: '#8b5cf6' })
+    await openInk()
+    expect(screen.getByRole('dialog', { name: '잉크' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '잉크 파랑' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '노트 색 #8b5cf6' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: '노트 색 #16794f' }))
+    expect(props.onInk).toHaveBeenCalledWith('#16794f')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('새 색 만들기로 색 코드를 넣어 노트 색으로 더한다', async () => {
     const props = setup()
-    await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+    await openInk()
+    await userEvent.click(screen.getByRole('button', { name: '+ 새 색 만들기' }))
     expect(screen.getByRole('dialog', { name: '새 색 만들기' })).toBeInTheDocument()
     const input = screen.getByRole('textbox', { name: '색 코드' })
     await userEvent.clear(input)
     await userEvent.type(input, '#12AB34')
     await userEvent.click(screen.getByRole('button', { name: '이 색 더하기' }))
     expect(props.onAddColor).toHaveBeenCalledWith('#12ab34')
+    expect(props.onInk).toHaveBeenCalledWith('#12ab34')
+  })
+
+  test('새 색 만들기에서 뒤로 가면 잉크 목록으로 돌아간다', async () => {
+    setup()
+    await openInk()
+    await userEvent.click(screen.getByRole('button', { name: '+ 새 색 만들기' }))
+    await userEvent.click(screen.getByRole('button', { name: '잉크 목록으로' }))
+    expect(screen.getByRole('dialog', { name: '잉크' })).toBeInTheDocument()
   })
 
   test('추천 색을 누르면 그 색이 골라진다', async () => {
     const props = setup()
-    await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+    await openInk()
+    await userEvent.click(screen.getByRole('button', { name: '+ 새 색 만들기' }))
     await userEvent.click(screen.getByRole('button', { name: '추천 색 #0e7490' }))
     expect(screen.getByRole('textbox', { name: '색 코드' })).toHaveValue('#0e7490')
     await userEvent.click(screen.getByRole('button', { name: '이 색 더하기' }))
@@ -102,7 +125,8 @@ describe('노트 색', () => {
 
   test('형식이 틀린 색 코드는 더할 수 없다', async () => {
     setup()
-    await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+    await openInk()
+    await userEvent.click(screen.getByRole('button', { name: '+ 새 색 만들기' }))
     const input = screen.getByRole('textbox', { name: '색 코드' })
     await userEvent.clear(input)
     await userEvent.type(input, '#12')
@@ -111,18 +135,20 @@ describe('노트 색', () => {
 
   test('노트 색이 가득 차면 더하기 대신 안내를 본다', async () => {
     setup({ noteColors: ['#000001', '#000002', '#000003', '#000004', '#000005', '#000006', '#000007', '#000008'] })
-    await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+    await openInk()
+    await userEvent.click(screen.getByRole('button', { name: '+ 새 색 만들기' }))
     expect(screen.getByRole('button', { name: '이 색 더하기' })).toBeDisabled()
     expect(screen.getByText(/8개까지/)).toBeInTheDocument()
   })
-})
 
-test('색 만들기 창에서 노트 색을 뺄 수 있다', async () => {
-  const onRemoveColor = vi.fn()
-  setup({ noteColors: ['#16794f'], onRemoveColor })
-  await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
-  await userEvent.click(screen.getByRole('button', { name: '노트 색 #16794f 빼기' }))
-  expect(onRemoveColor).toHaveBeenCalledWith('#16794f')
+  test('새 색 만들기에서 노트 색을 뺄 수 있다', async () => {
+    const onRemoveColor = vi.fn()
+    setup({ noteColors: ['#16794f'], onRemoveColor })
+    await openInk()
+    await userEvent.click(screen.getByRole('button', { name: '+ 새 색 만들기' }))
+    await userEvent.click(screen.getByRole('button', { name: '노트 색 #16794f 빼기' }))
+    expect(onRemoveColor).toHaveBeenCalledWith('#16794f')
+  })
 })
 
 test('레이어 버튼으로 레이어 패널을 열고 닫는다', async () => {

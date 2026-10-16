@@ -1220,3 +1220,51 @@
   padding-top: 8px;
   border-top: 1px solid var(--line-soft);
 }
+
+/* 잉크 버튼과 잉크 창 */
+.ink-btn {
+  position: relative;
+}
+.ink-btn[aria-expanded='true'] {
+  background: var(--accent-soft);
+}
+.ink-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ink-option {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.ink-option:hover {
+  background: var(--paper);
+}
+.ink-option[aria-pressed='true'] .swatch {
+  box-shadow:
+    0 0 0 2px var(--white),
+    0 0 0 4px currentColor;
+}
+.ink-back {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ink-back:hover {
+  background: var(--accent-soft);
+}
