@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import * as Y from 'yjs'
 import { addStroke, newId, readStrokes, round, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
-import { canDrawOn, layerPlan, observeLayers, readLayers } from './layers'
+import { canDrawOn, highlightPlan, layerOf, layerPlan, observeLayers, readLayers } from './layers'
+import { strokeBounds, unionRect } from './hit'
 import { canvasPixelRatio, paintLayers, paintStroke } from './render'
 import { matrixScale, transformPoints, type Matrix } from './transform'
 import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
@@ -31,6 +32,8 @@ type Props = {
   layer?: string
   /** 내 화면에서만 숨긴 레이어 */
   hiddenLayers?: ReadonlySet<string>
+  /** 레이어 탭에서 고르거나 올린 레이어: 나머지는 흐리게, 이 레이어는 이름표 달린 상자로 표시 */
+  highlightLayer?: string | null
   /** 지금 그리는 레이어가 잠겼거나 내가 숨겨 그리지 못했을 때 */
   onDrawBlocked?: (reason: 'locked' | 'hidden') => void
   author: string
@@ -63,6 +66,7 @@ export function PageView({
   pressureOn = true,
   layer,
   hiddenLayers,
+  highlightLayer,
   onDrawBlocked,
   author,
   readOnly = false,
@@ -124,12 +128,19 @@ export function PageView({
         moving.has(st.id) ? { ...st, points: transformPoints(st.points, preview.m), width: st.width * k } : st,
       )
     }
-    paintLayers(ctx, layerPlan(strokes, readLayers(doc), hiddenLayers), pixelScale)
+    const layers = readLayers(doc)
+    paintLayers(ctx, highlightPlan(layerPlan(strokes, layers, hiddenLayers), highlightLayer), pixelScale)
+    const target = highlightLayer ? layers.find((l) => l.id === highlightLayer) : undefined
+    if (target) {
+      const box = unionRect(strokes.filter((s) => layerOf(s, layers) === target.id).map(strokeBounds))
+      ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+      paintLayerTag(ctx, box, target.name, scale)
+    }
     if (overlay) {
       ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
       overlay(ctx)
     }
-  }, [doc, pixelScale, overlay, preview, hiddenLayers])
+  }, [doc, pixelScale, overlay, preview, hiddenLayers, highlightLayer, scale])
 
   // 문서가 바뀌면 다음 프레임에 한 번만 다시 그린다.
   useEffect(() => {
@@ -356,4 +367,33 @@ export function PageView({
       </div>
     </div>
   )
+}
+
+/** 강조한 레이어 둘레의 점선 상자와 이름표(장 좌표로 그린다, 화면에서 일정한 크기). 획이 없으면 그리지 않는다. */
+function paintLayerTag(ctx: CanvasRenderingContext2D, box: { x: number; y: number; width: number; height: number } | null, name: string, scale: number) {
+  if (!box) return
+  const px = (v: number) => v / scale
+  const pad = px(10)
+  const x = box.x - pad
+  const y = box.y - pad
+  const w = box.width + pad * 2
+  const h = box.height + pad * 2
+  ctx.save()
+  ctx.strokeStyle = '#2A47B0'
+  ctx.lineWidth = px(2)
+  ctx.setLineDash([px(6), px(4)])
+  ctx.strokeRect(x, y, w, h)
+  ctx.setLineDash([])
+  ctx.font = `600 ${px(13)}px 'Gothic A1', sans-serif`
+  const tw = ctx.measureText(name).width + px(14)
+  const th = px(22)
+  // 이름표는 오른쪽 위(레이어 창은 왼쪽에 뜬다). 위쪽에 자리가 없으면 상자 안쪽 위에 붙인다
+  const tx = x + w - tw
+  const ty = y - th < 0 ? y : y - th
+  ctx.fillStyle = '#2A47B0'
+  ctx.fillRect(tx, ty, tw, th)
+  ctx.fillStyle = '#FFFFFF'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(name, tx + px(7), ty + th / 2)
+  ctx.restore()
 }

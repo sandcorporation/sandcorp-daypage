@@ -187,3 +187,25 @@ describe('지우기', () => {
     expect(screen.getByRole('button', { name: '레이어 1 지우기' })).toBeDisabled()
   })
 })
+
+describe('화면에 표시', () => {
+  test('레이어 줄에 올리면 그 레이어를 강조하고, 떼면 푼다', async () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    const onHighlight = vi.fn()
+    setup(doc, { onHighlight })
+    await userEvent.hover(rows()[0])
+    expect(onHighlight).toHaveBeenLastCalledWith(top)
+    await userEvent.unhover(rows()[0])
+    expect(onHighlight).toHaveBeenLastCalledWith(null)
+  })
+
+  test('패널이 닫히면 강조를 푼다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const onHighlight = vi.fn()
+    render(
+      <LayerPanel doc={doc} current={BASE_LAYER_ID} onCurrent={vi.fn()} hidden={new Set()} onToggleHidden={vi.fn()} onHighlight={onHighlight} />,
+    ).unmount()
+    expect(onHighlight).toHaveBeenLastCalledWith(null)
+  })
+})

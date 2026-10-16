@@ -69,6 +69,23 @@ export function NotePage({ initial }: Props) {
   // 레이어: 지금 그리는 레이어는 연결마다 따로다. 고른 레이어가 사라지면 맨 위 레이어로.
   const { layers } = useLayers(doc)
   const [chosenLayer, setChosenLayer] = useState<string | null>(null)
+  // 레이어 탭에서 올리거나 고른 레이어를 화면에 표시한다. 고르면 잠깐(폰처럼 올릴 수 없을 때도 보이게).
+  const [highlightLayer, setHighlightLayer] = useState<string | null>(null)
+  const highlightTimer = useRef<number | undefined>(undefined)
+  // 지금 마우스를 올려 둔 레이어(고른 뒤 잠깐 표시가 끝나도 올려 둔 동안은 계속 표시)
+  const hoveredLayer = useRef<string | null>(null)
+  const highlight = useCallback((id: string | null) => {
+    hoveredLayer.current = id
+    window.clearTimeout(highlightTimer.current)
+    setHighlightLayer(id)
+  }, [])
+  const pickLayer = useCallback((id: string) => {
+    setChosenLayer(id)
+    setHighlightLayer(id)
+    window.clearTimeout(highlightTimer.current)
+    highlightTimer.current = window.setTimeout(() => setHighlightLayer(hoveredLayer.current), 1500)
+  }, [])
+  useEffect(() => () => window.clearTimeout(highlightTimer.current), [])
   const currentLayer = layers.find((l) => l.id === chosenLayer)?.id ?? layers[layers.length - 1].id
   // 내 화면에서만 숨긴 레이어(이 브라우저에 노트·날짜별로 기억)
   const [hiddenState, setHiddenState] = useState(() => ({ date: note.today, set: loadHiddenLayers(note.id, note.today) }))
@@ -315,7 +332,8 @@ export function NotePage({ initial }: Props) {
               doc={doc}
               origin={origin}
               current={currentLayer}
-              onCurrent={setChosenLayer}
+              onCurrent={pickLayer}
+              onHighlight={highlight}
               hidden={hiddenLayers}
               onToggleHidden={toggleHidden}
             />
@@ -330,6 +348,7 @@ export function NotePage({ initial }: Props) {
           pressureOn={pressureOn}
           layer={currentLayer}
           hiddenLayers={hiddenLayers}
+          highlightLayer={highlightLayer}
           onDrawBlocked={(reason) =>
             show(
               reason === 'locked'

@@ -60,9 +60,17 @@ type Props = {
   /** 내 화면에서만 숨긴 레이어 */
   hidden: ReadonlySet<string>
   onToggleHidden: (id: string) => void
+  /** 화면에서 강조할 레이어(줄에 올리거나 포커스). null이면 강조를 푼다 */
+  onHighlight?: (id: string | null) => void
 }
 
-export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHidden }: Props) {
+export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHidden, onHighlight }: Props) {
+  // 패널이 닫히면 강조를 푼다
+  const highlightRef = useRef(onHighlight)
+  useEffect(() => {
+    highlightRef.current = onHighlight
+  })
+  useEffect(() => () => highlightRef.current?.(null), [])
   const { layers, stats, version } = useLayers(doc)
   const full = layers.length >= MAX_LAYERS
   const [editing, setEditing] = useState<string | null>(null)
@@ -111,6 +119,10 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
                 dragRef.current = null
                 setDragging(null)
               }}
+              onPointerEnter={() => onHighlight?.(layer.id)}
+              onPointerLeave={() => onHighlight?.(null)}
+              onFocus={() => onHighlight?.(layer.id)}
+              onBlur={() => onHighlight?.(null)}
               onDragEnd={() => {
                 dragRef.current = null
                 setDragging(null)

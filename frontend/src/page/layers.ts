@@ -210,3 +210,14 @@ export function grabIds(ids: string[], strokes: Stroke[], layers: Layer[]): stri
   for (const s of strokes) if (stickerLayers.has(layerOf(s, layers))) picked.add(s.id)
   return [...picked]
 }
+
+/** 강조할 때 다른 레이어를 흐리게 하는 비율 */
+export const DIM = 0.25
+
+/** 레이어 탭에서 고르거나 올린 레이어만 또렷하게: 다른 레이어는 불투명도를 DIM배로 */
+export function highlightPlan(plan: LayerPlanItem[], highlight: string | null | undefined): LayerPlanItem[] {
+  if (!highlight) return plan
+  return plan.map((item) =>
+    item.layer.id === highlight ? item : { ...item, layer: { ...item.layer, opacity: item.layer.opacity * DIM } },
+  )
+}

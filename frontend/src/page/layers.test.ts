@@ -7,6 +7,7 @@ import {
   deleteLayer,
   editableStrokes,
   grabIds,
+  highlightPlan,
   layerOf,
   layerPlan,
   MAX_LAYERS,
@@ -324,5 +325,24 @@ describe('레이어를 스티커처럼 잡기', () => {
     expect(grabIds(['base-1'], strokes, layers)).toEqual(['base-1'])
     // 사각형으로 섞어 고르면 스티커 레이어는 통째로, 기본 레이어는 고른 것만
     expect(grabIds(['b', 'base-2'], strokes, layers).sort()).toEqual(['a', 'b', 'base-2'])
+  })
+})
+
+describe('레이어 강조', () => {
+  test('강조한 레이어만 그대로 두고 다른 레이어는 흐리게 그린다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    setLayerOpacity(doc, BASE_LAYER_ID, 0.8)
+    const plan = highlightPlan(layerPlan([stroke({ id: 'a' }), stroke({ id: 'b', layer: top })], readLayers(doc)), top)
+    expect(plan.map((p) => [p.layer.id, p.layer.opacity])).toEqual([
+      [BASE_LAYER_ID, 0.2],
+      [top, 1],
+    ])
+  })
+
+  test('강조할 레이어가 없으면 그대로', () => {
+    const doc = createPageDoc('2026-10-16')
+    const plan = layerPlan([stroke({ id: 'a' })], readLayers(doc))
+    expect(highlightPlan(plan, null)).toBe(plan)
   })
 })
