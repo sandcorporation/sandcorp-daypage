@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Y from 'yjs'
 import { deleteStrokes, moveStrokes, readStrokes } from './doc'
 import type { Point } from './geometry'
+import { editableStrokes, readLayers } from './layers'
 import {
   clampMoveDelta,
   normalizeRect,
@@ -20,8 +21,11 @@ const PICK_TOLERANCE = 8
 
 type Drag = { kind: 'move'; ids: string[]; start: Point; bounds: Rect } | { kind: 'band'; start: Point; end: Point } | { kind: 'erase'; last: Point }
 
-/** 지우개와 선택·이동 도구. 그리기·글씨는 다른 곳에서 처리한다. */
-export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
+/**
+ * 지우개와 선택·이동 도구. 그리기·글씨는 다른 곳에서 처리한다.
+ * 잠긴 레이어와 내가 숨긴 레이어의 획은 지우거나 고를 수 없다.
+ */
+export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hiddenLayers?: ReadonlySet<string>) {
   const [selected, setSelected] = useState<string[]>([])
   const [version, setVersion] = useState(0)
   // 끄는 동안에는 문서에 쓰지 않고 화면에서만 옮겨 보인다. 놓을 때 한 번만 저장한다.
@@ -44,17 +48,18 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
   }, [doc, selected.length])
 
   const pointerTool = useMemo<PointerTool | undefined>(() => {
+    const editable = () => editableStrokes(readStrokes(doc), readLayers(doc), hiddenLayers)
     if (tool === 'eraser') {
       return {
         down(p) {
           drag.current = { kind: 'erase', last: p }
-          deleteStrokes(doc, strokesHitBy(readStrokes(doc), [p], ERASER_RADIUS), origin)
+          deleteStrokes(doc, strokesHitBy(editable(), [p], ERASER_RADIUS), origin)
           return true
         },
         move(p) {
           const d = drag.current
           if (d?.kind !== 'erase') return
-          deleteStrokes(doc, strokesHitBy(readStrokes(doc), [d.last, p], ERASER_RADIUS), origin)
+          deleteStrokes(doc, strokesHitBy(editable(), [d.last, p], ERASER_RADIUS), origin)
           d.last = p
         },
         up() {
@@ -65,7 +70,7 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
     if (tool === 'select') {
       return {
         down(p) {
-          const strokes = readStrokes(doc)
+          const strokes = editable()
           const hit = topStrokeAt(strokes, p, PICK_TOLERANCE)
           if (hit) {
             const ids = selected.includes(hit.id) ? selected : [hit.id]
@@ -99,14 +104,14 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown) {
             setPreview(null)
           }
           if (d?.kind === 'band') {
-            setSelected(strokesInRect(readStrokes(doc), normalizeRect(d.start, d.end)))
+            setSelected(strokesInRect(editable(), normalizeRect(d.start, d.end)))
             bump()
           }
         },
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump])
+  }, [tool, doc, origin, selected, bump, hiddenLayers])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)

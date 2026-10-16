@@ -12,6 +12,7 @@ import {
   observeLayers,
   readLayers,
   renameLayer,
+  setLayerLocked,
   setLayerOpacity,
   type Layer,
   type LayerStats,
@@ -47,6 +48,8 @@ function Thumbnail({ doc, layer, version }: { doc: Y.Doc; layer: Layer; version:
 const EYE = 'M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z'
 const EYE_OFF = 'M2 10s3-6 8-6c2 0 3.6.8 4.9 1.8M18 10s-3 6-8 6c-2 0-3.6-.8-4.9-1.8M3 17L17 3'
 const PENCIL = 'M4 16l1-4 8-8 3 3-8 8z'
+const LOCK = 'M5 9h10v8H5zM7 9V6a3 3 0 016 0v3'
+const UNLOCK = 'M5 9h10v8H5zM7 9V6a3 3 0 015.6-1.5'
 
 function Icon({ d, children }: { d: string; children?: ReactNode }) {
   return (
@@ -161,6 +164,7 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
                     <span className="layer-name">{layer.name}</span>
                     <span className="layer-meta">
                       획 {st.count}개{st.authors.length > 0 && ` · ${st.authors.join(', ')}`}
+                      {layer.locked && ' · 잠김'}
                       {isHidden ? ' · 내 화면에서 숨김' : isActive ? ' · 지금 그리는 곳' : ''}
                     </span>
                   </span>
@@ -174,6 +178,16 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
                 onClick={() => setEditing(layer.id)}
               >
                 <Icon d={PENCIL} />
+              </button>
+              <button
+                type="button"
+                className="layer-icon-btn"
+                aria-label={`${layer.name} ${layer.locked ? '잠금 풀기' : '잠그기'}`}
+                title={layer.locked ? '잠금 풀기' : '잠그기: 아무도 이 레이어에 그리거나 지우지 못해요'}
+                aria-pressed={layer.locked}
+                onClick={() => setLayerLocked(doc, layer.id, !layer.locked, origin)}
+              >
+                <Icon d={layer.locked ? LOCK : UNLOCK} />
               </button>
               <button
                 type="button"
@@ -220,7 +234,7 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
         <p className="tool-pop-caption">
           {full && `레이어는 ${MAX_LAYERS}개까지예요. `}위에 있는 레이어가 앞에 보여요. 글 상자는 항상 맨 위예요.
         </p>
-        <p className="tool-pop-caption">눈은 내 화면에서만 숨기고, 이름·순서·불투명도는 모두에게 적용돼요.</p>
+        <p className="tool-pop-caption">눈은 내 화면에서만 숨기고, 자물쇠는 모두가 못 그리고 못 지우게 해요. 이름·순서·불투명도도 모두에게 적용돼요.</p>
       </div>
     </div>
   )

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import * as Y from 'yjs'
 import { addStroke, newId, readStrokes, round, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
-import { layerPlan, observeLayers, readLayers } from './layers'
+import { canDrawOn, layerPlan, observeLayers, readLayers } from './layers'
 import { canvasPixelRatio, paintLayers, paintStroke } from './render'
 import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { TouchPan, scrollNearest } from './touchPan'
@@ -28,6 +28,8 @@ type Props = {
   layer?: string
   /** 내 화면에서만 숨긴 레이어 */
   hiddenLayers?: ReadonlySet<string>
+  /** 지금 그리는 레이어가 잠겨 있어 그리지 못했을 때 */
+  onDrawBlocked?: () => void
   author: string
   readOnly?: boolean
   /** 지우개·선택·글씨처럼 그리기 외 도구의 포인터 처리 */
@@ -58,6 +60,7 @@ export function PageView({
   pressureOn = true,
   layer,
   hiddenLayers,
+  onDrawBlocked,
   author,
   readOnly = false,
   pointerTool,
@@ -204,6 +207,10 @@ export function PageView({
     const p = pagePoint(e)
     onGestureStart?.()
     if (tool === 'pen' || tool === 'highlighter') {
+      if (layer && !canDrawOn(readLayers(doc), layer)) {
+        onDrawBlocked?.()
+        return
+      }
       e.currentTarget.setPointerCapture(e.pointerId)
       activePointer.current = e.pointerId
       lastSample.current = null

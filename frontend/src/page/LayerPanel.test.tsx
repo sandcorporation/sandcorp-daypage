@@ -144,3 +144,15 @@ describe('이름·순서·숨기기·불투명도', () => {
     expect(readLayers(doc).map((l) => l.id)).toEqual([top, BASE_LAYER_ID])
   })
 })
+
+describe('잠그기', () => {
+  test('자물쇠로 잠그고 풀면 문서에 반영되고, 잠김이 보인다', async () => {
+    const doc = createPageDoc('2026-10-16')
+    setup(doc)
+    await userEvent.click(screen.getByRole('button', { name: '레이어 1 잠그기' }))
+    expect(readLayers(doc)[0].locked).toBe(true)
+    expect(rows()[0]).toHaveTextContent('잠김')
+    await userEvent.click(screen.getByRole('button', { name: '레이어 1 잠금 풀기' }))
+    expect(readLayers(doc)[0].locked).toBe(false)
+  })
+})

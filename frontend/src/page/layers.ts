@@ -104,6 +104,22 @@ export function setLayerOpacity(doc: Y.Doc, id: string, opacity: number, origin?
   updateLayer(doc, id, { opacity: Math.round(Math.min(1, Math.max(0.1, opacity)) * 100) / 100 }, origin)
 }
 
+/** 잠그면 아무도 그 레이어에 그리거나 지우지 못한다(클라이언트에서 지킨다). 누구나 풀 수 있다. */
+export function setLayerLocked(doc: Y.Doc, id: string, locked: boolean, origin?: unknown): void {
+  updateLayer(doc, id, { locked }, origin)
+}
+
+/** 이 레이어에 새 획을 그릴 수 있는지(잠기지 않았는지). */
+export function canDrawOn(layers: Layer[], id: string): boolean {
+  return !layers.find((l) => l.id === id)?.locked
+}
+
+/** 지우개·선택이 다룰 수 있는 획: 잠긴 레이어와 내가 숨긴 레이어의 획은 뺀다. */
+export function editableStrokes(strokes: Stroke[], layers: Layer[], hidden?: ReadonlySet<string>): Stroke[] {
+  const blocked = new Set(layers.filter((l) => l.locked || hidden?.has(l.id)).map((l) => l.id))
+  return blocked.size ? strokes.filter((s) => !blocked.has(layerOf(s, layers))) : strokes
+}
+
 /**
  * 레이어를 아래에서 index번째 자리로 옮긴다. 옮기는 레이어의 순서 키만 이웃 사이 값으로 바꾸므로
  * 두 사람이 동시에 다른 레이어를 옮겨도 합친 결과가 같다.

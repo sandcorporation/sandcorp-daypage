@@ -64,7 +64,6 @@ export function NotePage({ initial }: Props) {
   // 내 변경에 붙이는 표식(되돌리기는 이것만 추적한다)
   const origin = useMemo(() => ({ local: true }), [])
   const history = useUndo(doc, origin)
-  const edit = useEditTools(doc, tool, origin)
 
   // 레이어: 지금 그리는 레이어는 연결마다 따로다. 고른 레이어가 사라지면 맨 위 레이어로.
   const { layers } = useLayers(doc)
@@ -83,6 +82,7 @@ export function NotePage({ initial }: Props) {
     },
     [hiddenLayers, note.id, note.today],
   )
+  const edit = useEditTools(doc, tool, origin, hiddenLayers)
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
   const reconnectRef = useRef<() => void>(() => {})
@@ -329,6 +329,7 @@ export function NotePage({ initial }: Props) {
           pressureOn={pressureOn}
           layer={currentLayer}
           hiddenLayers={hiddenLayers}
+          onDrawBlocked={() => show('잠긴 레이어에는 그릴 수 없어요. 레이어에서 잠금을 풀어 주세요.')}
           author={note.me.nickname}
           origin={origin}
           pointerTool={tool === 'text' ? textTool : edit.pointerTool}

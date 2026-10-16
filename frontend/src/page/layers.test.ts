@@ -1,6 +1,19 @@
 import * as Y from 'yjs'
 import { addStroke, createPageDoc, readStrokes, type Stroke } from './doc'
-import { addLayer, BASE_LAYER_ID, layerOf, layerPlan, MAX_LAYERS, moveLayer, readLayers, renameLayer, setLayerOpacity } from './layers'
+import {
+  addLayer,
+  BASE_LAYER_ID,
+  canDrawOn,
+  editableStrokes,
+  layerOf,
+  layerPlan,
+  MAX_LAYERS,
+  moveLayer,
+  readLayers,
+  renameLayer,
+  setLayerLocked,
+  setLayerOpacity,
+} from './layers'
 import { createUndoManager } from './undo'
 
 function stroke(partial: Partial<Stroke>): Stroke {
@@ -154,5 +167,44 @@ describe('이름·순서·불투명도', () => {
     expect(readLayers(doc)[0]).toMatchObject({ name: '밑그림', opacity: 1 })
     undo.undo()
     expect(readLayers(doc)[0].name).toBe('레이어 1')
+  })
+})
+
+describe('잠그기', () => {
+  test('잠그면 모두에게 반영되고 누구나 풀 수 있다', () => {
+    const a = createPageDoc('2026-10-16')
+    setLayerLocked(a, BASE_LAYER_ID, true)
+    const b = new Y.Doc()
+    sync(a, b)
+    expect(readLayers(b)[0].locked).toBe(true)
+    setLayerLocked(b, BASE_LAYER_ID, false)
+    sync(a, b)
+    expect(readLayers(a)[0].locked).toBe(false)
+  })
+
+  test('잠긴 레이어와 내가 숨긴 레이어의 획은 지우개·선택 대상이 아니다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    const third = addLayer(doc)!
+    setLayerLocked(doc, BASE_LAYER_ID, true)
+    const strokes = [stroke({ id: 'base' }), stroke({ id: 'top', layer: top }), stroke({ id: 'third', layer: third })]
+    const ids = editableStrokes(strokes, readLayers(doc), new Set([third])).map((s) => s.id)
+    expect(ids).toEqual(['top'])
+  })
+
+  test('잠긴 레이어에는 그릴 수 없다', () => {
+    const doc = createPageDoc('2026-10-16')
+    expect(canDrawOn(readLayers(doc), BASE_LAYER_ID)).toBe(true)
+    setLayerLocked(doc, BASE_LAYER_ID, true)
+    expect(canDrawOn(readLayers(doc), BASE_LAYER_ID)).toBe(false)
+  })
+
+  test('잠금·풀기는 내 작업으로 되돌릴 수 있다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const origin = { local: true }
+    const undo = createUndoManager(doc, origin)
+    setLayerLocked(doc, BASE_LAYER_ID, true, origin)
+    undo.undo()
+    expect(readLayers(doc)[0].locked).toBe(false)
   })
 })
