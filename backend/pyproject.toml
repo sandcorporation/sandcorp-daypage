@@ -14,6 +14,7 @@ dependencies = [
     "pycrdt>=0.14.8",
     "pycrdt-websocket>=0.16.5",
     "redis>=8.1.0",
+    "sentry-sdk[celery,django]>=2.72.0",
     "uvicorn[standard]>=0.54.0",
 ]
 

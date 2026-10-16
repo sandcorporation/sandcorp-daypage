@@ -152,3 +152,12 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", "INFO")},
 }
+
+# 오류 수집(GlitchTip). DSN이 있고 DEBUG가 꺼진 운영에서만 켠다.
+from .sentry import init_sentry  # noqa: E402
+
+SENTRY_ENABLED = init_sentry(
+    env("SENTRY_DSN"),
+    debug=DEBUG,
+    environment=env("SENTRY_ENVIRONMENT", "production"),
+)
