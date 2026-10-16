@@ -4,6 +4,7 @@ import { addStroke, newId, readStrokes, round, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
 import { canDrawOn, layerPlan, observeLayers, readLayers } from './layers'
 import { canvasPixelRatio, paintLayers, paintStroke } from './render'
+import { matrixScale, transformPoints, type Matrix } from './transform'
 import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { TouchPan, scrollNearest } from './touchPan'
 
@@ -48,7 +49,7 @@ type Props = {
   overlay?: (ctx: CanvasRenderingContext2D) => void
   overlayVersion?: number
   /** 끄는 중인 획을 문서에 쓰기 전에 옮겨 보여 준다(놓을 때 한 번만 저장) */
-  preview?: { ids: string[]; dx: number; dy: number } | null
+  preview?: { ids: string[]; m: Matrix } | null
 }
 
 export function PageView({
@@ -112,12 +113,11 @@ export function PageView({
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     let strokes = readStrokes(doc)
-    if (preview && (preview.dx || preview.dy)) {
+    if (preview) {
       const moving = new Set(preview.ids)
+      const k = matrixScale(preview.m)
       strokes = strokes.map((st) =>
-        moving.has(st.id)
-          ? { ...st, points: st.points.map((v, i) => (i % 3 === 0 ? v + preview.dx : i % 3 === 1 ? v + preview.dy : v)) }
-          : st,
+        moving.has(st.id) ? { ...st, points: transformPoints(st.points, preview.m), width: st.width * k } : st,
       )
     }
     paintLayers(ctx, layerPlan(strokes, readLayers(doc), hiddenLayers), pixelScale)

@@ -1,5 +1,6 @@
 import * as Y from 'yjs'
 import { DEFAULT_BRUSH, isBrush, type Brush } from './tools'
+import { matrixScale, transformPoints, type Matrix } from './transform'
 
 /**
  * 장 하나의 Yjs 문서 구조.
@@ -207,4 +208,21 @@ export function isPageEmpty(doc: Y.Doc): boolean {
 
 export function round(v: number): number {
   return Math.round(v * 10) / 10
+}
+
+/**
+ * 획들을 행렬 m으로 옮기고·키우고·돌린다(필압은 그대로). 키운 만큼 굵기도 함께 키운다.
+ * 손을 뗀 순간 한 번만 쓰고, 끄는 동안은 화면에서만 미리 보인다.
+ */
+export function transformStrokes(doc: Y.Doc, ids: string[], m: Matrix, origin?: unknown): void {
+  if (ids.length === 0) return
+  const k = matrixScale(m)
+  doc.transact(() => {
+    for (const id of ids) {
+      const s = strokesMap(doc).get(id)
+      if (!s) continue
+      s.set('points', transformPoints(s.get('points') as number[], m))
+      if (Math.abs(k - 1) > 1e-6) s.set('width', round((s.get('width') as number) * k))
+    }
+  }, origin)
 }

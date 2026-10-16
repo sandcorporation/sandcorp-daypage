@@ -1,35 +1,59 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Y from 'yjs'
-import { deleteStrokes, moveStrokes, readStrokes } from './doc'
+import { deleteStrokes, readStrokes, transformStrokes } from './doc'
 import type { Point } from './geometry'
 import { editableStrokes, grabIds, readLayers } from './layers'
-import {
-  clampMoveDelta,
-  normalizeRect,
-  strokeBounds,
-  strokesHitBy,
-  strokesInRect,
-  topStrokeAt,
-  unionRect,
-  type Rect,
-} from './hit'
+import { normalizeRect, strokeBounds, strokesHitBy, strokesInRect, topStrokeAt, unionRect, type Rect } from './hit'
 import type { PointerTool } from './PageView'
 import type { ToolKind } from './tools'
+import {
+  anchorOf,
+  andThen,
+  boundsOfPoints,
+  handleAt,
+  handlePoints,
+  IDENTITY,
+  keepInPage,
+  rotateAbout,
+  rotationAngle,
+  scaleAbout,
+  scaleFactor,
+  transformedCorners,
+  translate,
+  type Matrix,
+} from './transform'
 
 const ERASER_RADIUS = 10
 const PICK_TOLERANCE = 8
+/** 선택 상자 여백·손잡이 크기(화면 px). 장 좌표로는 배율로 나눈다. */
+const BOX_PAD = 6
+const HANDLE_HIT = 14
+const HANDLE_SIZE = 10
+const ROTATE_OFFSET = 30
 
-type Drag = { kind: 'move'; ids: string[]; start: Point; bounds: Rect } | { kind: 'band'; start: Point; end: Point } | { kind: 'erase'; last: Point }
+type Drag =
+  | { kind: 'move'; ids: string[]; start: Point; bounds: Rect; m: Matrix }
+  | { kind: 'scale'; ids: string[]; bounds: Rect; anchor: Point; corner: Point; m: Matrix }
+  | { kind: 'rotate'; ids: string[]; bounds: Rect; center: Point; start: Point; m: Matrix }
+  | { kind: 'band'; start: Point; end: Point }
+  | { kind: 'erase'; last: Point }
+
+/** 변환한 묶음이 페이지 밖으로 나가면 안으로 밀어 넣는다 */
+function fitted(bounds: Rect, m: Matrix): Matrix {
+  const { dx, dy } = keepInPage(boundsOfPoints(transformedCorners(bounds, m)))
+  return dx || dy ? andThen(m, translate(dx, dy)) : m
+}
 
 /**
  * 지우개와 선택·이동 도구. 그리기·글씨는 다른 곳에서 처리한다.
  * 잠긴 레이어와 내가 숨긴 레이어의 획은 지우거나 고를 수 없다.
+ * 고른 묶음은 끌어서 옮기고, 모서리 손잡이로 키우거나 줄이고, 위쪽 손잡이로 돌린다(놓을 때 한 번 저장).
  */
-export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hiddenLayers?: ReadonlySet<string>) {
+export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hiddenLayers?: ReadonlySet<string>, scale = 1) {
   const [selected, setSelected] = useState<string[]>([])
   const [version, setVersion] = useState(0)
-  // 끄는 동안에는 문서에 쓰지 않고 화면에서만 옮겨 보인다. 놓을 때 한 번만 저장한다.
-  const [preview, setPreview] = useState<{ ids: string[]; dx: number; dy: number } | null>(null)
+  // 끄는 동안에는 문서에 쓰지 않고 화면에서만 바꿔 보인다. 놓을 때 한 번만 저장한다.
+  const [preview, setPreview] = useState<{ ids: string[]; m: Matrix } | null>(null)
   const drag = useRef<Drag | null>(null)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
 
@@ -46,6 +70,17 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
     strokes.observe(prune)
     return () => strokes.unobserve(prune)
   }, [doc, selected.length])
+
+  /** 고른 획들을 감싸는 상자(여백 포함) */
+  const selectionBox = useCallback(
+    (ids: string[]): Rect | null => {
+      const byId = new Map(readStrokes(doc).map((s) => [s.id, s]))
+      const r = unionRect(ids.flatMap((id) => (byId.has(id) ? [strokeBounds(byId.get(id)!)] : [])))
+      const pad = BOX_PAD / scale
+      return r && { x: r.x - pad, y: r.y - pad, width: r.width + pad * 2, height: r.height + pad * 2 }
+    },
+    [doc, scale],
+  )
 
   const pointerTool = useMemo<PointerTool | undefined>(() => {
     const editable = () => editableStrokes(readStrokes(doc), readLayers(doc), hiddenLayers)
@@ -70,15 +105,26 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
     if (tool === 'select') {
       return {
         down(p) {
+          // 고른 묶음의 손잡이: 모서리는 크기, 위쪽 원은 회전
+          const box = selected.length ? selectionBox(selected) : null
+          const h = box ? handleAt(box, p, HANDLE_HIT / scale, ROTATE_OFFSET / scale) : null
+          if (box && h === 'rotate') {
+            const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+            drag.current = { kind: 'rotate', ids: selected, bounds: box, center, start: p, m: IDENTITY }
+            return true
+          }
+          if (box && h && h !== 'rotate') {
+            drag.current = { kind: 'scale', ids: selected, bounds: box, anchor: anchorOf(box, h), corner: handlePoints(box, 0)[h], m: IDENTITY }
+            return true
+          }
           const strokes = editable()
           const hit = topStrokeAt(strokes, p, PICK_TOLERANCE)
           if (hit) {
             // 기본 레이어가 아닌 레이어는 스티커처럼 통째로 잡는다
             const ids = selected.includes(hit.id) ? selected : grabIds([hit.id], strokes, readLayers(doc))
             setSelected(ids)
-            const byId = new Map(strokes.map((st) => [st.id, st]))
-            const bounds = unionRect(ids.flatMap((id) => (byId.has(id) ? [strokeBounds(byId.get(id)!)] : [])))
-            drag.current = { kind: 'move', ids, start: p, bounds: bounds ?? { x: p.x, y: p.y, width: 0, height: 0 } }
+            const bounds = selectionBox(ids) ?? { x: p.x, y: p.y, width: 0, height: 0 }
+            drag.current = { kind: 'move', ids, start: p, bounds, m: IDENTITY }
           } else {
             setSelected([])
             drag.current = { kind: 'band', start: p, end: p }
@@ -88,20 +134,22 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
         move(p) {
           const d = drag.current
           if (!d) return
-          if (d.kind === 'move') {
-            const { dx, dy } = clampMoveDelta(d.bounds, p.x - d.start.x, p.y - d.start.y)
-            setPreview({ ids: d.ids, dx, dy })
-          } else if (d.kind === 'band') {
+          if (d.kind === 'band') {
             d.end = p
             bump()
+            return
           }
+          if (d.kind === 'erase') return
+          if (d.kind === 'move') d.m = fitted(d.bounds, translate(p.x - d.start.x, p.y - d.start.y))
+          else if (d.kind === 'scale') d.m = fitted(d.bounds, scaleAbout(d.anchor.x, d.anchor.y, scaleFactor(d.anchor, d.corner, p)))
+          else d.m = fitted(d.bounds, rotateAbout(d.center.x, d.center.y, rotationAngle(d.center, d.start, p)))
+          setPreview({ ids: d.ids, m: d.m })
         },
-        up(p) {
+        up() {
           const d = drag.current
           drag.current = null
-          if (d?.kind === 'move') {
-            const { dx, dy } = clampMoveDelta(d.bounds, p.x - d.start.x, p.y - d.start.y)
-            moveStrokes(doc, d.ids, dx, dy, origin)
+          if (d?.kind === 'move' || d?.kind === 'scale' || d?.kind === 'rotate') {
+            if (d.m.some((v, i) => v !== IDENTITY[i])) transformStrokes(doc, d.ids, d.m, origin)
             setPreview(null)
           }
           if (d?.kind === 'band') {
@@ -113,7 +161,7 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, hiddenLayers])
+  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)
@@ -123,25 +171,59 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
   const overlay = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       const d = drag.current
-      let rect: Rect | null = null
-      if (d?.kind === 'band') rect = normalizeRect(d.start, d.end)
-      else if (selected.length) {
-        const byId = new Map(readStrokes(doc).map((s) => [s.id, s]))
-        rect = unionRect(selected.flatMap((id) => (byId.has(id) ? [strokeBounds(byId.get(id)!)] : [])))
-        const off = preview ?? { dx: 0, dy: 0 }
-        if (rect) rect = { x: rect.x - 6 + off.dx, y: rect.y - 6 + off.dy, width: rect.width + 12, height: rect.height + 12 }
-      }
-      if (!rect) return
       ctx.save()
-      ctx.setLineDash([8, 6])
-      ctx.lineWidth = 1.5
+      ctx.lineWidth = 1.5 / scale
       ctx.strokeStyle = '#2A47B0'
       ctx.fillStyle = 'rgba(42, 71, 176, 0.06)'
-      ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
-      ctx.strokeRect(rect.x, rect.y, rect.width, rect.height)
+      if (d?.kind === 'band') {
+        const r = normalizeRect(d.start, d.end)
+        ctx.setLineDash([8 / scale, 6 / scale])
+        ctx.fillRect(r.x, r.y, r.width, r.height)
+        ctx.strokeRect(r.x, r.y, r.width, r.height)
+        ctx.restore()
+        return
+      }
+      const box = selected.length ? selectionBox(selected) : null
+      if (!box) {
+        ctx.restore()
+        return
+      }
+      const m = preview?.m ?? IDENTITY
+      const corners = transformedCorners(box, m)
+      // 선택 상자(돌리면 함께 기운다)
+      ctx.setLineDash([8 / scale, 6 / scale])
+      ctx.beginPath()
+      corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      // 손잡이: 네 모서리(크기), 위쪽 원(회전)
+      ctx.setLineDash([])
+      const hs = HANDLE_SIZE / scale
+      const [tlx, tly] = corners[0]
+      const [trx, try_] = corners[1]
+      const topMid = [(tlx + trx) / 2, (tly + try_) / 2]
+      // 위쪽 가운데에서 상자 바깥 방향으로 ROTATE_OFFSET만큼
+      const [cx, cy] = [(corners[0][0] + corners[2][0]) / 2, (corners[0][1] + corners[2][1]) / 2]
+      const len = Math.hypot(topMid[0] - cx, topMid[1] - cy) || 1
+      const off = ROTATE_OFFSET / scale
+      const rot = [topMid[0] + ((topMid[0] - cx) / len) * off, topMid[1] + ((topMid[1] - cy) / len) * off]
+      ctx.beginPath()
+      ctx.moveTo(topMid[0], topMid[1])
+      ctx.lineTo(rot[0], rot[1])
+      ctx.stroke()
+      ctx.fillStyle = '#FFFFFF'
+      for (const [x, y] of corners) {
+        ctx.fillRect(x - hs / 2, y - hs / 2, hs, hs)
+        ctx.strokeRect(x - hs / 2, y - hs / 2, hs, hs)
+      }
+      ctx.beginPath()
+      ctx.arc(rot[0], rot[1], hs / 2 + 1 / scale, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
       ctx.restore()
     },
-    [doc, selected, preview],
+    [selected, preview, scale, selectionBox],
   )
 
   return { pointerTool, overlay, overlayVersion: version, selected, deleteSelected, preview }

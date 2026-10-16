@@ -83,7 +83,7 @@ export function NotePage({ initial }: Props) {
     },
     [hiddenLayers, note.id, note.today],
   )
-  const edit = useEditTools(doc, tool, origin, hiddenLayers)
+  const edit = useEditTools(doc, tool, origin, hiddenLayers, scale)
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
   const reconnectRef = useRef<() => void>(() => {})
