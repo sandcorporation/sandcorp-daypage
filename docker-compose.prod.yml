@@ -19,7 +19,7 @@ x-backend: &backend
 
 services:
   # Caddy는 공식 이미지로 계속 떠 있다. 정적 파일은 web_static 볼륨(배포 때 web-dist가 채움),
-  # 설정은 저장소의 Caddyfile을 그대로 읽고 배포 때 reload한다. 그래서 배포해도 Caddy를 내리지 않는다.
+  # 설정은 caddy_etc 볼륨(배포 때 web-dist가 저장소의 Caddyfile을 넣음)에서 읽고 reload한다. 그래서 배포해도 Caddy를 내리지 않는다.
   web:
     image: caddy:2-alpine
     cpus: "0.2"
@@ -34,7 +34,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - web_static:/srv
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # 설정 파일도 볼륨으로 받는다(web-dist가 채움). Jenkins가 컨테이너 안에서 돌아 저장소 경로를 호스트에서 연결할 수 없다.
+      - caddy_etc:/etc/caddy
     depends_on:
       - backend
       - backend2
@@ -50,6 +51,7 @@ services:
     profiles: ["deploy"]
     volumes:
       - web_static:/srv
+      - caddy_etc:/caddy-etc
     restart: "no"
 
   # 백엔드는 단일 프로세스 uvicorn을 CPU 수만큼(지금 2개) 띄운다. Caddy가 웹소켓을 노트 경로로
@@ -126,3 +128,4 @@ volumes:
   caddy_data:
   caddy_config:
   web_static:
+  caddy_etc:

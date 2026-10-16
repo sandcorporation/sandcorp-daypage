@@ -18,4 +18,9 @@ mv -f /srv/.index.html.new /srv/index.html
 # 이번 빌드의 assets는 시각을 새로 찍어 정리 대상에서 빠지게 한다.
 for f in /dist/assets/*; do touch "/srv/assets/$(basename "$f")"; done
 find /srv/assets -type f -mtime +7 -delete
+# Caddy 설정도 볼륨으로 넘긴다(호스트 경로를 연결하지 않는다: Jenkins가 컨테이너 안에서 돌면 그 경로가 호스트에 없다).
+if [ -d /caddy-etc ]; then
+  cp /Caddyfile /caddy-etc/.Caddyfile.new
+  mv -f /caddy-etc/.Caddyfile.new /caddy-etc/Caddyfile
+fi
 echo "정적 파일 반영: $(ls /dist/assets | wc -l)개 assets, index.html 교체"
