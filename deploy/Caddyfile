@@ -15,6 +15,9 @@
 		reverse_proxy backend:8000 backend2:8000 {
 			lb_policy uri_hash
 			fail_duration 10s
+			# 배포로 한쪽이 내려가 있으면 잠깐 기다리며 다른 쪽으로 다시 보낸다(무중단 배포)
+			lb_try_duration 10s
+			lb_try_interval 250ms
 		}
 	}
 
@@ -24,6 +27,9 @@
 		reverse_proxy backend:8000 backend2:8000 {
 			lb_policy round_robin
 			fail_duration 10s
+			# 배포로 한쪽이 내려가 있으면 잠깐 기다리며 다른 쪽으로 다시 보낸다(무중단 배포)
+			lb_try_duration 10s
+			lb_try_interval 250ms
 		}
 	}
 

@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # Jenkins(oracle 에이전트)에서 부른다. 워크스페이스의 .env를 쓴다(저장소에는 없음).
+#
+# 무중단 배포: 한꺼번에 내리지 않고 하나씩 바꾼다.
+#   1) 새 이미지 빌드 → 2) migrate(옛 백엔드가 계속 받는 중) → 3) backend, backend2를 하나씩 교체
+#   (다음 것을 바꾸기 전에 앞의 것이 헬스를 통과할 때까지 기다린다. 그동안 Caddy가 다른 쪽으로 보낸다)
+#   → 4) 정적 파일을 볼륨에 넣고 index.html만 바꿔 끼움 → 5) Caddy 설정 reload(컨테이너는 그대로)
+#   → 6) worker·beat 교체(사용자 요청과 무관)
+# migrate는 옛 코드와 새 코드가 같은 DB에서 잠깐 함께 돈다는 전제다. 열을 지우거나 이름을 바꾸는
+# 마이그레이션은 두 번의 배포로 나눈다(먼저 안 쓰게 하고, 다음 배포에서 지운다).
 set -euo pipefail
 
 if [ ! -f .env ]; then
@@ -9,14 +17,53 @@ fi
 
 compose() { docker compose "$@"; }
 
-echo "== 이미지 빌드"
-compose build backend web
+# 서비스 컨테이너가 healthy가 될 때까지 기다린다.
+wait_healthy() {
+  local svc=$1
+  for i in $(seq 1 60); do
+    local id status
+    id=$(compose ps -q "$svc")
+    status=$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || echo starting)
+    if [ "$status" = "healthy" ]; then
+      echo "$svc healthy (${i}회째)"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "$svc가 healthy가 되지 않았다" >&2
+  compose logs --tail 80 "$svc" >&2
+  return 1
+}
 
-echo "== 기동(backend가 시작하며 migrate)"
-compose up -d --remove-orphans
+echo "== 이미지 빌드"
+compose build backend
+compose --profile deploy build web-dist
+
+echo "== DB·Redis (이미 떠 있으면 그대로)"
+compose up -d --no-recreate postgres redis
+wait_healthy postgres
+
+echo "== migrate (옛 백엔드는 계속 요청을 받는다)"
+compose run --rm --no-deps backend python manage.py migrate --noinput
+
+echo "== 백엔드 하나씩 교체"
+for svc in backend backend2; do
+  compose up -d --no-deps "$svc"
+  wait_healthy "$svc"
+done
+
+echo "== 정적 파일 반영"
+compose --profile deploy run --rm --no-deps web-dist
+
+echo "== Caddy (떠 있으면 컨테이너는 그대로 두고 설정만 다시 읽는다)"
+compose up -d --no-deps web
+compose exec -T web caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+
+echo "== worker·beat"
+compose up -d --no-deps worker beat
 
 # Django는 ALLOWED_HOSTS에 없는 Host를 거부하므로 운영 도메인을 Host로 보낸다.
-HOST=$(grep -E '^DJANGO_ALLOWED_HOSTS=' .env | cut -d= -f2 | cut -d, -f1)
+HOST=$(grep -E '^DJANGO_ALLOWED_HOSTS=' .env | cut -d= -f2 | cut -d, -f1 || true)
 HOST=${HOST:-localhost}
 
 echo "== 헬스 확인 (Host: $HOST)"

@@ -1,4 +1,4 @@
-# 운영 배포: docker compose -f docker-compose.prod.yml build backend web && docker compose -f docker-compose.prod.yml up -d
+# 운영 배포는 deploy/deploy.sh(무중단: 백엔드를 하나씩 교체, Caddy는 reload)
 # oracle 서버(NPMplus 뒤)에서는 docker-compose.oracle.yml을 덧붙인다(Jenkinsfile 참고).
 # 자원 예산: daypage 전체 2 CPU / 약 2.9 GB(oracle의 다른 서비스와 함께 쓴다). 서비스마다 cpus·mem_limit으로 나눈다.
 x-backend: &backend
@@ -18,10 +18,10 @@ x-backend: &backend
   restart: unless-stopped
 
 services:
+  # Caddy는 공식 이미지로 계속 떠 있다. 정적 파일은 web_static 볼륨(배포 때 web-dist가 채움),
+  # 설정은 저장소의 Caddyfile을 그대로 읽고 배포 때 reload한다. 그래서 배포해도 Caddy를 내리지 않는다.
   web:
-    build:
-      context: .
-      dockerfile: deploy/web.Dockerfile
+    image: caddy:2-alpine
     cpus: "0.2"
     mem_limit: 128m
     environment:
@@ -33,10 +33,24 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - web_static:/srv
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       - backend
       - backend2
     restart: unless-stopped
+
+  # 프론트 빌드 결과를 web_static에 넣고 끝나는 일회성 작업(deploy/publish-static.sh).
+  # 평소 `up`에는 뜨지 않고 배포 스크립트가 `--profile deploy run`으로 부른다.
+  web-dist:
+    image: daypage-web-dist:latest
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    profiles: ["deploy"]
+    volumes:
+      - web_static:/srv
+    restart: "no"
 
   # 백엔드는 단일 프로세스 uvicorn을 CPU 수만큼(지금 2개) 띄운다. Caddy가 웹소켓을 노트 경로로
   # 나눠(uri_hash) 같은 장의 연결이 한 프로세스에 모이고, 방 안 전달은 메모리에서 끝난다(daypage/hub.py).
@@ -47,12 +61,17 @@ services:
     # 수용 인원은 이 CPU 제한에서 계산한다(daypage/admission.py). 백엔드를 늘리면 같은 제한을 함께 준다.
     cpus: "0.65"
     mem_limit: 768m
-    command:
-      - sh
-      - -c
-      - "python manage.py migrate --noinput && exec uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips '*'"
+    # migrate는 배포 스크립트가 먼저 따로 돌린다(deploy/deploy.sh). 여기서는 받기만 한다.
+    # 내릴 때(SIGTERM) 새 연결을 받지 않고 열린 연결을 정리할 시간을 준다. 그동안 Caddy가 다른 쪽으로 보낸다.
+    command: &backend-command ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*", "--timeout-graceful-shutdown", "10"]
+    stop_grace_period: 20s
+    # 소켓이 열린 것만이 아니라 Django가 실제로 답하는지 본다(ALLOWED_HOSTS의 첫 도메인을 Host로 보낸다).
     healthcheck: &backend-health
-      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 2)"]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, urllib.request as u; h = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')[0]; u.urlopen(u.Request('http://127.0.0.1:8000/api/health', headers={'Host': h}), timeout=2)"
       interval: 3s
       retries: 40
 
@@ -60,9 +79,10 @@ services:
     <<: *backend
     cpus: "0.65"
     mem_limit: 768m
-    command: ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    command: *backend-command
+    stop_grace_period: 20s
     healthcheck: *backend-health
-    # migrate는 backend가 한다. 끝나고 받기 시작한 뒤에 뜬다.
+    # 처음 띄울 때 backend가 먼저 받기 시작한 뒤에 뜬다(배포 때는 deploy.sh가 하나씩 바꾼다).
     depends_on:
       backend:
         condition: service_healthy
@@ -105,3 +125,4 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  web_static:

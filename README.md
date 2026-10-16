@@ -46,13 +46,15 @@ cd frontend && pnpm typecheck && pnpm test
 
 1. DNS에서 `daypage.sandcorp.co.kr`의 A 레코드를 서버로 향하게 하고 80·443 포트를 연다.
 2. 서버의 저장소 루트에 `.env`를 만든다(`.env.example`의 운영 항목 참고: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `KAKAO_*`, `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD`).
-3. 띄운다. 마이그레이션은 backend 컨테이너가 시작할 때 자동으로 돈다.
+3. 배포 스크립트로 띄운다(처음과 이후 배포 모두 같다). Jenkins도 이 스크립트를 부른다.
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+COMPOSE_FILE=docker-compose.prod.yml bash deploy/deploy.sh
 docker compose -f docker-compose.prod.yml logs -f backend
 ```
 
-- 데이터: `pgdata`(DB), `caddy_data`(인증서) 볼륨에 남는다. 재시작·재배포해도 유지된다.
+배포는 무중단이다. migrate를 먼저 따로 돌리고, backend·backend2를 하나씩 바꾸며(앞의 것이 헬스를 통과한 뒤 다음 것), 그동안 Caddy가 살아 있는 쪽으로 다시 보낸다. 프론트는 빌드 결과를 `web_static` 볼륨에 넣고 `index.html`만 바꿔 끼우며, Caddy는 내리지 않고 설정만 reload한다. 그래서 마이그레이션은 옛 코드와 새 코드가 잠깐 함께 돌아도 되게 짠다(열을 지우거나 이름을 바꿀 때는 두 번의 배포로 나눈다).
+
+- 데이터: `pgdata`(DB), `caddy_data`(인증서), `web_static`(정적 파일) 볼륨에 남는다. 재시작·재배포해도 유지된다.
 - Caddy가 `/api/*`, `/auth/*`, `/ws/*`는 Django로, 나머지는 SPA(`index.html` fallback)로 보낸다.
 - 로컬에서 운영 구성을 시험할 때는 `SITE_ADDRESS=:80`, `HTTP_PORT=8088`처럼 HTTP로 띄우고 `ENV_FILE`로 env 파일을 바꿀 수 있다.

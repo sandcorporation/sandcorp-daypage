@@ -9,11 +9,13 @@ services:
       context: ./backend
       network: host
 
-  web:
+  web-dist:
     build:
       context: .
       dockerfile: deploy/web.Dockerfile
       network: host
+
+  web:
     environment:
       SITE_ADDRESS: ":80"
     ports: !override
