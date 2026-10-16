@@ -799,3 +799,85 @@
 .char-counter.is-full {
   color: #b91c1c;
 }
+
+/* 도구 막대 버튼에서 여는 창(components/ToolPopover) */
+.tool-anchor {
+  position: relative;
+}
+.tool-pop {
+  z-index: 45;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 6px 6px 0 var(--ink);
+  padding: 14px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--ink);
+  outline: none;
+}
+.tool-pop-popover {
+  position: absolute;
+  left: calc(100% + 12px);
+  width: 340px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+.tool-pop-popover.tool-pop-top {
+  top: 0;
+}
+.tool-pop-popover.tool-pop-bottom {
+  bottom: 0;
+}
+.tool-pop-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: 18px 18px 0 0;
+  border-bottom: 0;
+  box-shadow: 0 -8px 30px rgba(31, 33, 40, 0.18);
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+}
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  background: rgba(31, 33, 40, 0.28);
+}
+.tool-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tool-pop-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+.tool-pop-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.tool-pop-close:hover {
+  background: var(--paper-dark);
+}
+.tool-pop-caption {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-2);
+}
