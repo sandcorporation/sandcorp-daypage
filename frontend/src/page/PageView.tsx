@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import * as Y from 'yjs'
-import { addStroke, newId, readStrokes, round, strokesMap, type Stroke } from './doc'
+import { addStroke, newId, readStrokes, round, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
-import { canvasPixelRatio, paintStroke, paintStrokes } from './render'
+import { layerPlan, observeLayers, readLayers } from './layers'
+import { canvasPixelRatio, paintLayers, paintStroke } from './render'
 import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { TouchPan, scrollNearest } from './touchPan'
 
@@ -23,6 +24,10 @@ type Props = {
   brush?: Brush
   /** 필압 따라 굵기 바꾸기. 끄면 굵기가 일정한 획을 그린다 */
   pressureOn?: boolean
+  /** 새 획을 넣을 레이어(지금 그리는 레이어) */
+  layer?: string
+  /** 내 화면에서만 숨긴 레이어 */
+  hiddenLayers?: ReadonlySet<string>
   author: string
   readOnly?: boolean
   /** 지우개·선택·글씨처럼 그리기 외 도구의 포인터 처리 */
@@ -51,6 +56,8 @@ export function PageView({
   widthLevel,
   brush,
   pressureOn = true,
+  layer,
+  hiddenLayers,
   author,
   readOnly = false,
   pointerTool,
@@ -110,12 +117,12 @@ export function PageView({
           : st,
       )
     }
-    paintStrokes(ctx, strokes, pixelScale)
+    paintLayers(ctx, layerPlan(strokes, readLayers(doc), hiddenLayers), pixelScale)
     if (overlay) {
       ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
       overlay(ctx)
     }
-  }, [doc, pixelScale, overlay, preview])
+  }, [doc, pixelScale, overlay, preview, hiddenLayers])
 
   // 문서가 바뀌면 다음 프레임에 한 번만 다시 그린다.
   useEffect(() => {
@@ -125,10 +132,9 @@ export function PageView({
       frame = requestAnimationFrame(repaint)
     }
     schedule()
-    const strokes = strokesMap(doc)
-    strokes.observeDeep(schedule)
+    const unobserve = observeLayers(doc, schedule)
     return () => {
-      strokes.unobserveDeep(schedule)
+      unobserve()
       cancelAnimationFrame(frame)
     }
   }, [doc, repaint, overlayVersion])
@@ -212,6 +218,7 @@ export function PageView({
         createdAt: Date.now(),
         ...(tool === 'pen' && brush ? { brush } : {}),
         ...(tool === 'pen' && !pressureOn ? { steady: true } : {}),
+        ...(layer ? { layer } : {}),
       }
       paintLive()
       e.preventDefault()

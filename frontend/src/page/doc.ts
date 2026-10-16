@@ -4,7 +4,8 @@ import { DEFAULT_BRUSH, isBrush, type Brush } from './tools'
 /**
  * 장 하나의 Yjs 문서 구조.
  *
- * strokes:   Y.Map<strokeId, Y.Map{ tool, color, width, points: number[], author, createdAt, brush? }>
+ * strokes:   Y.Map<strokeId, Y.Map{ tool, color, width, points: number[], author, createdAt, brush?, steady?, layer? }>
+ * layers:    레이어 목록(layers.ts)
  * textboxes: Y.Map<boxId, Y.Map{ x, y, width, color, fontSize, font, content: Y.XmlFragment, author }>
  * meta:      Y.Map{ date }
  */
@@ -24,6 +25,8 @@ export type Stroke = {
   brush?: Brush
   /** 필압을 끄고 그린 획: 굵기가 일정하다 */
   steady?: boolean
+  /** 레이어 id. 없으면 기본 레이어(layers.ts) */
+  layer?: string
 }
 
 /** 획의 펜 종류. 없거나 모르는 값이면 볼펜(옛 획은 지금 모양 그대로). */
@@ -77,6 +80,7 @@ export function addStroke(doc: Y.Doc, stroke: Stroke, origin?: unknown): void {
     // 볼펜은 쓰지 않아도 같은 모양이므로 다른 펜 종류만 남긴다.
     if (stroke.tool === 'pen' && stroke.brush && stroke.brush !== DEFAULT_BRUSH) m.set('brush', stroke.brush)
     if (stroke.tool === 'pen' && stroke.steady) m.set('steady', true)
+    if (stroke.layer) m.set('layer', stroke.layer)
     strokesMap(doc).set(stroke.id, m)
   }, origin)
 }
@@ -92,6 +96,7 @@ export function readStroke(id: string, m: Y.Map<unknown>): Stroke {
     createdAt: m.get('createdAt') as number,
     ...(m.has('brush') ? { brush: m.get('brush') as Brush } : {}),
     ...(m.get('steady') === true ? { steady: true } : {}),
+    ...(typeof m.get('layer') === 'string' ? { layer: m.get('layer') as string } : {}),
   }
 }
 

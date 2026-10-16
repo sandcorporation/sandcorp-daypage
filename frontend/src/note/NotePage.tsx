@@ -7,6 +7,7 @@ import { TextLayer } from '../page/TextLayer'
 import { createTextBoxAt } from '../page/textbox'
 import { updateTextBox } from '../page/doc'
 import { fontOf } from '../page/fonts'
+import { LayerPanel, useLayers } from '../page/LayerPanel'
 import { Toolbar } from '../page/Toolbar'
 import { INKS, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
@@ -63,6 +64,12 @@ export function NotePage({ initial }: Props) {
   const origin = useMemo(() => ({ local: true }), [])
   const history = useUndo(doc, origin)
   const edit = useEditTools(doc, tool, origin)
+
+  // 레이어: 지금 그리는 레이어는 연결마다 따로다. 고른 레이어가 사라지면 맨 위 레이어로.
+  const { layers } = useLayers(doc)
+  const [chosenLayer, setChosenLayer] = useState<string | null>(null)
+  const currentLayer = layers.find((l) => l.id === chosenLayer)?.id ?? layers[layers.length - 1].id
+  const [hiddenLayers] = useState<ReadonlySet<string>>(() => new Set())
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
   const reconnectRef = useRef<() => void>(() => {})
@@ -289,6 +296,16 @@ export function NotePage({ initial }: Props) {
           noteColors={note.colors}
           onAddColor={addColor}
           onRemoveColor={(c) => void removeColor(c)}
+          layerPanel={
+            <LayerPanel
+              doc={doc}
+              origin={origin}
+              current={currentLayer}
+              onCurrent={setChosenLayer}
+              hidden={hiddenLayers}
+              onToggleHidden={() => {}}
+            />
+          }
         />
         <PageView
           doc={doc}
@@ -297,6 +314,8 @@ export function NotePage({ initial }: Props) {
           widthLevel={widthLevel}
           brush={brush}
           pressureOn={pressureOn}
+          layer={currentLayer}
+          hiddenLayers={hiddenLayers}
           author={note.me.nickname}
           origin={origin}
           pointerTool={tool === 'text' ? textTool : edit.pointerTool}

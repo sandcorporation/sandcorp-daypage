@@ -124,3 +124,11 @@ test('색 만들기 창에서 노트 색을 뺄 수 있다', async () => {
   await userEvent.click(screen.getByRole('button', { name: '노트 색 #16794f 빼기' }))
   expect(onRemoveColor).toHaveBeenCalledWith('#16794f')
 })
+
+test('레이어 버튼으로 레이어 패널을 열고 닫는다', async () => {
+  setup({ layerPanel: <p>패널 내용</p> })
+  await userEvent.click(screen.getByRole('button', { name: '레이어' }))
+  expect(screen.getByRole('dialog', { name: '레이어' })).toHaveTextContent('패널 내용')
+  await userEvent.click(screen.getByRole('button', { name: '레이어' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})

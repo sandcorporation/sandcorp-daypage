@@ -1,5 +1,6 @@
 import { getStroke, type StrokeOptions } from 'perfect-freehand'
 import { brushOf, type Stroke } from './doc'
+import type { LayerPlanItem } from './layers'
 import { grainPattern, grainSeed } from './texture'
 import { LINE_GAP, MARGIN_X, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 
@@ -150,4 +151,29 @@ export function paintPaper(ctx: CanvasRenderingContext2D, pixelScale: number): v
   ctx.lineTo(MARGIN_X - 24, PAGE_HEIGHT)
   ctx.stroke()
   ctx.restore()
+}
+
+/**
+ * 레이어 순서대로 그린다(plan은 layers.ts의 layerPlan). 불투명한 레이어는 바로 그리고,
+ * 불투명도가 1보다 작은 레이어만 따로 그려 그만큼 흐리게 합친다(겹친 획이 진해지지 않게).
+ */
+export function paintLayers(ctx: CanvasRenderingContext2D, plan: LayerPlanItem[], pixelScale: number): void {
+  for (const { layer, strokes } of plan) {
+    if (strokes.length === 0) continue
+    if (layer.opacity >= 1) {
+      paintStrokes(ctx, strokes, pixelScale)
+      continue
+    }
+    const off = document.createElement('canvas')
+    off.width = ctx.canvas.width
+    off.height = ctx.canvas.height
+    const octx = off.getContext('2d')
+    if (!octx) continue
+    paintStrokes(octx, strokes, pixelScale)
+    ctx.save()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalAlpha = layer.opacity
+    ctx.drawImage(off, 0, 0)
+    ctx.restore()
+  }
 }

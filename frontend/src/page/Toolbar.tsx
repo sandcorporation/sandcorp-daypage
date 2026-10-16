@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { ToolPopover } from '../components/ToolPopover'
 import { BrushPicker } from './BrushPicker'
 import { ColorPicker } from './ColorPicker'
@@ -28,6 +28,8 @@ type Props = {
   noteColors: string[]
   onAddColor: (color: string) => Promise<void>
   onRemoveColor?: (color: string) => void
+  /** 레이어 버튼으로 여는 레이어 패널 내용. 없으면 버튼을 보이지 않는다 */
+  layerPanel?: ReactNode
 }
 
 const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
@@ -40,8 +42,10 @@ const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
 
 export function Toolbar(props: Props) {
   const { tool, ink, widthLevel, canUndo, canRedo, onTool, onInk, onWidth, onUndo, onRedo, font, onFont, showFont } = props
-  const { brush, onBrush, pressure, onPressure, noteColors, onAddColor, onRemoveColor } = props
+  const { brush, onBrush, pressure, onPressure, noteColors, onAddColor, onRemoveColor, layerPanel } = props
   const [colorOpen, setColorOpen] = useState(false)
+  const [layersOpen, setLayersOpen] = useState(false)
+  const layersRef = useRef<HTMLButtonElement>(null)
   const addColorRef = useRef<HTMLButtonElement>(null)
   const [brushOpen, setBrushOpen] = useState(false)
   const penRef = useRef<HTMLButtonElement>(null)
@@ -176,6 +180,30 @@ export function Toolbar(props: Props) {
         </button>
       ))}
       <div className="tool-sep" />
+      {layerPanel && (
+        <div className="tool-anchor">
+          <button
+            ref={layersRef}
+            type="button"
+            className="tool-btn"
+            aria-label="레이어"
+            title="레이어"
+            aria-haspopup="dialog"
+            aria-expanded={layersOpen}
+            aria-pressed={layersOpen}
+            onClick={() => setLayersOpen((v) => !v)}
+          >
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+              <path d="M11 3l8 4-8 4-8-4zM3 11l8 4 8-4M3 15l8 4 8-4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+            </svg>
+          </button>
+          {layersOpen && (
+            <ToolPopover title="레이어" anchor={layersRef} align="bottom" onClose={() => setLayersOpen(false)}>
+              {layerPanel}
+            </ToolPopover>
+          )}
+        </div>
+      )}
       <button type="button" className="tool-btn" aria-label="되돌리기" title="되돌리기 (Ctrl+Z)" disabled={!canUndo} onClick={onUndo}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M7 5L3 9l4 4M3 9h9a5 5 0 010 10h-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

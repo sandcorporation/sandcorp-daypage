@@ -1,7 +1,8 @@
 import * as Y from 'yjs'
 import { readStrokes, readTextBoxes, textBoxContent, type TextBox } from './doc'
 import { LINE_GAP, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
-import { paintPaper, paintStrokes } from './render'
+import { layerPlan, readLayers } from './layers'
+import { paintLayers, paintPaper } from './render'
 import { textStyle } from './textStyle'
 
 export type Marks = Record<string, Record<string, unknown> | undefined>
@@ -140,7 +141,8 @@ export async function renderPagePng(doc: Y.Doc, pixelScale = 1): Promise<Blob> {
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas를 쓸 수 없어요')
   paintPaper(ctx, pixelScale)
-  paintStrokes(ctx, readStrokes(doc), pixelScale)
+  // 내가 숨긴 레이어도 담는다(모두가 본 페이지 그대로).
+  paintLayers(ctx, layerPlan(readStrokes(doc), readLayers(doc)), pixelScale)
   ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
   for (const box of readTextBoxes(doc)) paintTextBox(ctx, doc, box)
   return new Promise((resolve, reject) =>
