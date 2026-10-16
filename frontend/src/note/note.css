@@ -343,23 +343,40 @@
   margin: 0;
   min-height: 32px;
 }
+/* 글 상자 폭 손잡이: 옮기기 손잡이처럼 다른 글 상자보다 위층에, 화면에서 일정한 크기로(배율은 TextLayer가 거꾸로 적용) */
 .textbox-handle {
   position: absolute;
-  right: -8px;
-  top: 50%;
+  z-index: 20;
+  left: calc(100% - 4px);
+  top: calc(50% - 15px);
+  transform-origin: 0 50%;
   width: 12px;
   height: 30px;
-  margin-top: -15px;
   border-radius: 4px;
   background: var(--white);
   border: 2px solid currentColor;
   cursor: ew-resize;
-  opacity: 0;
   touch-action: none;
+  opacity: 0;
+  /* 숨었을 때는 아래를 막지 않고, 마우스가 잠깐 벗어나도 바로 사라지지 않게 */
+  visibility: hidden;
+  transition:
+    opacity 120ms ease 400ms,
+    visibility 0s linear 520ms;
 }
 .textbox.is-focused .textbox-handle,
-.textbox.is-interactive:hover .textbox-handle {
+.textbox.is-interactive:hover .textbox-handle,
+.textbox-handle:hover,
+.textbox-handle:active {
   opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+@media (hover: none) {
+  .textbox.is-interactive .textbox-handle {
+    opacity: 1;
+    visibility: visible;
+  }
 }
 .textbox-editing {
   /* 글을 가리지 않게 상자 오른쪽 바깥(폭 손잡이 너머)에 둔다 */

@@ -301,6 +301,7 @@ function TextBoxView({
       {interactive && (
         <span
           className="textbox-handle"
+          style={{ transform: `scale(${1 / scale})` }}
           role="separator"
           aria-orientation="vertical"
           aria-label="글 상자 폭 조절"
