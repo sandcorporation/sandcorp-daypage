@@ -44,6 +44,12 @@ def health(request):
     return {"ok": True}
 
 
+@api.get("/client-config", auth=None)
+def client_config(request):
+    """프론트가 실행할 때 받아 가는 설정. 오류 수집 DSN은 빌드에 넣지 않고 여기서 내려준다(운영에서만 값이 있다)."""
+    return {"sentryDsn": settings.SENTRY_FRONTEND_DSN or None, "environment": settings.SENTRY_ENVIRONMENT}
+
+
 @api.get("/me", auth=None)
 def me(request):
     # SPA가 POST 요청에 쓸 CSRF 쿠키를 여기서 내려준다.

@@ -156,8 +156,7 @@ LOGGING = {
 # 오류 수집(GlitchTip). DSN이 있고 DEBUG가 꺼진 운영에서만 켠다.
 from .sentry import init_sentry  # noqa: E402
 
-SENTRY_ENABLED = init_sentry(
-    env("SENTRY_DSN"),
-    debug=DEBUG,
-    environment=env("SENTRY_ENVIRONMENT", "production"),
-)
+SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", "production")
+SENTRY_ENABLED = init_sentry(env("SENTRY_DSN"), debug=DEBUG, environment=SENTRY_ENVIRONMENT)
+# 프론트 오류 수집 DSN(/api/client-config로 내려준다). 백엔드와 같이 운영에서만 준다.
+SENTRY_FRONTEND_DSN = "" if DEBUG else env("SENTRY_FRONTEND_DSN")
