@@ -21,7 +21,7 @@ test('저장된 값이 없으면 기본값', () => {
 
 test('모르는 값·깨진 값은 그 항목만 기본값으로 바꾼다', () => {
   const storage = memoryStorage({
-    'daypage:tool-prefs': JSON.stringify({ tool: 'laser', ink: '#123456', widthLevel: 7, font: 'gaegu', brush: 'laser', pressure: 'yes' }),
+    'daypage:tool-prefs': JSON.stringify({ tool: 'laser', ink: 'blue', widthLevel: 7, font: 'gaegu', brush: 'laser', pressure: 'yes' }),
   })
   expect(loadToolPrefs(storage)).toEqual({ ...DEFAULT_TOOL_PREFS, font: 'gaegu' })
   expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': '{not json' }))).toEqual(DEFAULT_TOOL_PREFS)
@@ -38,4 +38,9 @@ test('저장소를 쓸 수 없는 환경(시크릿 창 등)에서도 깨지지 �
   }
   expect(loadToolPrefs(broken)).toEqual(DEFAULT_TOOL_PREFS)
   expect(() => saveToolPrefs(DEFAULT_TOOL_PREFS, broken)).not.toThrow()
+})
+
+test('노트 색(#rrggbb)도 고른 잉크로 기억한다', () => {
+  const storage = memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ ink: '#16794f' }) })
+  expect(loadToolPrefs(storage).ink).toBe('#16794f')
 })

@@ -24,6 +24,8 @@ function setup(over: Partial<Props> = {}) {
     onBrush: vi.fn(),
     pressure: true,
     onPressure: vi.fn(),
+    noteColors: [],
+    onAddColor: vi.fn(async () => {}),
     ...over,
   }
   render(<Toolbar {...props} />)
@@ -66,5 +68,51 @@ describe('펜 종류', () => {
   test('펜 버튼 이름에 지금 펜 종류가 들어 있다', () => {
     setup({ brush: 'brushpen' })
     expect(screen.getByRole('button', { name: '펜 (붓펜)' })).toBeInTheDocument()
+  })
+})
+
+describe('노트 색', () => {
+  test('노트 색이 기본 잉크 아래에 보이고 고를 수 있다', async () => {
+    const props = setup({ noteColors: ['#16794f', '#8b5cf6'], ink: '#8b5cf6' })
+    const green = screen.getByRole('button', { name: '노트 색 #16794f' })
+    expect(screen.getByRole('button', { name: '노트 색 #8b5cf6' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(green)
+    expect(props.onInk).toHaveBeenCalledWith('#16794f')
+  })
+
+  test('"+"로 색 만들기 창을 열고, 색 코드를 넣어 노트 색으로 더한다', async () => {
+    const props = setup()
+    await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+    expect(screen.getByRole('dialog', { name: '새 색 만들기' })).toBeInTheDocument()
+    const input = screen.getByRole('textbox', { name: '색 코드' })
+    await userEvent.clear(input)
+    await userEvent.type(input, '#12AB34')
+    await userEvent.click(screen.getByRole('button', { name: '이 색 더하기' }))
+    expect(props.onAddColor).toHaveBeenCalledWith('#12ab34')
+  })
+
+  test('추천 색을 누르면 그 색이 골라진다', async () => {
+    const props = setup()
+    await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+    await userEvent.click(screen.getByRole('button', { name: '추천 색 #0e7490' }))
+    expect(screen.getByRole('textbox', { name: '색 코드' })).toHaveValue('#0e7490')
+    await userEvent.click(screen.getByRole('button', { name: '이 색 더하기' }))
+    expect(props.onAddColor).toHaveBeenCalledWith('#0e7490')
+  })
+
+  test('형식이 틀린 색 코드는 더할 수 없다', async () => {
+    setup()
+    await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+    const input = screen.getByRole('textbox', { name: '색 코드' })
+    await userEvent.clear(input)
+    await userEvent.type(input, '#12')
+    expect(screen.getByRole('button', { name: '이 색 더하기' })).toBeDisabled()
+  })
+
+  test('노트 색이 가득 차면 더하기 대신 안내를 본다', async () => {
+    setup({ noteColors: ['#000001', '#000002', '#000003', '#000004', '#000005', '#000006', '#000007', '#000008'] })
+    await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+    expect(screen.getByRole('button', { name: '이 색 더하기' })).toBeDisabled()
+    expect(screen.getByText(/8개까지/)).toBeInTheDocument()
   })
 })

@@ -1,4 +1,5 @@
 import datetime as dt
+import re
 
 from django.conf import settings
 from django.db import transaction
@@ -126,6 +127,7 @@ def note_detail(request, note_id: str):
         "online": online_count(note.id),
         "memberCount": note.members.count(),
         "memberLimit": note.member_limit,
+        "colors": note.colors,
     }
 
 
@@ -164,6 +166,35 @@ def member_note(request, note_id: str) -> Note:
     if not NoteMember.objects.filter(note=note, user=request.user).exists():
         raise ApiError(403, "not_member", "이 노트의 참여자만 볼 수 있어요.")
     return note
+
+
+MAX_NOTE_COLORS = 8
+HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+class AddColorIn(Schema):
+    color: str
+
+
+def clean_color(color: str) -> str:
+    if not HEX_COLOR.match(color or ""):
+        raise ApiError(400, "bad_color", "색 코드는 #RRGGBB 꼴로 적어 주세요.")
+    return color.lower()
+
+
+@api.post("/notes/{note_id}/colors")
+def add_note_color(request, note_id: str, body: AddColorIn):
+    """노트 색 더하기. 참여자라면 누구나. 이미 있으면 그대로 둔다."""
+    member_note(request, note_id)
+    color = clean_color(body.color)
+    with transaction.atomic():
+        note = Note.objects.select_for_update().get(pk=note_id)
+        if color not in note.colors:
+            if len(note.colors) >= MAX_NOTE_COLORS:
+                raise ApiError(400, "colors_full", f"노트 색은 {MAX_NOTE_COLORS}개까지 둘 수 있어요.")
+            note.colors = [*note.colors, color]
+            note.save(update_fields=["colors"])
+    return {"colors": note.colors}
 
 
 @api.get("/notes/{note_id}/pages")

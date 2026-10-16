@@ -176,6 +176,22 @@ export function NotePage({ initial }: Props) {
     [note.id, show],
   )
 
+  const addColor = useCallback(
+    async (color: string) => {
+      try {
+        const res = await api<{ colors: string[] }>(`/api/notes/${note.id}/colors`, {
+          method: 'POST',
+          body: JSON.stringify({ color }),
+        })
+        setNote((n) => ({ ...n, colors: res.colors }))
+      } catch (e) {
+        show(e instanceof ApiError ? e.message : '색을 더하지 못했어요')
+        throw e
+      }
+    },
+    [note.id, show],
+  )
+
   const deleteNote = useCallback(async () => {
     setDeleting(true)
     try {
@@ -253,6 +269,8 @@ export function NotePage({ initial }: Props) {
           onBrush={setBrush}
           pressure={pressureOn}
           onPressure={setPressureOn}
+          noteColors={note.colors}
+          onAddColor={addColor}
         />
         <PageView
           doc={doc}

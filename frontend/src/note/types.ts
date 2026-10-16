@@ -10,6 +10,8 @@ export type NoteDetail = {
   online: number
   memberCount: number
   memberLimit: number | null
+  /** 노트 색(#rrggbb, 더한 순서) */
+  colors: string[]
 }
 
 export type Peer = {

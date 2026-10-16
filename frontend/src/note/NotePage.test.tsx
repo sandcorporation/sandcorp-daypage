@@ -19,6 +19,7 @@ const NOTE: NoteDetail = {
   online: 0,
   memberCount: 2,
   memberLimit: null,
+  colors: [],
 }
 
 function latest() {

@@ -22,6 +22,10 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
 }
 
 const KEY = 'daypage:tool-prefs'
+
+function isHexColor(v: unknown): boolean {
+  return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)
+}
 const TOOLS: ToolKind[] = ['pen', 'highlighter', 'text', 'eraser', 'select']
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
@@ -46,7 +50,8 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
   const d = DEFAULT_TOOL_PREFS
   return {
     tool: TOOLS.includes(raw.tool as ToolKind) ? (raw.tool as ToolKind) : d.tool,
-    ink: INKS.some((i) => i.color === raw.ink) ? (raw.ink as string) : d.ink,
+    // 기본 잉크이거나 노트 색(#rrggbb). 노트 색이 빠졌는지는 노트를 연 뒤 확인한다.
+    ink: INKS.some((i) => i.color === raw.ink) || isHexColor(raw.ink) ? (raw.ink as string) : d.ink,
     widthLevel: [0, 1, 2].includes(raw.widthLevel as number) ? (raw.widthLevel as WidthLevel) : d.widthLevel,
     font: FONTS.some((f) => f.id === raw.font) ? (raw.font as string) : d.font,
     brush: isBrush(raw.brush) ? raw.brush : d.brush,

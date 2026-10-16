@@ -41,6 +41,8 @@ class Note(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_notes")
     # 정원: 만든 사람을 포함한 참여자 최대 인원. None이면 무제한.
     member_limit = models.PositiveSmallIntegerField(null=True, blank=True)
+    # 노트 색: 참여자가 더한 잉크 색(#rrggbb, 더한 순서). 날짜와 상관없이 남는다.
+    colors = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
