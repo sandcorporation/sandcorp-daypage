@@ -1,5 +1,8 @@
+import { useRef, useState } from 'react'
+import { ToolPopover } from '../components/ToolPopover'
+import { BrushPicker } from './BrushPicker'
 import { FontPicker } from './FontPicker'
-import { INKS, WIDTH_NAMES, type ToolKind, type WidthLevel } from './tools'
+import { BRUSHES, INKS, WIDTH_NAMES, type Brush, type ToolKind, type WidthLevel } from './tools'
 
 type Props = {
   tool: ToolKind
@@ -16,6 +19,8 @@ type Props = {
   onFont: (id: string) => void
   /** 글씨 도구이거나 글 상자를 편집 중일 때 글꼴 선택을 보인다 */
   showFont: boolean
+  brush: Brush
+  onBrush: (brush: Brush) => void
 }
 
 const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
@@ -28,9 +33,44 @@ const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
 
 export function Toolbar(props: Props) {
   const { tool, ink, widthLevel, canUndo, canRedo, onTool, onInk, onWidth, onUndo, onRedo, font, onFont, showFont } = props
+  const { brush, onBrush } = props
+  const [brushOpen, setBrushOpen] = useState(false)
+  const penRef = useRef<HTMLButtonElement>(null)
+  const brushName = BRUSHES.find((b) => b.id === brush)?.name ?? BRUSHES[0].name
   return (
     <nav aria-label="도구" className="toolbar">
-      {TOOLS.map((t) => (
+      {TOOLS.map((t) =>
+        t.kind === 'pen' ? (
+          <div key={t.kind} className="tool-anchor">
+            <button
+              ref={penRef}
+              type="button"
+              className="tool-btn"
+              aria-label={`펜 (${brushName})`}
+              title={`펜 (${brushName}) · 다시 누르면 펜 종류`}
+              aria-pressed={tool === 'pen'}
+              aria-haspopup="dialog"
+              aria-expanded={brushOpen}
+              onClick={() => (tool === 'pen' ? setBrushOpen((v) => !v) : onTool('pen'))}
+            >
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                <path d={t.icon} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+              </svg>
+              <span className="tool-corner" aria-hidden="true" />
+            </button>
+            {brushOpen && (
+              <ToolPopover title="펜 종류" anchor={penRef} onClose={() => setBrushOpen(false)}>
+                <BrushPicker
+                  brush={brush}
+                  onBrush={(b) => {
+                    onBrush(b)
+                    setBrushOpen(false)
+                  }}
+                />
+              </ToolPopover>
+            )}
+          </div>
+        ) : (
         <button
           key={t.kind}
           type="button"
@@ -44,7 +84,8 @@ export function Toolbar(props: Props) {
             <path d={t.icon} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
           </svg>
         </button>
-      ))}
+        ),
+      )}
       {showFont && <FontPicker font={font} onFont={onFont} />}
       <div className="tool-sep" />
       {INKS.map((c) => (

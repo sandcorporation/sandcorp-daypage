@@ -1,9 +1,10 @@
 import * as Y from 'yjs'
+import { DEFAULT_BRUSH, isBrush, type Brush } from './tools'
 
 /**
  * 장 하나의 Yjs 문서 구조.
  *
- * strokes:   Y.Map<strokeId, Y.Map{ tool, color, width, points: number[], author, createdAt }>
+ * strokes:   Y.Map<strokeId, Y.Map{ tool, color, width, points: number[], author, createdAt, brush? }>
  * textboxes: Y.Map<boxId, Y.Map{ x, y, width, color, fontSize, font, content: Y.XmlFragment, author }>
  * meta:      Y.Map{ date }
  */
@@ -19,6 +20,13 @@ export type Stroke = {
   points: number[]
   author: string
   createdAt: number
+  /** 펜 종류. 펜 획에만 있고, 없으면 볼펜 */
+  brush?: Brush
+}
+
+/** 획의 펜 종류. 없거나 모르는 값이면 볼펜(옛 획은 지금 모양 그대로). */
+export function brushOf(stroke: Stroke): Brush {
+  return stroke.tool === 'pen' && isBrush(stroke.brush) ? stroke.brush : DEFAULT_BRUSH
 }
 
 export type TextBox = {
@@ -64,6 +72,8 @@ export function addStroke(doc: Y.Doc, stroke: Stroke, origin?: unknown): void {
     m.set('points', stroke.points)
     m.set('author', stroke.author)
     m.set('createdAt', stroke.createdAt)
+    // 볼펜은 쓰지 않아도 같은 모양이므로 다른 펜 종류만 남긴다.
+    if (stroke.tool === 'pen' && stroke.brush && stroke.brush !== DEFAULT_BRUSH) m.set('brush', stroke.brush)
     strokesMap(doc).set(stroke.id, m)
   }, origin)
 }
@@ -77,6 +87,7 @@ export function readStroke(id: string, m: Y.Map<unknown>): Stroke {
     points: m.get('points') as number[],
     author: m.get('author') as string,
     createdAt: m.get('createdAt') as number,
+    ...(m.has('brush') ? { brush: m.get('brush') as Brush } : {}),
   }
 }
 

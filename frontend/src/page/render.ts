@@ -1,5 +1,5 @@
-import { getStroke } from 'perfect-freehand'
-import type { Stroke } from './doc'
+import { getStroke, type StrokeOptions } from 'perfect-freehand'
+import { brushOf, type Stroke } from './doc'
 import { LINE_GAP, MARGIN_X, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 
 export const HIGHLIGHTER_ALPHA = 0.45
@@ -25,6 +25,26 @@ function toTriples(points: number[]): [number, number, number][] {
   return out
 }
 
+/** 펜 종류별 perfect-freehand 설정. 볼펜(기본)은 펜 종류가 생기기 전과 같은 값이다. */
+function outlineOptions(stroke: Stroke, triples: [number, number, number][]): StrokeOptions {
+  const size = stroke.width
+  const simulatePressure = triples.every(([, , p]) => p === 0.5)
+  const base: StrokeOptions = { size, thinning: 0.55, smoothing: 0.5, streamline: 0.45, simulatePressure, last: true }
+  switch (brushOf(stroke)) {
+    case 'brushpen':
+      // 붓처럼 시작과 끝이 가늘게 빠진다.
+      return {
+        ...base,
+        size: size * 1.4,
+        thinning: 0.7,
+        start: { taper: Math.max(16, size * 5) },
+        end: { taper: Math.max(24, size * 8) },
+      }
+    default:
+      return base
+  }
+}
+
 /** perfect-freehand 외곽선(펜) 또는 굵은 선(형광펜)을 Path2D로. */
 export function strokePath(stroke: Stroke): Path2D {
   const triples = toTriples(stroke.points)
@@ -36,14 +56,7 @@ export function strokePath(stroke: Stroke): Path2D {
     if (triples.length === 1) path.lineTo(triples[0][0] + 0.1, triples[0][1])
     return path
   }
-  const outline = getStroke(triples, {
-    size: stroke.width,
-    thinning: 0.55,
-    smoothing: 0.5,
-    streamline: 0.45,
-    simulatePressure: triples.every(([, , p]) => p === 0.5),
-    last: true,
-  })
+  const outline = getStroke(triples, outlineOptions(stroke, triples))
   if (outline.length === 0) return path
   path.moveTo(outline[0][0], outline[0][1])
   for (let i = 1; i < outline.length; i++) {

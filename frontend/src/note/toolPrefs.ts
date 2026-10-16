@@ -1,5 +1,5 @@
 import { DEFAULT_FONT, FONTS } from '../page/fonts'
-import { INKS, type ToolKind, type WidthLevel } from '../page/tools'
+import { DEFAULT_BRUSH, INKS, isBrush, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
 
 /** 이 브라우저에서 마지막으로 고른 도구 설정. 사람마다·기기마다 다른 편의 설정이라 브라우저에만 둔다. */
 export type ToolPrefs = {
@@ -7,6 +7,7 @@ export type ToolPrefs = {
   ink: string
   widthLevel: WidthLevel
   font: string
+  brush: Brush
 }
 
 export const DEFAULT_TOOL_PREFS: ToolPrefs = {
@@ -14,6 +15,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   ink: INKS[0].color,
   widthLevel: 1,
   font: DEFAULT_FONT.id,
+  brush: DEFAULT_BRUSH,
 }
 
 const KEY = 'daypage:tool-prefs'
@@ -44,6 +46,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     ink: INKS.some((i) => i.color === raw.ink) ? (raw.ink as string) : d.ink,
     widthLevel: [0, 1, 2].includes(raw.widthLevel as number) ? (raw.widthLevel as WidthLevel) : d.widthLevel,
     font: FONTS.some((f) => f.id === raw.font) ? (raw.font as string) : d.font,
+    brush: isBrush(raw.brush) ? raw.brush : d.brush,
   }
 }
 

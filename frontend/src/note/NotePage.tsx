@@ -8,7 +8,7 @@ import { createTextBoxAt } from '../page/textbox'
 import { updateTextBox } from '../page/doc'
 import { fontOf } from '../page/fonts'
 import { Toolbar } from '../page/Toolbar'
-import type { ToolKind, WidthLevel } from '../page/tools'
+import type { Brush, ToolKind, WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
 import { isTypingTarget, useUndo } from '../page/useUndo'
 import { useNavigate } from 'react-router'
@@ -42,7 +42,8 @@ export function NotePage({ initial }: Props) {
   const [ink, setInk] = useState<string>(prefs.ink)
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(prefs.widthLevel)
   const [font, setFont] = useState<string>(prefs.font)
-  useEffect(() => saveToolPrefs({ tool, ink, widthLevel, font }), [tool, ink, widthLevel, font])
+  const [brush, setBrush] = useState<Brush>(prefs.brush)
+  useEffect(() => saveToolPrefs({ tool, ink, widthLevel, font, brush }), [tool, ink, widthLevel, font, brush])
   const [scale, setScale] = useState(0.5)
   const [zoom, setZoom] = useState<Zoom>('fit')
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -244,12 +245,15 @@ export function NotePage({ initial }: Props) {
           font={font}
           onFont={chooseFont}
           showFont={tool === 'text' || editingBoxId !== null}
+          brush={brush}
+          onBrush={setBrush}
         />
         <PageView
           doc={doc}
           tool={tool}
           ink={ink}
           widthLevel={widthLevel}
+          brush={brush}
           author={note.me.nickname}
           origin={origin}
           pointerTool={tool === 'text' ? textTool : edit.pointerTool}

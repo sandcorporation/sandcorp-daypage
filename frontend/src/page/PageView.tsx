@@ -3,7 +3,7 @@ import * as Y from 'yjs'
 import { addStroke, newId, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
 import { canvasPixelRatio, paintStroke, paintStrokes } from './render'
-import { strokeWidth, type ToolKind, type WidthLevel } from './tools'
+import { strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { TouchPan, scrollNearest } from './touchPan'
 
 export type PointerTool = {
@@ -19,6 +19,8 @@ type Props = {
   tool: ToolKind
   ink: string
   widthLevel: WidthLevel
+  /** 펜 종류(펜일 때만 쓴다) */
+  brush?: Brush
   author: string
   readOnly?: boolean
   /** 지우개·선택·글씨처럼 그리기 외 도구의 포인터 처리 */
@@ -45,6 +47,7 @@ export function PageView({
   tool,
   ink,
   widthLevel,
+  brush,
   author,
   readOnly = false,
   pointerTool,
@@ -190,6 +193,7 @@ export function PageView({
         points: [round(p.x), round(p.y), pressure(e)],
         author,
         createdAt: Date.now(),
+        ...(tool === 'pen' && brush ? { brush } : {}),
       }
       paintLive()
       e.preventDefault()
