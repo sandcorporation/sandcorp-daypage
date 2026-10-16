@@ -1,10 +1,5 @@
 import { useState, type PointerEvent } from 'react'
-import { hexToHsv, hsvToHex, normalizeHex, type Hsv } from './color'
-
-export const MAX_NOTE_COLORS = 8
-
-/** 기본 잉크와 잘 어울리는 추천 색 */
-export const RECOMMENDED_COLORS = ['#16794f', '#0e7490', '#7c3aed', '#db2777', '#b45309', '#65a30d', '#94a3b8', '#f9a8d4']
+import { hexToHsv, hsvToHex, MAX_NOTE_COLORS, normalizeHex, RECOMMENDED_COLORS, type Hsv } from './color'
 
 type Props = {
   noteColors: string[]

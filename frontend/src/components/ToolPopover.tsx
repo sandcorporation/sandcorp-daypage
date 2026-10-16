@@ -1,32 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-
-/** 도구 막대가 가로로 바뀌는 폭(note.css와 같은 값). 이보다 좁으면 창을 아래 시트로 연다. */
-export const PHONE_QUERY = '(max-width: 720px)'
-
-function matchPhone(): boolean {
-  try {
-    return window.matchMedia?.(PHONE_QUERY).matches ?? false
-  } catch {
-    return false
-  }
-}
-
-export function useIsPhone(): boolean {
-  const [phone, setPhone] = useState(matchPhone)
-  useEffect(() => {
-    let mq: MediaQueryList | undefined
-    try {
-      mq = window.matchMedia?.(PHONE_QUERY)
-    } catch {
-      return
-    }
-    if (!mq) return
-    const update = () => setPhone(mq!.matches)
-    mq.addEventListener?.('change', update)
-    return () => mq!.removeEventListener?.('change', update)
-  }, [])
-  return phone
-}
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useIsPhone } from './useIsPhone'
 
 type Props = {
   title: string
@@ -47,7 +20,9 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
   const phone = useIsPhone()
   const ref = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
-  closeRef.current = onClose
+  useLayoutEffect(() => {
+    closeRef.current = onClose
+  })
 
   useEffect(() => {
     const anchorEl = anchor.current
@@ -75,6 +50,33 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
     }
   }, [anchor])
 
+  // 데스크톱: 버튼 오른쪽에 붙이되 화면 안에 들어오게 위아래를 맞춘다(아래쪽 버튼에서 열어도 잘리지 않게).
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  useLayoutEffect(() => {
+    if (phone) return
+    const place = () => {
+      const a = anchor.current?.getBoundingClientRect()
+      const el = ref.current
+      if (!a || !el) return
+      const margin = 8
+      const h = el.offsetHeight
+      const wanted = align === 'bottom' ? a.bottom - h : a.top
+      // 위쪽은 노트 머리말(약 64px) 아래로
+      const top = Math.max(72, Math.min(wanted, window.innerHeight - h - margin))
+      setPos({ top, left: a.right + 12 })
+    }
+    place()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
+    if (ref.current) observer?.observe(ref.current)
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [phone, anchor, align])
+
   const variant = phone ? 'sheet' : 'popover'
   return (
     <>
@@ -85,6 +87,7 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
         aria-label={title}
         tabIndex={-1}
         data-variant={variant}
+        style={pos ? { top: pos.top, left: pos.left } : undefined}
         className={`tool-pop tool-pop-${variant} tool-pop-${align}${className ? ` ${className}` : ''}`}
       >
         <div className="tool-pop-head">

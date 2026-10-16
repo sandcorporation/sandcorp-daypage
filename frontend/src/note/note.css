@@ -818,18 +818,12 @@
   color: var(--ink);
   outline: none;
 }
+/* 위치(top·left)는 ToolPopover가 버튼 좌표로 정해 화면 안에 들어오게 한다 */
 .tool-pop-popover {
-  position: absolute;
-  left: calc(100% + 12px);
+  position: fixed;
   width: 340px;
-  max-height: calc(100vh - 120px);
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
-}
-.tool-pop-popover.tool-pop-top {
-  top: 0;
-}
-.tool-pop-popover.tool-pop-bottom {
-  bottom: 0;
 }
 .tool-pop-sheet {
   position: fixed;

@@ -1,35 +1,23 @@
-import { useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import * as Y from 'yjs'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { readStrokes } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 import {
   addLayer,
   deleteLayer,
   layerPlan,
-  layerStats,
   MAX_LAYER_NAME,
   MAX_LAYERS,
   moveLayer,
-  observeLayers,
   readLayers,
   renameLayer,
   setLayerLocked,
   setLayerOpacity,
   type Layer,
-  type LayerStats,
 } from './layers'
-import { ConfirmDialog } from '../components/ConfirmDialog'
 import { paintLayers } from './render'
-
-/** 레이어 목록과 레이어별 획 수·그린 사람. 문서가 바뀌면(다른 사람 포함) 다시 읽는다. */
-export function useLayers(doc: Y.Doc): { layers: Layer[]; stats: Map<string, LayerStats>; version: number } {
-  const [version, bump] = useReducer((v: number) => v + 1, 0)
-  useEffect(() => observeLayers(doc, bump), [doc])
-  return useMemo(() => {
-    const layers = readLayers(doc)
-    return { layers, stats: layerStats(doc, layers), version }
-  }, [doc, version])
-}
+import { useLayers } from './useLayers'
 
 const THUMB_W = 40
 const THUMB_H = Math.round((THUMB_W * PAGE_HEIGHT) / PAGE_WIDTH)

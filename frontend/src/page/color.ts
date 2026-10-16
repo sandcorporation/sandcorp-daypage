@@ -1,5 +1,11 @@
 /** 색 코드(#rrggbb)와 HSV(색상 0~360, 채도·명도 0~1) 변환. 색 만들기 창에서 쓴다. */
 
+/** 노트 색 최대 개수(서버 api.py의 MAX_NOTE_COLORS와 같은 값) */
+export const MAX_NOTE_COLORS = 8
+
+/** 기본 잉크와 잘 어울리는 추천 색 */
+export const RECOMMENDED_COLORS = ['#16794f', '#0e7490', '#7c3aed', '#db2777', '#b45309', '#65a30d', '#94a3b8', '#f9a8d4']
+
 export type Hsv = { h: number; s: number; v: number }
 
 /** '#16794F', '16794f' → '#16794f'. 여섯 자리 16진수가 아니면 null. */
