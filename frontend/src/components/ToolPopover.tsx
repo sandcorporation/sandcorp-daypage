@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { useIsPhone } from './useIsPhone'
 
 type Props = {
@@ -14,7 +15,8 @@ type Props = {
 
 /**
  * 도구 막대 버튼에서 여는 창. 데스크톱에서는 버튼 옆 팝오버, 폰 폭에서는 아래에서 올라오는 시트.
- * 여는 쪽이 열림 상태를 갖고, 버튼과 이 창을 position: relative인 감싸개 안에 함께 둔다.
+ * 여는 쪽이 열림 상태를 갖는다. 창은 body에 붙여 그린다: 도구 막대(가로 스크롤·쌓임 맥락) 안에 두면
+ * 폰에서 잘리거나 확대·연결 표시 아래로 깔린다.
  */
 export function ToolPopover({ title, anchor, onClose, children, align = 'top', className }: Props) {
   const phone = useIsPhone()
@@ -78,7 +80,7 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
   }, [phone, anchor, align])
 
   const variant = phone ? 'sheet' : 'popover'
-  return (
+  return createPortal(
     <>
       {phone && <div className="sheet-backdrop" aria-hidden="true" />}
       <div
@@ -108,6 +110,7 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
         </div>
         {children}
       </div>
-    </>
+    </>,
+    document.body,
   )
 }
