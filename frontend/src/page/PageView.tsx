@@ -9,6 +9,12 @@ import { matrixScale, transformPoints, type Matrix } from './transform'
 import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
+import { DEFAULT_SHAPE, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
+
+/** 곡선: 첫 점·직전 점에서 이만큼(화면 px) 안을 누르면 닫기·끝내기로 본다 */
+const CURVE_SNAP_PX = 14
+/** 곡선: 이 시간(ms) 안에 같은 자리를 다시 누르면 두 번 누르기 */
+const DOUBLE_TAP_MS = 400
 
 export type PointerTool = {
   /** 이 도구가 포인터를 직접 처리하면 true를 돌려준다. */
@@ -25,8 +31,10 @@ type Props = {
   tool: ToolKind
   ink: string
   widthLevel: WidthLevel
-  /** 펜 종류(펜일 때만 쓴다) */
+  /** 펜 종류(펜·도형일 때 쓴다) */
   brush?: Brush
+  /** 도형 도구에서 고른 도형 */
+  shape?: ShapeKind
   /** 필압 따라 굵기 바꾸기. 끄면 굵기가 일정한 획을 그린다 */
   pressureOn?: boolean
   /** 새 획을 넣을 레이어(지금 그리는 레이어) */
@@ -64,6 +72,7 @@ export function PageView({
   ink,
   widthLevel,
   brush,
+  shape = DEFAULT_SHAPE,
   pressureOn = true,
   layer,
   hiddenLayers,
@@ -94,6 +103,12 @@ export function PageView({
   const lastSample = useRef<{ x: number; y: number; t: number; p: number } | null>(null)
   /** Shift 직선의 시작점(직선으로 바뀐 획만). 손을 떼면 비운다. */
   const straight = useRef<{ x: number; y: number; p: number } | null>(null)
+  /** 도형 도구: 끌기 시작한 곳 */
+  const shapeStart = useRef<Point | null>(null)
+  /** n점 곡선: 찍은 점들과 마지막으로 찍은 점(두 번 눌러 끝내기 판정용) */
+  const curve = useRef<{ controls: Point[]; last: { x: number; y: number; t: number } } | null>(null)
+  // 찍은 점 수(완료·취소 막대를 보이고 숨기는 데만 쓴다)
+  const [curveCount, setCurveCount] = useState(0)
   // 지금 처리 중인 포인터. 두 번째 손가락·손바닥이 한 획에 섞이지 않게 한다.
   const activePointer = useRef<number | null>(null)
   // 마지막 포인터 화면 위치. 누른 채 스크롤하면 이 위치로 장 좌표를 다시 계산한다.
@@ -193,10 +208,122 @@ export function PageView({
     return value
   }
 
+  /** 지금 레이어에 그릴 수 있는지. 못 그리면 이유를 알린다. */
+  function canDrawHere(): boolean {
+    if (layer && !canDrawOn(readLayers(doc), layer)) {
+      onDrawBlocked?.('locked')
+      return false
+    }
+    if (layer && hiddenLayers?.has(layer)) {
+      // 숨긴 레이어에 그리면 손을 떼는 순간 내 화면에서 사라진다
+      onDrawBlocked?.('hidden')
+      return false
+    }
+    return true
+  }
+
+  /** 도형 획: 지금 펜 종류·색·굵기로, 필압과 상관없이 굵기가 일정하게 */
+  function shapeStroke(): Stroke {
+    return {
+      id: newId(),
+      tool: 'pen',
+      color: ink,
+      width: strokeWidth('pen', widthLevel),
+      points: [],
+      author,
+      createdAt: Date.now(),
+      ...(brush ? { brush } : {}),
+      steady: true,
+      ...(layer ? { layer } : {}),
+    }
+  }
+
+  /** 곡선 미리보기: 찍은 점들(+ 다음 점 자리)을 지나는 곡선 */
+  function showCurve(next: Point | null) {
+    const c = curve.current
+    const s = drawing.current
+    if (!c || !s) return
+    s.points = curvePoints(next ? [...c.controls, next] : c.controls, false)
+    paintLive()
+  }
+
+  /** 곡선 점 찍기. 두 번 누르면 끝내고, 점이 셋 이상일 때 첫 점을 누르면 닫는다. */
+  function curveDown(p: Point, t: number) {
+    const c = curve.current
+    if (!c) {
+      curve.current = { controls: [p], last: { x: p.x, y: p.y, t } }
+      drawing.current = shapeStroke()
+      setCurveCount(1)
+      showCurve(null)
+      return
+    }
+    const near = (q: Point) => Math.hypot(p.x - q.x, p.y - q.y) * scale <= CURVE_SNAP_PX
+    if (c.controls.length >= 3 && near(c.controls[0])) return finishCurve(true)
+    if (t - c.last.t < DOUBLE_TAP_MS && near(c.last)) return finishCurve(false)
+    c.controls.push(p)
+    c.last = { x: p.x, y: p.y, t }
+    setCurveCount(c.controls.length)
+    showCurve(null)
+  }
+
+  /** 곡선을 저장한다(점이 둘 이상일 때). closed면 첫 점으로 닫는다. */
+  function finishCurve(closed: boolean) {
+    const c = curve.current
+    const s = drawing.current
+    curve.current = null
+    drawing.current = null
+    activePointer.current = null
+    setCurveCount(0)
+    if (c && s && c.controls.length >= 2) addStroke(doc, { ...s, points: curvePoints(c.controls, closed) }, origin)
+    paintLive()
+  }
+
+  function cancelCurve() {
+    curve.current = null
+    drawing.current = null
+    activePointer.current = null
+    setCurveCount(0)
+    paintLive()
+  }
+  // 최신 함수를 효과 안에서 부르기 위해 둔다
+  const curveActions = useRef({ finishCurve, cancelCurve })
+  curveActions.current = { finishCurve, cancelCurve }
+
+  // 곡선 중: Enter로 끝내고 Esc로 취소한다(글 상자 등에 쓰는 중이면 그대로 둔다)
+  useEffect(() => {
+    if (curveCount === 0) return
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el?.closest('input, textarea, [contenteditable="true"]')) return
+      if (e.key === 'Enter') curveActions.current.finishCurve(false)
+      else if (e.key === 'Escape') curveActions.current.cancelCurve()
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [curveCount])
+
+  // 도구·도형을 바꾸면 찍던 곡선은 그대로 마무리한다(점이 하나뿐이면 버린다)
+  useEffect(() => () => {
+    if (curve.current) curveActions.current.finishCurve(false)
+  }, [tool, shape])
+
   /** 두 번째 손가락이 닿으면 막 시작한 획은 버리고, 다른 도구 동작은 그 자리에서 끝낸다. */
   function cancelGesture(e: PointerEvent<HTMLDivElement>) {
     if (activePointer.current === null) return
     activePointer.current = null
+    const cv = curve.current
+    if (cv) {
+      // 곡선: 이번에 찍은 점만 버리고 이어 찍을 수 있게 둔다
+      cv.controls.pop()
+      if (cv.controls.length === 0) cancelCurve()
+      else {
+        setCurveCount(cv.controls.length)
+        showCurve(null)
+      }
+      return
+    }
     if (drawing.current) {
       drawing.current = null
       paintLive()
@@ -224,16 +351,22 @@ export function PageView({
     lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
     onGestureStart?.()
+    if (tool === 'shape') {
+      if (!curve.current && !canDrawHere()) return
+      e.currentTarget.setPointerCapture(e.pointerId)
+      activePointer.current = e.pointerId
+      e.preventDefault()
+      if (shape === 'curve') {
+        curveDown(p, e.timeStamp)
+        return
+      }
+      shapeStart.current = p
+      drawing.current = { ...shapeStroke(), points: densify([p]) }
+      paintLive()
+      return
+    }
     if (tool === 'pen' || tool === 'highlighter') {
-      if (layer && !canDrawOn(readLayers(doc), layer)) {
-        onDrawBlocked?.('locked')
-        return
-      }
-      if (layer && hiddenLayers?.has(layer)) {
-        // 숨긴 레이어에 그리면 손을 떼는 순간 내 화면에서 사라진다
-        onDrawBlocked?.('hidden')
-        return
-      }
+      if (!canDrawHere()) return
       e.currentTarget.setPointerCapture(e.pointerId)
       activePointer.current = e.pointerId
       lastSample.current = null
@@ -274,6 +407,22 @@ export function PageView({
     lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
     onPointerMove?.(p)
+    if (tool === 'shape') {
+      const c = curve.current
+      if (c) {
+        // 누른 채 끌면 방금 찍은 점을 옮기고, 올려만 두면 다음 점 자리를 미리 보여 준다
+        if (activePointer.current !== null) c.controls[c.controls.length - 1] = p
+        showCurve(activePointer.current !== null ? null : p)
+        return
+      }
+      const s = drawing.current
+      const start = shapeStart.current
+      if (s && start && shape !== 'curve') {
+        s.points = shapePoints(shape, start, p, e.shiftKey)
+        paintLive()
+      }
+      return
+    }
     const s = drawing.current
     if (s) {
       // Shift를 누르면(그리는 도중이라도) 시작점에서 지금 위치까지 직선으로 바꾸고, 손을 뗄 때까지 직선으로 둔다.
@@ -308,6 +457,19 @@ export function PageView({
     if (e.pointerType === 'touch') touchPan.current.up(e.pointerId)
     if (e.pointerId !== activePointer.current) return
     activePointer.current = null
+    if (tool === 'shape') {
+      // 곡선은 점을 찍을 때마다 이어 가고, 끝낼 때 한 번에 저장한다
+      if (curve.current) return
+      const s = drawing.current
+      const start = shapeStart.current
+      drawing.current = null
+      shapeStart.current = null
+      // 거의 움직이지 않은 탭은 도형으로 남기지 않는다
+      const p = pagePoint(e)
+      if (s && start && Math.hypot(p.x - start.x, p.y - start.y) * scale >= 4) addStroke(doc, s, origin)
+      paintLive()
+      return
+    }
     const s = drawing.current
     if (s) {
       drawing.current = null
@@ -377,6 +539,20 @@ export function PageView({
           {children}
         </div>
       </div>
+      {curveCount > 0 && (
+        <div className="curve-bar" role="toolbar" aria-label="곡선">
+          <span>
+            곡선 · 점 {curveCount}개
+            <span className="curve-bar-hint"> · 두 번 누르면 끝, 첫 점을 누르면 닫혀요</span>
+          </span>
+          <button type="button" className="curve-bar-btn" onClick={() => cancelCurve()}>
+            취소
+          </button>
+          <button type="button" className="curve-bar-btn primary" disabled={curveCount < 2} onClick={() => finishCurve(false)}>
+            완료
+          </button>
+        </div>
+      )}
     </div>
   )
 }

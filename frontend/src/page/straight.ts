@@ -1,8 +1,8 @@
-import { round } from './doc'
 import type { Point } from './geometry'
+import { densify, SHAPE_STEP } from './shapes'
 
-/** 직선 위 점 간격(장 좌표). 펜 종류(질감·만년필)가 손으로 그은 획처럼 보이게 촘촘히 둔다. */
-export const STRAIGHT_STEP = 2
+/** 직선 위 점 간격(장 좌표). 도형과 같다. */
+export const STRAIGHT_STEP = SHAPE_STEP
 /** 수평·수직에서 이만큼(도) 안쪽이면 수평·수직으로 맞춘다(밑줄 긋기) */
 const SNAP_DEGREES = 5
 
@@ -12,19 +12,9 @@ const SNAP_DEGREES = 5
  */
 export function straightPoints(start: Point, end: Point, pressure: number): number[] {
   let { x, y } = end
-  const dx = x - start.x
-  const dy = y - start.y
-  const angle = Math.abs((Math.atan2(dy, dx) * 180) / Math.PI) // 0~180
+  const angle = Math.abs((Math.atan2(y - start.y, x - start.x) * 180) / Math.PI) // 0~180
   if (angle < SNAP_DEGREES || angle > 180 - SNAP_DEGREES) y = start.y
   else if (Math.abs(angle - 90) < SNAP_DEGREES) x = start.x
-
-  const length = Math.hypot(x - start.x, y - start.y)
-  const steps = Math.ceil(length / STRAIGHT_STEP)
-  if (steps === 0) return [round(start.x), round(start.y), pressure]
-  const out: number[] = []
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps
-    out.push(round(start.x + (x - start.x) * t), round(start.y + (y - start.y) * t), pressure)
-  }
-  return out
+  if (x === start.x && y === start.y) return densify([start], pressure)
+  return densify([start, { x, y }], pressure)
 }

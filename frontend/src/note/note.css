@@ -1342,3 +1342,51 @@
     0 0 0 2px var(--white),
     0 0 0 3.5px var(--ink);
 }
+
+/* n점 곡선을 찍는 동안 화면 아래 가운데에 뜨는 완료·취소 막대 */
+.curve-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 6px 6px 6px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  background: var(--white);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(31, 33, 40, 0.12);
+}
+.curve-bar-btn {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.curve-bar-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--white);
+}
+.curve-bar-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+@media (max-width: 720px) {
+  .curve-bar {
+    bottom: 76px;
+  }
+  .curve-bar-hint {
+    display: none;
+  }
+}

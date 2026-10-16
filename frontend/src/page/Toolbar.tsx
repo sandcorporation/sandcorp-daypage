@@ -1,6 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { ToolPopover } from '../components/ToolPopover'
 import { BrushPicker } from './BrushPicker'
+import { ShapePicker } from './ShapePicker'
+import { SHAPES, type ShapeKind } from './shapes'
 import { InkControl } from './InkControl'
 import { FontPicker } from './FontPicker'
 import { BRUSHES, WIDTH_NAMES, type Brush, type ToolKind, type WidthLevel } from './tools'
@@ -22,6 +24,8 @@ type Props = {
   showFont: boolean
   brush: Brush
   onBrush: (brush: Brush) => void
+  shape: ShapeKind
+  onShape: (shape: ShapeKind) => void
   pressure: boolean
   onPressure: (on: boolean) => void
   /** 노트 색(#rrggbb). 기본 잉크 아래에 보인다 */
@@ -35,6 +39,7 @@ type Props = {
 const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
   { kind: 'pen', label: '펜', icon: 'M4 18l1-4L15 4l3 3L8 17z' },
   { kind: 'highlighter', label: '형광펜', icon: 'M6 14l7-9 4 3-7 9H6zM4 19h14' },
+  { kind: 'shape', label: '도형', icon: '' },
   { kind: 'text', label: '글씨', icon: 'M5 5h12M11 5v13M8 18h6' },
   { kind: 'eraser', label: '지우개', icon: 'M8 18l-4-4 9-9 5 5-8 8zM8 18h10' },
   { kind: 'select', label: '선택·이동', icon: 'M5 4l12 6-5 1.5L10 17z' },
@@ -42,7 +47,10 @@ const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
 
 export function Toolbar(props: Props) {
   const { tool, ink, widthLevel, canUndo, canRedo, onTool, onInk, onWidth, onUndo, onRedo, font, onFont, showFont } = props
-  const { brush, onBrush, pressure, onPressure, noteColors, onAddColor, onRemoveColor, layerPanel } = props
+  const { brush, onBrush, pressure, onPressure, noteColors, onAddColor, onRemoveColor, layerPanel, shape, onShape } = props
+  const [shapeOpen, setShapeOpen] = useState(false)
+  const shapeRef = useRef<HTMLButtonElement>(null)
+  const shapeInfo = SHAPES.find((s) => s.id === shape) ?? SHAPES[0]
   const [layersOpen, setLayersOpen] = useState(false)
   const layersRef = useRef<HTMLButtonElement>(null)
   const [brushOpen, setBrushOpen] = useState(false)
@@ -84,6 +92,36 @@ export function Toolbar(props: Props) {
                   </label>
                   <p className="tool-pop-caption">펜슬·태블릿은 누르는 세기로, 마우스·손가락은 쓰는 속도로 굵기가 바뀌어요.</p>
                 </BrushPicker>
+              </ToolPopover>
+            )}
+          </div>
+        ) : t.kind === 'shape' ? (
+          <div key={t.kind} className="tool-anchor">
+            <button
+              ref={shapeRef}
+              type="button"
+              className="tool-btn"
+              aria-label={`도형 (${shapeInfo.name})`}
+              title={`도형 (${shapeInfo.name}) · 다시 누르면 도형 종류`}
+              aria-pressed={tool === 'shape'}
+              aria-haspopup="dialog"
+              aria-expanded={shapeOpen}
+              onClick={() => (tool === 'shape' ? setShapeOpen((v) => !v) : onTool('shape'))}
+            >
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                <path d={shapeInfo.icon} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+              </svg>
+              <span className="tool-corner" aria-hidden="true" />
+            </button>
+            {shapeOpen && (
+              <ToolPopover title="도형" anchor={shapeRef} onClose={() => setShapeOpen(false)}>
+                <ShapePicker
+                  shape={shape}
+                  onShape={(s) => {
+                    onShape(s)
+                    setShapeOpen(false)
+                  }}
+                />
               </ToolPopover>
             )}
           </div>

@@ -1,4 +1,4 @@
-export type ToolKind = 'pen' | 'highlighter' | 'text' | 'eraser' | 'select'
+export type ToolKind = 'pen' | 'highlighter' | 'shape' | 'text' | 'eraser' | 'select'
 
 /** 펜 종류(펜 획의 질감). 형광펜에는 없다. 볼펜이 기본이자 펜 종류가 없는 옛 획의 모양이다. */
 export type Brush = 'ballpoint' | 'fountain' | 'pencil' | 'brushpen' | 'crayon'

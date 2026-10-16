@@ -22,6 +22,8 @@ function setup(over: Partial<Props> = {}) {
     showFont: false,
     brush: 'ballpoint',
     onBrush: vi.fn(),
+    shape: 'rect',
+    onShape: vi.fn(),
     pressure: true,
     onPressure: vi.fn(),
     noteColors: [],
@@ -157,4 +159,22 @@ test('레이어 버튼으로 레이어 패널을 열고 닫는다', async () => 
   expect(screen.getByRole('dialog', { name: '레이어' })).toHaveTextContent('패널 내용')
   await userEvent.click(screen.getByRole('button', { name: '레이어' }))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+describe('도형', () => {
+  test('다른 도구일 때 도형을 누르면 도형 도구로 바뀐다', async () => {
+    const props = setup({ tool: 'pen' })
+    await userEvent.click(screen.getByRole('button', { name: '도형 (사각형)' }))
+    expect(props.onTool).toHaveBeenCalledWith('shape')
+  })
+
+  test('도형 도구일 때 다시 누르면 도형 종류를 고를 수 있다', async () => {
+    const props = setup({ tool: 'shape', shape: 'rect' })
+    await userEvent.click(screen.getByRole('button', { name: '도형 (사각형)' }))
+    const dialog = screen.getByRole('dialog', { name: '도형' })
+    expect(dialog).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^곡선:/ }))
+    expect(props.onShape).toHaveBeenCalledWith('curve')
+    expect(screen.queryByRole('dialog', { name: '도형' })).not.toBeInTheDocument()
+  })
 })

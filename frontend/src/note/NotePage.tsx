@@ -12,6 +12,7 @@ import { useLayers } from '../page/useLayers'
 import { loadHiddenLayers, saveHiddenLayers } from './hiddenLayers'
 import { Toolbar } from '../page/Toolbar'
 import { INKS, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
+import type { ShapeKind } from '../page/shapes'
 import { useEditTools } from '../page/useEditTools'
 import { isTypingTarget, useUndo } from '../page/useUndo'
 import { useNavigate } from 'react-router'
@@ -48,12 +49,13 @@ export function NotePage({ initial }: Props) {
   const [font, setFont] = useState<string>(prefs.font)
   const [brush, setBrush] = useState<Brush>(prefs.brush)
   const [pressureOn, setPressureOn] = useState(prefs.pressure)
+  const [shape, setShape] = useState<ShapeKind>(prefs.shape)
   // 고른 노트 색이 노트에서 빠졌으면 기본 잉크로 돌아간다.
   const ink =
     INKS.some((i) => i.color === chosenInk) || note.colors.includes(chosenInk.toLowerCase()) ? chosenInk : INKS[0].color
   useEffect(
-    () => saveToolPrefs({ tool, ink, widthLevel, font, brush, pressure: pressureOn }),
-    [tool, ink, widthLevel, font, brush, pressureOn],
+    () => saveToolPrefs({ tool, ink, widthLevel, font, brush, shape, pressure: pressureOn }),
+    [tool, ink, widthLevel, font, brush, shape, pressureOn],
   )
   const [scale, setScale] = useState(0.5)
   const [zoom, setZoom] = useState<Zoom>('fit')
@@ -334,6 +336,8 @@ export function NotePage({ initial }: Props) {
           showFont={tool === 'text' || editingBoxId !== null}
           brush={brush}
           onBrush={setBrush}
+          shape={shape}
+          onShape={setShape}
           pressure={pressureOn}
           onPressure={setPressureOn}
           noteColors={note.colors}
@@ -357,6 +361,7 @@ export function NotePage({ initial }: Props) {
           ink={ink}
           widthLevel={widthLevel}
           brush={brush}
+          shape={shape}
           pressureOn={pressureOn}
           layer={currentLayer}
           hiddenLayers={hiddenLayers}

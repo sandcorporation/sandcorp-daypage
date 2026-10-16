@@ -1,4 +1,5 @@
 import { DEFAULT_FONT, FONTS } from '../page/fonts'
+import { DEFAULT_SHAPE, isShape, type ShapeKind } from '../page/shapes'
 import { DEFAULT_BRUSH, INKS, isBrush, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
 
 /** 이 브라우저에서 마지막으로 고른 도구 설정. 사람마다·기기마다 다른 편의 설정이라 브라우저에만 둔다. */
@@ -8,6 +9,8 @@ export type ToolPrefs = {
   widthLevel: WidthLevel
   font: string
   brush: Brush
+  /** 도형 도구에서 고른 도형 */
+  shape: ShapeKind
   /** 필압 따라 굵기 바꾸기 */
   pressure: boolean
 }
@@ -18,6 +21,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   widthLevel: 1,
   font: DEFAULT_FONT.id,
   brush: DEFAULT_BRUSH,
+  shape: DEFAULT_SHAPE,
   pressure: true,
 }
 
@@ -26,7 +30,7 @@ const KEY = 'daypage:tool-prefs'
 function isHexColor(v: unknown): boolean {
   return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)
 }
-const TOOLS: ToolKind[] = ['pen', 'highlighter', 'text', 'eraser', 'select']
+const TOOLS: ToolKind[] = ['pen', 'highlighter', 'shape', 'text', 'eraser', 'select']
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -55,6 +59,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     widthLevel: [0, 1, 2].includes(raw.widthLevel as number) ? (raw.widthLevel as WidthLevel) : d.widthLevel,
     font: FONTS.some((f) => f.id === raw.font) ? (raw.font as string) : d.font,
     brush: isBrush(raw.brush) ? raw.brush : d.brush,
+    shape: isShape(raw.shape) ? raw.shape : d.shape,
     pressure: typeof raw.pressure === 'boolean' ? raw.pressure : d.pressure,
   }
 }

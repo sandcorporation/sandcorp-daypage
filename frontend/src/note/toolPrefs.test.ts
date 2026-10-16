@@ -11,8 +11,9 @@ function memoryStorage(initial: Record<string, string> = {}) {
 
 test('저장한 도구 설정을 다시 읽는다', () => {
   const storage = memoryStorage()
-  saveToolPrefs({ tool: 'text', ink: '#E0603A', widthLevel: 2, font: 'myeongjo', brush: 'brushpen', pressure: false }, storage)
-  expect(loadToolPrefs(storage)).toEqual({ tool: 'text', ink: '#E0603A', widthLevel: 2, font: 'myeongjo', brush: 'brushpen', pressure: false })
+  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false } as const
+  saveToolPrefs(prefs, storage)
+  expect(loadToolPrefs(storage)).toEqual(prefs)
 })
 
 test('저장된 값이 없으면 기본값', () => {
@@ -21,7 +22,7 @@ test('저장된 값이 없으면 기본값', () => {
 
 test('모르는 값·깨진 값은 그 항목만 기본값으로 바꾼다', () => {
   const storage = memoryStorage({
-    'daypage:tool-prefs': JSON.stringify({ tool: 'laser', ink: 'blue', widthLevel: 7, font: 'gaegu', brush: 'laser', pressure: 'yes' }),
+    'daypage:tool-prefs': JSON.stringify({ tool: 'laser', ink: 'blue', widthLevel: 7, font: 'gaegu', brush: 'laser', shape: 'star', pressure: 'yes' }),
   })
   expect(loadToolPrefs(storage)).toEqual({ ...DEFAULT_TOOL_PREFS, font: 'gaegu' })
   expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': '{not json' }))).toEqual(DEFAULT_TOOL_PREFS)
