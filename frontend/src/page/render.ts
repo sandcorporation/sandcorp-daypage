@@ -1,5 +1,6 @@
 import { getStroke, type StrokeOptions } from 'perfect-freehand'
 import { brushOf, type Stroke } from './doc'
+import { grainPattern, grainSeed } from './texture'
 import { LINE_GAP, MARGIN_X, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 
 export const HIGHLIGHTER_ALPHA = 0.45
@@ -40,6 +41,12 @@ function outlineOptions(stroke: Stroke, triples: [number, number, number][]): St
         start: { taper: Math.max(16, size * 5) },
         end: { taper: Math.max(24, size * 8) },
       }
+    case 'pencil':
+      // 굵기 변화가 적고 끝이 살짝 가늘다
+      return { ...base, thinning: 0.25, start: { taper: size * 2 }, end: { taper: size * 2 } }
+    case 'crayon':
+      // 뭉툭하고 넓게
+      return { ...base, size: size * 1.7, thinning: 0.1, smoothing: 0.6 }
     default:
       return base
   }
@@ -80,7 +87,9 @@ export function paintStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void
     ctx.restore()
     return
   }
-  ctx.fillStyle = stroke.color
+  const brush = brushOf(stroke)
+  const grain = brush === 'pencil' || brush === 'crayon' ? grainPattern(ctx, brush, stroke.color, grainSeed(stroke.id)) : null
+  ctx.fillStyle = grain ?? stroke.color
   ctx.fill(path)
 }
 

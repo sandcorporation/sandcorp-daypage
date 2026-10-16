@@ -5,7 +5,9 @@ export type Brush = 'ballpoint' | 'fountain' | 'pencil' | 'brushpen' | 'crayon'
 
 export const BRUSHES: { id: Brush; name: string; desc: string }[] = [
   { id: 'ballpoint', name: '볼펜', desc: '매끈한 기본 펜' },
+  { id: 'pencil', name: '연필', desc: '사각사각, 종이 결이 보여요' },
   { id: 'brushpen', name: '붓펜', desc: '끝이 가늘게 빠지는 붓글씨' },
+  { id: 'crayon', name: '크레용', desc: '거칠고 진한 질감' },
 ]
 
 export const DEFAULT_BRUSH: Brush = 'ballpoint'
