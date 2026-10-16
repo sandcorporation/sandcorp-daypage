@@ -255,6 +255,9 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
             <p>지운 뒤 되돌리기를 누르면 다시 살아나요.</p>
           </ConfirmDialog>
         )}
+        <p className="tool-pop-caption">
+          선택·이동 도구로 레이어의 그림을 끌면 스티커처럼 레이어째 옮겨져요(처음부터 있던 레이어는 페이지라 한 획씩).
+        </p>
         <p className="tool-pop-caption">눈은 내 화면에서만 숨기고, 자물쇠는 모두가 못 그리고 못 지우게 해요. 이름·순서·불투명도도 모두에게 적용돼요.</p>
       </div>
     </div>

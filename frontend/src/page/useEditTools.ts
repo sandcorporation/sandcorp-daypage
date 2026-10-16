@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Y from 'yjs'
 import { deleteStrokes, moveStrokes, readStrokes } from './doc'
 import type { Point } from './geometry'
-import { editableStrokes, readLayers } from './layers'
+import { editableStrokes, grabIds, readLayers } from './layers'
 import {
   clampMoveDelta,
   normalizeRect,
@@ -73,7 +73,8 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
           const strokes = editable()
           const hit = topStrokeAt(strokes, p, PICK_TOLERANCE)
           if (hit) {
-            const ids = selected.includes(hit.id) ? selected : [hit.id]
+            // 기본 레이어가 아닌 레이어는 스티커처럼 통째로 잡는다
+            const ids = selected.includes(hit.id) ? selected : grabIds([hit.id], strokes, readLayers(doc))
             setSelected(ids)
             const byId = new Map(strokes.map((st) => [st.id, st]))
             const bounds = unionRect(ids.flatMap((id) => (byId.has(id) ? [strokeBounds(byId.get(id)!)] : [])))
@@ -104,7 +105,8 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
             setPreview(null)
           }
           if (d?.kind === 'band') {
-            setSelected(strokesInRect(editable(), normalizeRect(d.start, d.end)))
+            const strokes = editable()
+            setSelected(grabIds(strokesInRect(strokes, normalizeRect(d.start, d.end)), strokes, readLayers(doc)))
             bump()
           }
         },

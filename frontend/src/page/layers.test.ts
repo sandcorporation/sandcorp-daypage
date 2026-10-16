@@ -6,6 +6,7 @@ import {
   canDrawOn,
   deleteLayer,
   editableStrokes,
+  grabIds,
   layerOf,
   layerPlan,
   MAX_LAYERS,
@@ -304,5 +305,24 @@ describe('리뷰에서 찾은 경우', () => {
     expect(readLayers(doc).map((l) => l.id)).toEqual([top])
     undo.undo()
     expect(readLayers(doc).map((l) => l.id)).toEqual([BASE_LAYER_ID, top])
+  })
+})
+
+describe('레이어를 스티커처럼 잡기', () => {
+  test('기본 레이어가 아닌 레이어의 획을 잡으면 그 레이어의 획이 모두 잡힌다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const sticker = addLayer(doc)!
+    const strokes = [
+      stroke({ id: 'a', layer: sticker }),
+      stroke({ id: 'b', layer: sticker }),
+      stroke({ id: 'base-1' }),
+      stroke({ id: 'base-2' }),
+    ]
+    const layers = readLayers(doc)
+    expect(grabIds(['a'], strokes, layers).sort()).toEqual(['a', 'b'])
+    // 기본 레이어(페이지)의 획은 하나씩
+    expect(grabIds(['base-1'], strokes, layers)).toEqual(['base-1'])
+    // 사각형으로 섞어 고르면 스티커 레이어는 통째로, 기본 레이어는 고른 것만
+    expect(grabIds(['b', 'base-2'], strokes, layers).sort()).toEqual(['a', 'b', 'base-2'])
   })
 })

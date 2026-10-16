@@ -196,3 +196,17 @@ export function observeLayers(doc: Y.Doc, cb: () => void): () => void {
     strokes.unobserveDeep(cb)
   }
 }
+
+/**
+ * 선택·이동으로 잡을 획. 기본 레이어(페이지)의 획은 고른 것만, 다른 레이어는 스티커처럼 그 레이어의 획을
+ * 통째로 잡는다(strokes에는 잡을 수 있는 획만 넘긴다: 잠기거나 숨긴 레이어는 빠진다).
+ */
+export function grabIds(ids: string[], strokes: Stroke[], layers: Layer[]): string[] {
+  const picked = new Set(ids)
+  const stickerLayers = new Set(
+    strokes.filter((s) => picked.has(s.id)).map((s) => layerOf(s, layers)).filter((l) => l !== BASE_LAYER_ID),
+  )
+  if (stickerLayers.size === 0) return ids
+  for (const s of strokes) if (stickerLayers.has(layerOf(s, layers))) picked.add(s.id)
+  return [...picked]
+}
