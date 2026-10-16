@@ -72,6 +72,17 @@ def test_state_cannot_be_reused(client, fake_kakao):
     assert res.status_code == 400
 
 
+def test_repeated_callback_after_login_returns_to_next(client, fake_kakao):
+    """뒤로 가기·인앱 브라우저 복원으로 같은 콜백이 다시 와도, 이미 로그인했으면 오류 대신 원래 자리로 보낸다."""
+    _, state = start_login(client, "/note/abc")
+    client.get("/auth/kakao/callback", {"code": "1234", "state": state})
+    res = client.get("/auth/kakao/callback", {"code": "5678", "state": state})
+    assert res.status_code == 302
+    assert res["Location"] == "/note/abc"
+    assert fake_kakao == ["1234"]  # 다시 온 code로는 카카오에 묻지 않는다
+    assert client.get("/api/me").json()["authenticated"] is True
+
+
 def test_kakao_failure_is_reported_without_login(client, fake_kakao):
     _, state = start_login(client, "/note/abc")
     res = client.get("/auth/kakao/callback", {"code": "bad", "state": state})

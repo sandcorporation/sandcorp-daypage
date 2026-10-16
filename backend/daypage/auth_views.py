@@ -11,6 +11,8 @@ from .models import User
 logger = logging.getLogger(__name__)
 
 SESSION_KEY = "kakao_oauth"
+# 마지막으로 끝난 로그인이 돌아간 자리(같은 콜백이 다시 올 때 쓴다)
+LAST_NEXT_KEY = "kakao_last_next"
 
 
 def safe_next(value: str | None) -> str:
@@ -34,6 +36,9 @@ def kakao_callback(request):
     pending = request.session.pop(SESSION_KEY, None)
     state = request.GET.get("state")
     if not pending or not state or not secrets.compare_digest(pending["state"], state):
+        # 뒤로 가기·인앱 브라우저 복원으로 끝난 로그인의 콜백이 다시 오는 경우. 이미 로그인했으면 오류 대신 돌려보낸다.
+        if request.user.is_authenticated:
+            return HttpResponseRedirect(request.session.get(LAST_NEXT_KEY, "/"))
         return HttpResponseBadRequest("로그인 요청이 올바르지 않아요. 처음부터 다시 시도해 주세요.")
 
     next_path = pending["next"]
@@ -53,6 +58,7 @@ def kakao_callback(request):
 
     user = User.objects.get_or_create_kakao(kakao_id)
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    request.session[LAST_NEXT_KEY] = next_path
     return HttpResponseRedirect(next_path)
 
 
