@@ -5,10 +5,13 @@ import { orderStrokes } from './render'
 /**
  * 레이어: 한 페이지 안에서 획을 나눠 담는 층. 페이지 문서의 layers 맵에 둔다.
  *
- * layers: Y.Map<layerId, Y.Map{ name, order, locked, opacity }>
+ * layers: Y.Map<'<layerId>/<필드>', 값>  필드: name, order, locked, opacity, deleted(기본 레이어만)
  *
- * - 맵이 비어 있으면 기본 레이어 하나가 있는 것으로 본다. 처음 바꿀 때 기본 레이어를 함께 쓴다
- *   (그래서 레이어를 쓰지 않는 페이지는 문서가 바뀌지 않는다).
+ * - 레이어마다 중첩 맵을 두지 않고 필드마다 키를 둔다. 두 사람이 같은 레이어의 다른 값(이름과 잠금)을
+ *   동시에 바꿔도 둘 다 남고, 같은 값은 나중 것이 남는다.
+ * - 기본 레이어는 따로 만들지 않는다. deleted가 아니면 늘 있고, 값이 없으면 기본값이다.
+ *   그래서 레이어를 쓰지 않는 페이지는 문서가 바뀌지 않고, 내 첫 변경을 되돌려도 공용 기본 레이어는 남는다.
+ * - 다른 레이어는 order 키가 있으면 있는 것이다. 지우면 그 레이어의 키를 모두 지운다.
  * - order는 정렬 키(소수). 사이에 끼워 넣을 수 있어 동시에 순서를 바꿔도 충돌하지 않는다.
  * - 글 상자는 레이어에 속하지 않고 항상 맨 위다.
  * - 보이기/숨기기는 문서에 쓰지 않는다(사람마다 다른 화면 설정).
@@ -19,47 +22,46 @@ export type Layer = { id: string; name: string; order: number; locked: boolean; 
 export const LAYERS = 'layers'
 export const BASE_LAYER_ID = 'base'
 export const MAX_LAYERS = 5
+export const MAX_LAYER_NAME = 20
 
 const BASE_LAYER: Layer = { id: BASE_LAYER_ID, name: '레이어 1', order: 0, locked: false, opacity: 1 }
 
-export function layersMap(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
+type Field = 'name' | 'order' | 'locked' | 'opacity' | 'deleted'
+
+export function layersMap(doc: Y.Doc): Y.Map<unknown> {
   return doc.getMap(LAYERS)
 }
 
-function readLayer(id: string, m: Y.Map<unknown>): Layer {
-  const opacity = m.get('opacity')
-  return {
-    id,
-    name: (m.get('name') as string) ?? '레이어',
-    order: (m.get('order') as number) ?? 0,
-    locked: m.get('locked') === true,
-    opacity: typeof opacity === 'number' ? Math.min(1, Math.max(0.1, opacity)) : 1,
-  }
+const key = (id: string, field: Field) => `${id}/${field}`
+
+function toLayer(id: string, f: Partial<Record<Field, unknown>>, fallback: Layer): Layer {
+  const name = typeof f.name === 'string' && f.name ? f.name : fallback.name
+  const order = typeof f.order === 'number' && Number.isFinite(f.order) ? f.order : fallback.order
+  const opacity = typeof f.opacity === 'number' && Number.isFinite(f.opacity) ? Math.min(1, Math.max(0.1, f.opacity)) : 1
+  return { id, name, order, locked: f.locked === true, opacity }
 }
 
-/** 레이어 목록, 아래에서 위 순서. 비어 있으면 기본 레이어 하나. */
+/** 레이어 목록, 아래에서 위 순서. 하나도 없으면 기본 레이어 하나. */
 export function readLayers(doc: Y.Doc): Layer[] {
-  const map = layersMap(doc)
-  if (map.size === 0) return [BASE_LAYER]
-  return Array.from(map.entries())
-    .map(([id, m]) => readLayer(id, m))
-    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
-}
-
-function writeLayer(map: Y.Map<Y.Map<unknown>>, layer: Layer): void {
-  const m = new Y.Map<unknown>()
-  m.set('name', layer.name)
-  m.set('order', layer.order)
-  m.set('locked', layer.locked)
-  m.set('opacity', layer.opacity)
-  map.set(layer.id, m)
-}
-
-/** 레이어를 처음 바꿀 때 기본 레이어를 문서에 쓴다(트랜잭션 안에서 부른다). */
-function ensureLayers(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
-  const map = layersMap(doc)
-  if (map.size === 0) writeLayer(map, BASE_LAYER)
-  return map
+  const fields = new Map<string, Partial<Record<Field, unknown>>>()
+  for (const [k, v] of layersMap(doc).entries()) {
+    const slash = k.lastIndexOf('/')
+    if (slash <= 0) continue
+    const id = k.slice(0, slash)
+    const rec = fields.get(id) ?? {}
+    rec[k.slice(slash + 1) as Field] = v
+    fields.set(id, rec)
+  }
+  const layers: Layer[] = []
+  const base = fields.get(BASE_LAYER_ID) ?? {}
+  if (base.deleted !== true) layers.push(toLayer(BASE_LAYER_ID, base, BASE_LAYER))
+  for (const [id, f] of fields) {
+    if (id === BASE_LAYER_ID || typeof f.order !== 'number' || !Number.isFinite(f.order)) continue
+    layers.push(toLayer(id, f, { ...BASE_LAYER, id, name: '레이어' }))
+  }
+  // 동시에 마지막 둘을 지운 경우처럼 하나도 남지 않으면 기본 레이어로 본다.
+  if (layers.length === 0) return [BASE_LAYER]
+  return layers.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 }
 
 function newLayerId(): string {
@@ -78,21 +80,21 @@ export function addLayer(doc: Y.Doc, origin?: unknown): string | null {
   const id = newLayerId()
   const order = Math.max(...layers.map((l) => l.order)) + 1
   doc.transact(() => {
-    writeLayer(ensureLayers(doc), { id, name: nextName(layers), order, locked: false, opacity: 1 })
+    const map = layersMap(doc)
+    map.set(key(id, 'name'), nextName(layers))
+    map.set(key(id, 'order'), order)
   }, origin)
   return id
 }
 
-/** 레이어 하나의 값을 바꾼다(기본 레이어만 있던 페이지면 먼저 기본 레이어를 쓴다). */
-function updateLayer(doc: Y.Doc, id: string, fields: Partial<Omit<Layer, 'id'>>, origin?: unknown): void {
+/** 있는 레이어의 값을 바꾼다. 바뀌는 값의 키만 쓴다. */
+function updateLayer(doc: Y.Doc, id: string, fields: Partial<Record<'name' | 'order' | 'locked' | 'opacity', unknown>>, origin?: unknown): void {
+  if (!readLayers(doc).some((l) => l.id === id)) return
   doc.transact(() => {
-    const m = ensureLayers(doc).get(id)
-    if (!m) return
-    for (const [k, v] of Object.entries(fields)) m.set(k, v)
+    const map = layersMap(doc)
+    for (const [k, v] of Object.entries(fields)) map.set(key(id, k as Field), v)
   }, origin)
 }
-
-export const MAX_LAYER_NAME = 20
 
 export function renameLayer(doc: Y.Doc, id: string, name: string, origin?: unknown): void {
   const clean = name.trim().slice(0, MAX_LAYER_NAME)
@@ -117,7 +119,9 @@ export function deleteLayer(doc: Y.Doc, id: string, origin?: unknown): boolean {
   doc.transact(() => {
     const strokes = strokesMap(doc)
     for (const sid of doomed) strokes.delete(sid)
-    ensureLayers(doc).delete(id)
+    const map = layersMap(doc)
+    if (id === BASE_LAYER_ID) map.set(key(id, 'deleted'), true)
+    else for (const k of Array.from(map.keys())) if (k.startsWith(`${id}/`)) map.delete(k)
   }, origin)
   return true
 }
@@ -140,14 +144,16 @@ export function editableStrokes(strokes: Stroke[], layers: Layer[], hidden?: Rea
 
 /**
  * 레이어를 아래에서 index번째 자리로 옮긴다. 옮기는 레이어의 순서 키만 이웃 사이 값으로 바꾸므로
- * 두 사람이 동시에 다른 레이어를 옮겨도 합친 결과가 같다.
+ * 두 사람이 동시에 다른 레이어를 옮겨도 합친 결과가 같다. 레이어가 하나뿐이면 아무것도 하지 않는다.
  */
 export function moveLayer(doc: Y.Doc, id: string, index: number, origin?: unknown): void {
   const others = readLayers(doc).filter((l) => l.id !== id)
+  if (others.length === 0) return
   const i = Math.min(Math.max(0, index), others.length)
   const below = others[i - 1]?.order
   const above = others[i]?.order
   const order = below === undefined ? above! - 1 : above === undefined ? below + 1 : (below + above) / 2
+  if (!Number.isFinite(order)) return
   updateLayer(doc, id, { order }, origin)
 }
 
@@ -183,10 +189,10 @@ export function layerStats(doc: Y.Doc, layers: Layer[] = readLayers(doc)): Map<s
 export function observeLayers(doc: Y.Doc, cb: () => void): () => void {
   const layers = layersMap(doc)
   const strokes = strokesMap(doc)
-  layers.observeDeep(cb)
+  layers.observe(cb)
   strokes.observeDeep(cb)
   return () => {
-    layers.unobserveDeep(cb)
+    layers.unobserve(cb)
     strokes.unobserveDeep(cb)
   }
 }

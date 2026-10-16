@@ -255,3 +255,54 @@ describe('지우기', () => {
     expect(layerOf(readStrokes(doc)[0], readLayers(doc))).toBe(top)
   })
 })
+
+describe('리뷰에서 찾은 경우', () => {
+  test('레이어가 하나뿐일 때 옮기기는 아무것도 하지 않는다(순서가 깨지지 않는다)', () => {
+    const doc = createPageDoc('2026-10-16')
+    moveLayer(doc, BASE_LAYER_ID, 1)
+    moveLayer(doc, BASE_LAYER_ID, -1)
+    const id = addLayer(doc)!
+    expect(readLayers(doc).map((l) => l.id)).toEqual([BASE_LAYER_ID, id])
+    expect(readLayers(doc).every((l) => Number.isFinite(l.order))).toBe(true)
+  })
+
+  test('두 사람이 새 페이지에서 동시에 처음 기본 레이어를 고쳐도 둘 다 남는다', () => {
+    const a = createPageDoc('2026-10-16')
+    const b = new Y.Doc()
+    sync(a, b)
+    renameLayer(a, BASE_LAYER_ID, '밑그림')
+    setLayerLocked(b, BASE_LAYER_ID, true)
+    sync(a, b)
+    expect(readLayers(a)[0]).toMatchObject({ name: '밑그림', locked: true })
+    expect(readLayers(b)[0]).toMatchObject({ name: '밑그림', locked: true })
+  })
+
+  test('내 첫 레이어 변경을 되돌려도 공용 기본 레이어와 그 획은 그대로다', () => {
+    const a = createPageDoc('2026-10-16')
+    const origin = { local: true }
+    const undo = createUndoManager(a, origin)
+    addStroke(a, stroke({ id: 'base-stroke' }))
+    renameLayer(a, BASE_LAYER_ID, '내 이름', origin)
+    const b = new Y.Doc()
+    sync(a, b)
+    const theirs = addLayer(b)!
+    sync(a, b)
+    undo.undo()
+    const layers = readLayers(a)
+    expect(layers.map((l) => l.id)).toEqual([BASE_LAYER_ID, theirs])
+    expect(layers[0].name).toBe('레이어 1')
+    expect(layerOf(readStrokes(a)[0], layers)).toBe(BASE_LAYER_ID)
+  })
+
+  test('지운 기본 레이어는 되돌리기로 돌아온다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const origin = { local: true }
+    const undo = createUndoManager(doc, origin)
+    const top = addLayer(doc)!
+    undo.stopCapturing()
+    deleteLayer(doc, BASE_LAYER_ID, origin)
+    expect(readLayers(doc).map((l) => l.id)).toEqual([top])
+    undo.undo()
+    expect(readLayers(doc).map((l) => l.id)).toEqual([BASE_LAYER_ID, top])
+  })
+})

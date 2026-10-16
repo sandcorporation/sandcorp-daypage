@@ -330,7 +330,13 @@ export function NotePage({ initial }: Props) {
           pressureOn={pressureOn}
           layer={currentLayer}
           hiddenLayers={hiddenLayers}
-          onDrawBlocked={() => show('잠긴 레이어에는 그릴 수 없어요. 레이어에서 잠금을 풀어 주세요.')}
+          onDrawBlocked={(reason) =>
+            show(
+              reason === 'locked'
+                ? '잠긴 레이어에는 그릴 수 없어요. 레이어에서 잠금을 풀어 주세요.'
+                : '숨긴 레이어에는 그릴 수 없어요. 레이어에서 다시 보이게 해 주세요.',
+            )
+          }
           author={note.me.nickname}
           origin={origin}
           pointerTool={tool === 'text' ? textTool : edit.pointerTool}

@@ -28,8 +28,8 @@ type Props = {
   layer?: string
   /** 내 화면에서만 숨긴 레이어 */
   hiddenLayers?: ReadonlySet<string>
-  /** 지금 그리는 레이어가 잠겨 있어 그리지 못했을 때 */
-  onDrawBlocked?: () => void
+  /** 지금 그리는 레이어가 잠겼거나 내가 숨겨 그리지 못했을 때 */
+  onDrawBlocked?: (reason: 'locked' | 'hidden') => void
   author: string
   readOnly?: boolean
   /** 지우개·선택·글씨처럼 그리기 외 도구의 포인터 처리 */
@@ -208,7 +208,12 @@ export function PageView({
     onGestureStart?.()
     if (tool === 'pen' || tool === 'highlighter') {
       if (layer && !canDrawOn(readLayers(doc), layer)) {
-        onDrawBlocked?.()
+        onDrawBlocked?.('locked')
+        return
+      }
+      if (layer && hiddenLayers?.has(layer)) {
+        // 숨긴 레이어에 그리면 손을 떼는 순간 내 화면에서 사라진다
+        onDrawBlocked?.('hidden')
         return
       }
       e.currentTarget.setPointerCapture(e.pointerId)
