@@ -22,6 +22,8 @@ function setup(over: Partial<Props> = {}) {
     showFont: false,
     brush: 'ballpoint',
     onBrush: vi.fn(),
+    pressure: true,
+    onPressure: vi.fn(),
     ...over,
   }
   render(<Toolbar {...props} />)
@@ -50,6 +52,15 @@ describe('펜 종류', () => {
     await userEvent.click(screen.getByRole('button', { name: /^붓펜/ }))
     expect(props.onBrush).toHaveBeenCalledWith('brushpen')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('펜 종류 창에서 필압 따라 굵기 바꾸기를 끌 수 있다', async () => {
+    const props = setup({ tool: 'pen', pressure: true })
+    await userEvent.click(screen.getByRole('button', { name: /^펜/ }))
+    const box = screen.getByRole('checkbox', { name: '필압 따라 굵기 바꾸기' })
+    expect(box).toBeChecked()
+    await userEvent.click(box)
+    expect(props.onPressure).toHaveBeenCalledWith(false)
   })
 
   test('펜 버튼 이름에 지금 펜 종류가 들어 있다', () => {

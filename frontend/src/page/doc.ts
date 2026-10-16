@@ -22,6 +22,8 @@ export type Stroke = {
   createdAt: number
   /** 펜 종류. 펜 획에만 있고, 없으면 볼펜 */
   brush?: Brush
+  /** 필압을 끄고 그린 획: 굵기가 일정하다 */
+  steady?: boolean
 }
 
 /** 획의 펜 종류. 없거나 모르는 값이면 볼펜(옛 획은 지금 모양 그대로). */
@@ -74,6 +76,7 @@ export function addStroke(doc: Y.Doc, stroke: Stroke, origin?: unknown): void {
     m.set('createdAt', stroke.createdAt)
     // 볼펜은 쓰지 않아도 같은 모양이므로 다른 펜 종류만 남긴다.
     if (stroke.tool === 'pen' && stroke.brush && stroke.brush !== DEFAULT_BRUSH) m.set('brush', stroke.brush)
+    if (stroke.tool === 'pen' && stroke.steady) m.set('steady', true)
     strokesMap(doc).set(stroke.id, m)
   }, origin)
 }
@@ -88,6 +91,7 @@ export function readStroke(id: string, m: Y.Map<unknown>): Stroke {
     author: m.get('author') as string,
     createdAt: m.get('createdAt') as number,
     ...(m.has('brush') ? { brush: m.get('brush') as Brush } : {}),
+    ...(m.get('steady') === true ? { steady: true } : {}),
   }
 }
 

@@ -3,7 +3,7 @@ import * as Y from 'yjs'
 import { addStroke, newId, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
 import { canvasPixelRatio, paintStroke, paintStrokes } from './render'
-import { strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
+import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { TouchPan, scrollNearest } from './touchPan'
 
 export type PointerTool = {
@@ -21,6 +21,8 @@ type Props = {
   widthLevel: WidthLevel
   /** 펜 종류(펜일 때만 쓴다) */
   brush?: Brush
+  /** 필압 따라 굵기 바꾸기. 끄면 굵기가 일정한 획을 그린다 */
+  pressureOn?: boolean
   author: string
   readOnly?: boolean
   /** 지우개·선택·글씨처럼 그리기 외 도구의 포인터 처리 */
@@ -48,6 +50,7 @@ export function PageView({
   ink,
   widthLevel,
   brush,
+  pressureOn = true,
   author,
   readOnly = false,
   pointerTool,
@@ -67,6 +70,8 @@ export function PageView({
   const liveCanvasRef = useRef<HTMLCanvasElement>(null)
   const [scale, setScale] = useState(0.5)
   const drawing = useRef<Stroke | null>(null)
+  // 만년필: 앞 점의 위치·시각·필압(속도로 필압을 만들 때 쓴다)
+  const lastSample = useRef<{ x: number; y: number; t: number; p: number } | null>(null)
   // 지금 처리 중인 포인터. 두 번째 손가락·손바닥이 한 획에 섞이지 않게 한다.
   const activePointer = useRef<number | null>(null)
   // 마지막 포인터 화면 위치. 누른 채 스크롤하면 이 위치로 장 좌표를 다시 계산한다.
@@ -147,8 +152,18 @@ export function PageView({
     return clampToPage(toPagePoint(e.clientX, e.clientY, rect, scale))
   }
 
-  function pressure(e: { pressure: number; pointerType: string }): number {
-    return e.pointerType === 'mouse' || e.pressure === 0 ? 0.5 : round(e.pressure)
+  /** 점의 필압 값. 필압을 끄면 고정값, 만년필을 필압 없는 입력으로 쓰면 속도로 만든다. */
+  function pressure(e: { pressure: number; pointerType: string; timeStamp: number }, q: Point): number {
+    const real = e.pointerType !== 'mouse' && e.pressure !== 0
+    let value = 0.5
+    if (!pressureOn) value = 0.5
+    else if (real && (e.pointerType === 'pen' || brush !== 'fountain')) value = round(e.pressure)
+    else if (tool === 'pen' && brush === 'fountain') {
+      const last = lastSample.current
+      value = last ? fountainPressure(last.p, Math.hypot(q.x - last.x, q.y - last.y), e.timeStamp - last.t) : 0.6
+    }
+    lastSample.current = { x: q.x, y: q.y, t: e.timeStamp, p: value }
+    return value
   }
 
   /** 두 번째 손가락이 닿으면 막 시작한 획은 버리고, 다른 도구 동작은 그 자리에서 끝낸다. */
@@ -185,15 +200,18 @@ export function PageView({
     if (tool === 'pen' || tool === 'highlighter') {
       e.currentTarget.setPointerCapture(e.pointerId)
       activePointer.current = e.pointerId
+      lastSample.current = null
+      const firstPressure = pressure(e, p)
       drawing.current = {
         id: newId(),
         tool,
         color: ink,
         width: strokeWidth(tool, widthLevel),
-        points: [round(p.x), round(p.y), pressure(e)],
+        points: [round(p.x), round(p.y), firstPressure],
         author,
         createdAt: Date.now(),
         ...(tool === 'pen' && brush ? { brush } : {}),
+        ...(tool === 'pen' && !pressureOn ? { steady: true } : {}),
       }
       paintLive()
       e.preventDefault()
@@ -224,7 +242,7 @@ export function PageView({
       const rect = frameRef.current!.getBoundingClientRect()
       for (const ev of events.length ? events : [e.nativeEvent]) {
         const q = clampToPage(toPagePoint(ev.clientX, ev.clientY, rect, scale))
-        s.points.push(round(q.x), round(q.y), pressure(ev))
+        s.points.push(round(q.x), round(q.y), pressure(ev, q))
       }
       paintLive()
       return

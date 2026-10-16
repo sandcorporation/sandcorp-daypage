@@ -31,13 +31,21 @@ function outlineOptions(stroke: Stroke, triples: [number, number, number][]): St
   const size = stroke.width
   const simulatePressure = triples.every(([, , p]) => p === 0.5)
   const base: StrokeOptions = { size, thinning: 0.55, smoothing: 0.5, streamline: 0.45, simulatePressure, last: true }
+  // 필압을 끄고 그린 획은 굵기가 일정하다.
+  if (stroke.steady) {
+    base.thinning = 0
+    base.simulatePressure = false
+  }
   switch (brushOf(stroke)) {
+    case 'fountain':
+      // 점에 저장된 필압(펜슬 또는 속도로 만든 값)으로 굵기가 크게 바뀐다.
+      return stroke.steady ? base : { ...base, thinning: 0.8, simulatePressure: false }
     case 'brushpen':
       // 붓처럼 시작과 끝이 가늘게 빠진다.
       return {
         ...base,
         size: size * 1.4,
-        thinning: 0.7,
+        thinning: stroke.steady ? 0 : 0.7,
         start: { taper: Math.max(16, size * 5) },
         end: { taper: Math.max(24, size * 8) },
       }

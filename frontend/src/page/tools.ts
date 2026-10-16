@@ -5,6 +5,7 @@ export type Brush = 'ballpoint' | 'fountain' | 'pencil' | 'brushpen' | 'crayon'
 
 export const BRUSHES: { id: Brush; name: string; desc: string }[] = [
   { id: 'ballpoint', name: '볼펜', desc: '매끈한 기본 펜' },
+  { id: 'fountain', name: '만년필', desc: '빠르게 쓰면 가늘고, 천천히 쓰면 굵어져요' },
   { id: 'pencil', name: '연필', desc: '사각사각, 종이 결이 보여요' },
   { id: 'brushpen', name: '붓펜', desc: '끝이 가늘게 빠지는 붓글씨' },
   { id: 'crayon', name: '크레용', desc: '거칠고 진한 질감' },
@@ -32,4 +33,16 @@ const HIGHLIGHTER_WIDTHS = [14, 24, 36]
 
 export function strokeWidth(tool: 'pen' | 'highlighter', level: WidthLevel): number {
   return (tool === 'pen' ? PEN_WIDTHS : HIGHLIGHTER_WIDTHS)[level]
+}
+
+/**
+ * 만년필: 필압이 없는 입력(마우스·터치)에서 쓰는 속도로 필압 값을 만든다. 빠를수록 가늘다.
+ * 그릴 때 점에 저장하므로 다른 사람 화면·기록에서도 같은 굵기로 보인다.
+ * prev는 앞 점의 값이다. 갑자기 튀지 않게 그쪽에서 조금씩 따라간다.
+ */
+export function fountainPressure(prev: number, distance: number, ms: number): number {
+  const speed = distance / Math.max(ms, 1)
+  const target = Math.min(1, Math.max(0.15, 1 - (speed - 0.15) * 0.45))
+  const next = prev * 0.6 + target * 0.4
+  return Math.round(Math.min(1, Math.max(0.15, next)) * 100) / 100
 }

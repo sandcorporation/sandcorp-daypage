@@ -21,6 +21,8 @@ type Props = {
   showFont: boolean
   brush: Brush
   onBrush: (brush: Brush) => void
+  pressure: boolean
+  onPressure: (on: boolean) => void
 }
 
 const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
@@ -33,7 +35,7 @@ const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
 
 export function Toolbar(props: Props) {
   const { tool, ink, widthLevel, canUndo, canRedo, onTool, onInk, onWidth, onUndo, onRedo, font, onFont, showFont } = props
-  const { brush, onBrush } = props
+  const { brush, onBrush, pressure, onPressure } = props
   const [brushOpen, setBrushOpen] = useState(false)
   const penRef = useRef<HTMLButtonElement>(null)
   const brushName = BRUSHES.find((b) => b.id === brush)?.name ?? BRUSHES[0].name
@@ -66,7 +68,13 @@ export function Toolbar(props: Props) {
                     onBrush(b)
                     setBrushOpen(false)
                   }}
-                />
+                >
+                  <label className="pressure-toggle">
+                    필압 따라 굵기 바꾸기
+                    <input type="checkbox" checked={pressure} onChange={(e) => onPressure(e.target.checked)} />
+                  </label>
+                  <p className="tool-pop-caption">펜슬·태블릿은 누르는 세기로, 마우스·손가락은 쓰는 속도로 굵기가 바뀌어요.</p>
+                </BrushPicker>
               </ToolPopover>
             )}
           </div>

@@ -8,6 +8,8 @@ export type ToolPrefs = {
   widthLevel: WidthLevel
   font: string
   brush: Brush
+  /** 필압 따라 굵기 바꾸기 */
+  pressure: boolean
 }
 
 export const DEFAULT_TOOL_PREFS: ToolPrefs = {
@@ -16,6 +18,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   widthLevel: 1,
   font: DEFAULT_FONT.id,
   brush: DEFAULT_BRUSH,
+  pressure: true,
 }
 
 const KEY = 'daypage:tool-prefs'
@@ -47,6 +50,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     widthLevel: [0, 1, 2].includes(raw.widthLevel as number) ? (raw.widthLevel as WidthLevel) : d.widthLevel,
     font: FONTS.some((f) => f.id === raw.font) ? (raw.font as string) : d.font,
     brush: isBrush(raw.brush) ? raw.brush : d.brush,
+    pressure: typeof raw.pressure === 'boolean' ? raw.pressure : d.pressure,
   }
 }
 

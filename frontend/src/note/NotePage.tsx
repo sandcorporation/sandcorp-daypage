@@ -43,7 +43,11 @@ export function NotePage({ initial }: Props) {
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(prefs.widthLevel)
   const [font, setFont] = useState<string>(prefs.font)
   const [brush, setBrush] = useState<Brush>(prefs.brush)
-  useEffect(() => saveToolPrefs({ tool, ink, widthLevel, font, brush }), [tool, ink, widthLevel, font, brush])
+  const [pressureOn, setPressureOn] = useState(prefs.pressure)
+  useEffect(
+    () => saveToolPrefs({ tool, ink, widthLevel, font, brush, pressure: pressureOn }),
+    [tool, ink, widthLevel, font, brush, pressureOn],
+  )
   const [scale, setScale] = useState(0.5)
   const [zoom, setZoom] = useState<Zoom>('fit')
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -247,6 +251,8 @@ export function NotePage({ initial }: Props) {
           showFont={tool === 'text' || editingBoxId !== null}
           brush={brush}
           onBrush={setBrush}
+          pressure={pressureOn}
+          onPressure={setPressureOn}
         />
         <PageView
           doc={doc}
@@ -254,6 +260,7 @@ export function NotePage({ initial }: Props) {
           ink={ink}
           widthLevel={widthLevel}
           brush={brush}
+          pressureOn={pressureOn}
           author={note.me.nickname}
           origin={origin}
           pointerTool={tool === 'text' ? textTool : edit.pointerTool}
