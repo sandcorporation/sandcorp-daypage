@@ -247,6 +247,23 @@
 .status-dot.offline {
   background: #b91c1c;
 }
+.status-dot.new {
+  background: var(--accent);
+}
+/* 새 버전 안내: 연결 알약 자리에 누르면 새로고침하는 버튼으로 뜬다 */
+.connection-pill.new-version {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  border-color: var(--accent);
+  cursor: pointer;
+}
+.connection-pill.new-version strong {
+  color: var(--accent);
+}
+.connection-pill.new-version:hover {
+  background: var(--accent-soft);
+}
 
 @media (max-width: 720px) {
   .note-header {

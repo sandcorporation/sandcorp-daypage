@@ -24,6 +24,7 @@ import { MemberLimitControl } from './MemberLimitControl'
 import { loadToolPrefs, saveToolPrefs } from './toolPrefs'
 import { ZoomControl, type Zoom } from './ZoomControl'
 import { uniquePeople, usePresence } from './usePresence'
+import { useNewVersion } from './useNewVersion'
 import { useRealtime, type FatalReason } from './useRealtime'
 import type { NoteDetail } from './types'
 import './note.css'
@@ -136,6 +137,7 @@ export function NotePage({ initial }: Props) {
   }, [reconnect])
   const presence = usePresence(provider, note.me)
   const { setEditing } = presence
+  const newVersion = useNewVersion(status)
 
   // 들어와 동기화가 끝나면, 지난번에 비워 둔 채 나간 내 빈 상자를 정리한다.
   // 다른 탭에서 쓰고 있는 상자는 남기도록, 접속자 정보가 들어올 틈을 둔다.
@@ -393,7 +395,7 @@ export function NotePage({ initial }: Props) {
           <Cursors peers={presence.peers} scale={scale} />
         </PageView>
       </div>
-      <ConnectionPill status={status} synced={synced} />
+      <ConnectionPill status={status} synced={synced} newVersion={newVersion} />
       <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
       {confirmDelete && (
         <ConfirmDialog
