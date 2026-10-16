@@ -1,6 +1,6 @@
 # 운영 배포는 deploy/deploy.sh(무중단: 백엔드를 하나씩 교체, Caddy는 reload)
 # oracle 서버(NPMplus 뒤)에서는 docker-compose.oracle.yml을 덧붙인다(Jenkinsfile 참고).
-# 자원 예산: daypage 전체 2 CPU / 약 2.9 GB(oracle의 다른 서비스와 함께 쓴다). 서비스마다 cpus·mem_limit으로 나눈다.
+# 자원 예산: daypage 전체 약 3.1 CPU / 약 4.4 GB(oracle 4코어·23 GB를 다른 서비스와 함께 쓴다). 백엔드 하나에 1 CPU를 주고 나머지는 그 비율로 나눈다.
 x-backend: &backend
   # 네 서비스가 같은 이미지를 쓴다. backend만 빌드하고 나머지는 이 태그를 그대로 쓴다.
   image: daypage-backend:latest
@@ -24,8 +24,8 @@ services:
     # 버전을 고정한다. 태그가 움직이면 모르는 사이 새 이미지로 Caddy가 다시 만들어져 끊긴다.
     # 올릴 때는 이 줄을 바꾸고, 그 배포에서만 Caddy가 몇 초 다시 뜬다.
     image: caddy:2.11.7-alpine
-    cpus: "0.2"
-    mem_limit: 128m
+    cpus: "0.3"
+    mem_limit: 192m
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-daypage.sandcorp.co.kr}
     ports:
@@ -63,8 +63,8 @@ services:
   backend:
     <<: *backend
     # 수용 인원은 이 CPU 제한에서 계산한다(daypage/admission.py). 백엔드를 늘리면 같은 제한을 함께 준다.
-    cpus: "0.65"
-    mem_limit: 768m
+    cpus: "1"
+    mem_limit: 1152m
     # migrate는 배포 스크립트가 먼저 따로 돌린다(deploy/deploy.sh). 여기서는 받기만 한다.
     # 내릴 때(SIGTERM) 새 연결을 받지 않고 열린 연결을 정리할 시간을 준다. 그동안 Caddy가 다른 쪽으로 보낸다.
     command: &backend-command ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*", "--timeout-graceful-shutdown", "10"]
@@ -81,8 +81,8 @@ services:
 
   backend2:
     <<: *backend
-    cpus: "0.65"
-    mem_limit: 768m
+    cpus: "1"
+    mem_limit: 1152m
     command: *backend-command
     stop_grace_period: 20s
     healthcheck: *backend-health
@@ -93,20 +93,20 @@ services:
 
   worker:
     <<: *backend
-    cpus: "0.03"
-    mem_limit: 256m
+    cpus: "0.05"
+    mem_limit: 384m
     command: celery -A config worker -l info --concurrency 2
 
   beat:
     <<: *backend
-    cpus: "0.02"
-    mem_limit: 128m
+    cpus: "0.03"
+    mem_limit: 192m
     command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
 
   postgres:
     image: postgres:17-alpine
-    cpus: "0.35"
-    mem_limit: 768m
+    cpus: "0.55"
+    mem_limit: 1152m
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-daypage}
       POSTGRES_USER: ${POSTGRES_USER:-daypage}
@@ -121,8 +121,8 @@ services:
 
   redis:
     image: redis:7-alpine
-    cpus: "0.1"
-    mem_limit: 128m
+    cpus: "0.15"
+    mem_limit: 192m
     restart: unless-stopped
 
 volumes:
