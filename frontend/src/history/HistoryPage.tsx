@@ -54,30 +54,30 @@ export function HistoryPage() {
     <div className="history-screen">
       <header className="note-header">
         <div className="note-header-left">
-          <Link to={`/note/${noteId}`} aria-label="오늘 장으로 돌아가기" className="icon-link">
+          <Link to={`/note/${noteId}`} aria-label="오늘 페이지로 돌아가기" className="icon-link">
             <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
               <path d="M13 5l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Link>
           <div className="note-title">
             <p className="note-name">{note.name} · 기록</p>
-            <p className="note-sub">지난 장은 보기만 할 수 있어요</p>
+            <p className="note-sub">지난 페이지는 보기만 할 수 있어요</p>
           </div>
         </div>
         <Link to={`/note/${noteId}`} className="btn btn-primary">
-          오늘 장 열기
+          오늘 페이지 열기
         </Link>
       </header>
 
       {pages.length === 0 ? (
         <main className="history-empty">
-          <p className="hand">아직 지난 장이 없어요</p>
-          <p>밤 12시가 지나면 오늘 장이 이곳에 기록돼요.</p>
+          <p className="hand">아직 지난 페이지가 없어요</p>
+          <p>밤 12시가 지나면 오늘 페이지가 이곳에 기록돼요.</p>
         </main>
       ) : (
         <main className="history-main">
           <section className="history-list" aria-labelledby="history-title">
-            <h1 id="history-title">지난 장</h1>
+            <h1 id="history-title">지난 페이지</h1>
             <ol>
               {pages.map((p) => (
                 <li key={p.date}>
@@ -134,7 +134,7 @@ function SealedPageView({ noteId, noteName, date }: { noteId: string; noteName: 
   }
 
   return (
-    <section className="history-view" aria-label={`${formatShortDate(date)} 장`}>
+    <section className="history-view" aria-label={`${formatShortDate(date)} 페이지`}>
       <div className="history-view-head">
         <h2>{formatShortDate(date)}</h2>
         <div className="history-view-actions">
@@ -151,7 +151,7 @@ function SealedPageView({ noteId, noteName, date }: { noteId: string; noteName: 
         </div>
       </div>
       {loaded === 'missing' ? (
-        <p className="empty">이 장을 불러오지 못했어요.</p>
+        <p className="empty">이 페이지를 불러오지 못했어요.</p>
       ) : (
         <PageView doc={doc} tool="select" ink="#000" widthLevel={1} author="" readOnly onScale={setScale}>
           <TextLayer

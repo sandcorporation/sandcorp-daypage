@@ -1,4 +1,4 @@
-"""샘플(데모)용 노트의 오늘 장을 손글씨 메모와 낙서로 채운다.
+"""샘플(데모)용 노트의 오늘 페이지를 손글씨 메모와 낙서로 채운다.
 
     python manage.py seed_sample <노트 ID> [--style sparse|dense] [--new 이름] [--force]
 
@@ -44,8 +44,8 @@ def orange(attrs: dict | None = None) -> dict:
 
 # (x, y, 폭, 글꼴, 색, 쓴 사람, 문단들). 문단은 글자열 또는 (글자열, 서식) 조각의 리스트.
 BOXES = [
-    (110, 32, 560, "pen", INK_BLUE, ME, [[("오늘의 한 장 ✏️", {**BOLD, **BIG})]]),
-    (110, 96, 820, "gothic", PENCIL, ME, ["링크를 받은 사람은 누구나 같은 장에 같이 쓰고 그릴 수 있어요"]),
+    (110, 32, 560, "pen", INK_BLUE, ME, [[("오늘의 한 페이지 ✏️", {**BOLD, **BIG})]]),
+    (110, 96, 820, "gothic", PENCIL, ME, ["링크를 받은 사람은 누구나 같은 페이지에 같이 쓰고 그릴 수 있어요"]),
     (
         120, 192, 430, "pen", PENCIL, ME,
         [[("오늘 할 일", BOLD)], "☑ 아침 산책 20분", "☑ 택배 찾아오기", "☐ 장 보기 (우유, 계란, 사과)", "☐ 저녁엔 영화 한 편!"],
@@ -99,11 +99,11 @@ BOXES = [
     (780, 1472, 480, "pen", ORANGE, FRIEND, [[("설악산은 꼭!! ", BOLD), ("단풍 시즌 놓치지 말기", None)]]),
     (130, 1664, 470, "pen", INK_BLUE, ME, ["내일 아침 7시 알람 맞췄어요?"]),
     (230, 1728, 300, "pen", ORANGE, FRIEND, ["방금 맞췄어요 ⏰"]),
-    (130, 1792, 400, "pen", INK_BLUE, ME, ["그럼 내일 장에서 봐요!"]),
+    (130, 1792, 400, "pen", INK_BLUE, ME, ["그럼 내일 페이지에서 봐요!"]),
     (840, 1824, 640, "himelody", INK_BLUE, ME, [[("작은 하루도 같이 쓰면 큰 이야기가 돼요", BIG)]]),
     (
         130, 2208, 900, "gothic", PENCIL, ME,
-        ["밤 12시가 되면 이 장은 기록으로 넘어가고 새 장이 펼쳐져요.", "지난 장은 기록에서 언제든 다시 볼 수 있어요 👋"],
+        ["밤 12시가 되면 이 페이지는 기록으로 넘어가고 새 페이지가 펼쳐져요.", "지난 페이지는 기록에서 언제든 다시 볼 수 있어요 👋"],
     ),
 ]
 
@@ -494,13 +494,13 @@ def sparse_layout(me: str):
 
 
 class Command(BaseCommand):
-    help = "샘플(데모)용 노트의 오늘 장을 손글씨 메모와 낙서로 채운다."
+    help = "샘플(데모)용 노트의 오늘 페이지를 손글씨 메모와 낙서로 채운다."
 
     def add_arguments(self, parser):
         parser.add_argument("note_id", help="채울 노트(--new를 쓰면 주인·정원을 따라 할 노트)")
         parser.add_argument("--style", choices=["sparse", "dense"], default="sparse", help="간단한 버전 또는 빽빽한 버전")
         parser.add_argument("--new", metavar="이름", help="같은 주인으로 새 노트를 만들어 거기에 채운다")
-        parser.add_argument("--force", action="store_true", help="오늘 장에 내용이 있어도 지우고 다시 채운다")
+        parser.add_argument("--force", action="store_true", help="오늘 페이지에 내용이 있어도 지우고 다시 채운다")
 
     def handle(self, note_id: str, style: str = "sparse", new: str | None = None, force: bool = False, **options):
         note = Note.objects.filter(pk=note_id).first()
@@ -516,7 +516,7 @@ class Command(BaseCommand):
         strokes = doc.get("strokes", type=Map)
         boxes = doc.get("textboxes", type=Map)
         if (len(strokes) or len(boxes)) and not force:
-            raise CommandError("오늘 장에 이미 내용이 있어요. 지우고 다시 채우려면 --force")
+            raise CommandError("오늘 페이지에 이미 내용이 있어요. 지우고 다시 채우려면 --force")
 
         rng.seed(20261015)
         box_specs, stroke_specs = (dense_layout if style == "dense" else sparse_layout)(me)
@@ -539,4 +539,4 @@ class Command(BaseCommand):
         async_to_sync(get_channel_layer().group_send)(
             page_group(page.id), {"type": "hub.update", "page": page.id, "update": update, "from": "seed_sample"}
         )
-        self.stdout.write(f"'{note.name}'({note.id}) {page.date} 장: 글 상자 {len(box_specs)}개, 낙서 {len(stroke_specs)}획")
+        self.stdout.write(f"'{note.name}'({note.id}) {page.date} 페이지: 글 상자 {len(box_specs)}개, 낙서 {len(stroke_specs)}획")

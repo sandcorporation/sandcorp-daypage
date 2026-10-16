@@ -33,7 +33,7 @@ export function InvitePage({ noteId, noteName, online, isFull, loggedIn = false 
             </p>
           ) : (
             <p className="invite-desc">
-              {online > 0 ? `지금 ${online}명이 오늘 장을 채우고 있어요.` : '오늘 장이 기다리고 있어요.'}
+              {online > 0 ? `지금 ${online}명이 오늘 페이지를 채우고 있어요.` : '오늘 페이지가 기다리고 있어요.'}
               <br />
               카카오로 로그인하면 바로 함께 그릴 수 있어요.
             </p>

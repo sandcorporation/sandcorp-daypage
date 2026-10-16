@@ -36,7 +36,7 @@ def seal_due_pages() -> list[Page]:
         if seal_page(page.id):
             sealed.append(page)
     if sealed:
-        logger.info("장 %d개 봉인", len(sealed))
+        logger.info("페이지 %d개 봉인", len(sealed))
     return sealed
 
 

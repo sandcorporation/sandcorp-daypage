@@ -15,5 +15,5 @@ export function Countdown({ nextMidnight, clockOffset }: Props) {
     return () => window.clearInterval(timer)
   }, [clockOffset])
 
-  return <span className="countdown">새 장까지 {formatCountdown(millisUntil(nextMidnight, now))}</span>
+  return <span className="countdown">새 페이지까지 {formatCountdown(millisUntil(nextMidnight, now))}</span>
 }

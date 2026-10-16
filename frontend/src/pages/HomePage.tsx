@@ -31,15 +31,15 @@ function Landing() {
 
       <main className="landing">
         <section className="landing-copy">
-          <p className="hand landing-kicker">오늘도 한 장, 같이 채워요</p>
+          <p className="hand landing-kicker">오늘도 한 페이지, 같이 채워요</p>
           <h1>
             링크 하나로 열리는
             <br />
             함께 쓰는 하루 노트
           </h1>
           <p className="landing-desc">
-            그리고, 쓰고, 지우고. 링크를 받은 사람은 누구나 같은 장에 실시간으로 그릴 수 있어요. 밤 12시가 되면
-            새 장이 펼쳐지고, 지난 장은 기록에 고이 남습니다.
+            그리고, 쓰고, 지우고. 링크를 받은 사람은 누구나 같은 페이지에 실시간으로 그릴 수 있어요. 밤 12시가 되면
+            새 페이지가 펼쳐지고, 지난 페이지는 기록에 고이 남습니다.
           </p>
           <div className="landing-cta">
             <a className="btn btn-kakao btn-lg" href={kakaoLoginHref('/')}>
@@ -55,7 +55,7 @@ function Landing() {
         <section className="landing-art" aria-hidden="true">
           <div className="landing-sheet">
             <div className="landing-sheet-top">
-              <span>오늘의 장</span>
+              <span>오늘의 페이지</span>
               <span className="landing-live">
                 <span className="dot" />
                 3명 함께 쓰는 중
@@ -82,15 +82,15 @@ function Landing() {
               </span>
             </div>
           </div>
-          <div className="hand landing-sticker">자정에 새 장!</div>
+          <div className="hand landing-sticker">자정에 새 페이지!</div>
         </section>
       </main>
 
       <section id="how" className="how">
         {[
           ['노트를 만들고', '카카오로 로그인하고 버튼 한 번이면 나만의 긴 링크가 생겨요.'],
-          ['링크를 건네면', '받은 사람도 로그인만 하면 같은 장에서 동시에 그리고 쓸 수 있어요.'],
-          ['자정마다 새 장으로', '지난 장은 기록에서 언제든 볼 수 있지만, 고칠 수는 없어요.'],
+          ['링크를 건네면', '받은 사람도 로그인만 하면 같은 페이지에서 동시에 그리고 쓸 수 있어요.'],
+          ['자정마다 새 페이지로', '지난 페이지는 기록에서 언제든 볼 수 있지만, 고칠 수는 없어요.'],
         ].map(([title, desc], i) => (
           <div key={title} className="how-card">
             <p className="hand how-num">{i + 1}</p>
@@ -158,7 +158,7 @@ function MyNotes({ notes, onChanged }: { notes: MyNote[]; onChanged: () => void 
       </header>
       <main className="mynotes">
         <form className="card new-note" onSubmit={create}>
-          <p className="hand new-note-kicker">새 장을 펼쳐요</p>
+          <p className="hand new-note-kicker">새 페이지를 펼쳐요</p>
           <h1>새 노트 만들기</h1>
           <label className="field">
             <span>노트 이름</span>
@@ -225,7 +225,7 @@ function MyNotes({ notes, onChanged }: { notes: MyNote[]; onChanged: () => void 
           onConfirm={confirmDelete}
           onCancel={() => setDeleting(null)}
         >
-          <p>오늘 장과 지난 기록까지 모두 바로 사라지고, 되돌릴 수 없어요.</p>
+          <p>오늘 페이지와 지난 기록까지 모두 바로 사라지고, 되돌릴 수 없어요.</p>
           {deleting.memberCount > 1 && <p>함께 쓰던 참여자 {deleting.memberCount - 1}명도 더는 볼 수 없어요.</p>}
         </ConfirmDialog>
       )}

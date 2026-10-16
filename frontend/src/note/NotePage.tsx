@@ -286,7 +286,7 @@ export function NotePage({ initial }: Props) {
           onConfirm={deleteNote}
           onCancel={() => setConfirmDelete(false)}
         >
-          <p>오늘 장과 지난 기록까지 모두 바로 사라지고, 되돌릴 수 없어요.</p>
+          <p>오늘 페이지와 지난 기록까지 모두 바로 사라지고, 되돌릴 수 없어요.</p>
           {note.memberCount > 1 && <p>함께 쓰던 참여자 {note.memberCount - 1}명도 더는 볼 수 없어요.</p>}
         </ConfirmDialog>
       )}
