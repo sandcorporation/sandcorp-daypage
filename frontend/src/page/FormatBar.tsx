@@ -1,5 +1,5 @@
 import { useEditorState, type Editor } from '@tiptap/react'
-import type { PointerEvent } from 'react'
+import { useState, type PointerEvent } from 'react'
 import { TEXT_COLORS, TEXT_SIZES } from './editorExtensions'
 
 // 누르는 동안 편집기의 선택·포커스를 지킨다.
@@ -19,10 +19,13 @@ type Props = {
   below?: boolean
   /** 상자가 장 오른쪽 끝에 가까우면 오른쪽에 맞춘다 */
   alignRight?: boolean
+  /** 노트 색(#rrggbb). 기본 글자 색 뒤에 붙는다 */
+  noteColors?: string[]
 }
 
 /** 편집 중인 글 상자 위에 뜨는 서식 막대. 장 레이어의 축소를 거꾸로 키워 화면에서 일정한 크기로 보인다. */
-export function FormatBar({ editor, scale, below = false, alignRight = false }: Props) {
+export function FormatBar({ editor, scale, below = false, alignRight = false, noteColors = [] }: Props) {
+  const [colorsOpen, setColorsOpen] = useState(false)
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -36,6 +39,16 @@ export function FormatBar({ editor, scale, below = false, alignRight = false }: 
   })
 
   const run = (fn: () => void) => () => fn()
+  // 색을 고르면 펼친 색 줄을 닫는다. null이면 상자 기본색으로 되돌린다.
+  const pickColor = (color: string | null) => () => {
+    if (color === null) editor.chain().focus().unsetColor().run()
+    else editor.chain().focus().setColor(color).run()
+    setColorsOpen(false)
+  }
+  const colorName = (color: string | null) =>
+    color === null
+      ? '상자 기본색'
+      : (TEXT_COLORS.find((c) => c.color.toLowerCase() === color.toLowerCase())?.name ?? '노트 색 ' + color.toLowerCase())
 
   return (
     <div
@@ -63,24 +76,53 @@ export function FormatBar({ editor, scale, below = false, alignRight = false }: 
         </button>
       ))}
       <span className="format-sep" />
-      {TEXT_COLORS.map((c) => (
+      <span className="format-color">
         <button
-          key={c.color}
           type="button"
           className="format-btn"
-          aria-label={`글자 색 ${c.name}`}
-          title={`글자 색 ${c.name}`}
-          aria-pressed={state.color === c.color}
+          aria-label={`글자 색: ${colorName(state.color)}`}
+          title="글자 색"
+          aria-expanded={colorsOpen}
           onPointerDown={keep}
-          onClick={run(() =>
-            state.color === c.color
-              ? editor.chain().focus().unsetColor().run()
-              : editor.chain().focus().setColor(c.color).run(),
-          )}
+          onClick={() => setColorsOpen((v) => !v)}
         >
-          <span className="format-swatch" style={{ background: c.color }} />
+          <span
+            className={`format-swatch${state.color ? '' : ' default'}`}
+            style={state.color ? { background: state.color } : undefined}
+          />
         </button>
-      ))}
+        {colorsOpen && (
+          <span className="format-colors" role="group" aria-label="글자 색">
+            <button
+              type="button"
+              className="format-btn"
+              aria-label="글자 색 상자 기본색"
+              title="상자 기본색"
+              aria-pressed={state.color === null}
+              onPointerDown={keep}
+              onClick={pickColor(null)}
+            >
+              <span className="format-swatch default" />
+            </button>
+            {[...TEXT_COLORS.map((c) => ({ label: c.name, color: c.color as string })), ...noteColors.map((c) => ({ label: `노트 색 ${c}`, color: c }))].map(
+              (c) => (
+                <button
+                  key={c.color}
+                  type="button"
+                  className="format-btn"
+                  aria-label={`글자 색 ${c.label}`}
+                  title={`글자 색 ${c.label}`}
+                  aria-pressed={state.color?.toLowerCase() === c.color.toLowerCase()}
+                  onPointerDown={keep}
+                  onClick={pickColor(c.color)}
+                >
+                  <span className="format-swatch" style={{ background: c.color }} />
+                </button>
+              ),
+            )}
+          </span>
+        )}
+      </span>
       <span className="format-sep" />
       {TEXT_SIZES.map((s) => (
         <button

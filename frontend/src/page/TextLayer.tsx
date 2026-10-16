@@ -30,6 +30,8 @@ type Props = {
   editors: Map<string, { nickname: string; color: string }[]>
   /** 내 닉네임(내가 만든 빈 상자만 지우려고) */
   me: string
+  /** 노트 색: 서식 막대의 글자 색에 함께 보인다 */
+  noteColors?: string[]
 }
 
 function useTextBoxes(doc: Y.Doc): TextBox[] {
@@ -73,6 +75,7 @@ function TextBoxView({
   onEditing,
   editors,
   me,
+  noteColors,
 }: ViewProps) {
   const fragment = textBoxContent(doc, box.id)
   const [focused, setFocused] = useState(false)
@@ -261,6 +264,7 @@ function TextBoxView({
           scale={scale}
           below={y * scale < 56}
           alignRight={x + FORMAT_BAR_WIDTH / scale > PAGE_WIDTH}
+          noteColors={noteColors}
         />}
       {interactive && (
         <button

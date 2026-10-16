@@ -359,6 +359,7 @@ export function NotePage({ initial }: Props) {
             onEditing={onEditing}
             editors={presence.editors}
             me={note.me.nickname}
+            noteColors={note.colors}
           />
           <Cursors peers={presence.peers} scale={scale} />
         </PageView>
