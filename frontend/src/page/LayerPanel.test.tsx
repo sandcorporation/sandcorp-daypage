@@ -156,3 +156,34 @@ describe('잠그기', () => {
     expect(readLayers(doc)[0].locked).toBe(false)
   })
 })
+
+describe('지우기', () => {
+  test('확인을 받은 뒤 레이어와 그 획을 지운다', async () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    addStroke(doc, stroke({ id: 'a', layer: top, author: '푸른 펭귄' }))
+    setup(doc)
+    await userEvent.click(screen.getByRole('button', { name: '레이어 2 지우기' }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toHaveTextContent('획 1개')
+    expect(dialog).toHaveTextContent('푸른 펭귄')
+    await userEvent.click(within(dialog).getByRole('button', { name: '지우기' }))
+    expect(readLayers(doc).map((l) => l.id)).toEqual([BASE_LAYER_ID])
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  test('취소하면 그대로다', async () => {
+    const doc = createPageDoc('2026-10-16')
+    addLayer(doc)
+    setup(doc)
+    await userEvent.click(screen.getByRole('button', { name: '레이어 2 지우기' }))
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+    expect(readLayers(doc)).toHaveLength(2)
+  })
+
+  test('마지막 남은 레이어는 지울 수 없다', () => {
+    const doc = createPageDoc('2026-10-16')
+    setup(doc)
+    expect(screen.getByRole('button', { name: '레이어 1 지우기' })).toBeDisabled()
+  })
+})

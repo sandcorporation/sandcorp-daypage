@@ -104,6 +104,24 @@ export function setLayerOpacity(doc: Y.Doc, id: string, opacity: number, origin?
   updateLayer(doc, id, { opacity: Math.round(Math.min(1, Math.max(0.1, opacity)) * 100) / 100 }, origin)
 }
 
+/**
+ * 레이어와 그 레이어의 획(남의 획 포함)을 한 번에 지운다. 내 작업이므로 되돌리기로 함께 살아난다.
+ * 마지막 남은 레이어는 지울 수 없다(false).
+ */
+export function deleteLayer(doc: Y.Doc, id: string, origin?: unknown): boolean {
+  const layers = readLayers(doc)
+  if (layers.length <= 1 || !layers.some((l) => l.id === id)) return false
+  const doomed = readStrokes(doc)
+    .filter((s) => layerOf(s, layers) === id)
+    .map((s) => s.id)
+  doc.transact(() => {
+    const strokes = strokesMap(doc)
+    for (const sid of doomed) strokes.delete(sid)
+    ensureLayers(doc).delete(id)
+  }, origin)
+  return true
+}
+
 /** 잠그면 아무도 그 레이어에 그리거나 지우지 못한다(클라이언트에서 지킨다). 누구나 풀 수 있다. */
 export function setLayerLocked(doc: Y.Doc, id: string, locked: boolean, origin?: unknown): void {
   updateLayer(doc, id, { locked }, origin)

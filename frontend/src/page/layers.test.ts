@@ -4,6 +4,7 @@ import {
   addLayer,
   BASE_LAYER_ID,
   canDrawOn,
+  deleteLayer,
   editableStrokes,
   layerOf,
   layerPlan,
@@ -206,5 +207,51 @@ describe('잠그기', () => {
     setLayerLocked(doc, BASE_LAYER_ID, true, origin)
     undo.undo()
     expect(readLayers(doc)[0].locked).toBe(false)
+  })
+})
+
+describe('지우기', () => {
+  test('레이어를 지우면 그 레이어의 획(남의 획 포함)도 함께 사라지고 모두에게 반영된다', () => {
+    const a = createPageDoc('2026-10-16')
+    const top = addLayer(a)!
+    addStroke(a, stroke({ id: 'mine', layer: top }))
+    addStroke(a, stroke({ id: 'theirs', layer: top, author: '푸른 펭귄' }))
+    addStroke(a, stroke({ id: 'base' }))
+    expect(deleteLayer(a, top)).toBe(true)
+    const b = new Y.Doc()
+    sync(a, b)
+    expect(readLayers(b).map((l) => l.id)).toEqual([BASE_LAYER_ID])
+    expect(readStrokes(b).map((s) => s.id)).toEqual(['base'])
+  })
+
+  test('되돌리면 레이어와 획이 함께 돌아오고, 남이 그 뒤에 한 작업은 되돌리지 않는다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const origin = { local: true }
+    const undo = createUndoManager(doc, origin)
+    const top = addLayer(doc)!
+    addStroke(doc, stroke({ id: 'x', layer: top }))
+    undo.stopCapturing()
+    deleteLayer(doc, top, origin)
+    addStroke(doc, stroke({ id: 'other' }), { remote: true })
+    undo.undo()
+    expect(readLayers(doc).map((l) => l.id)).toEqual([BASE_LAYER_ID, top])
+    expect(readStrokes(doc).map((s) => s.id).sort()).toEqual(['other', 'x'])
+  })
+
+  test('마지막 남은 레이어는 지울 수 없다', () => {
+    const doc = createPageDoc('2026-10-16')
+    addStroke(doc, stroke({ id: 'a' }))
+    expect(deleteLayer(doc, BASE_LAYER_ID)).toBe(false)
+    expect(readStrokes(doc)).toHaveLength(1)
+  })
+
+  test('기본 레이어를 지우면 옛 획(레이어 정보 없음)도 함께 지운다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    addStroke(doc, stroke({ id: 'old' }))
+    addStroke(doc, stroke({ id: 'new', layer: top }))
+    deleteLayer(doc, BASE_LAYER_ID)
+    expect(readStrokes(doc).map((s) => s.id)).toEqual(['new'])
+    expect(layerOf(readStrokes(doc)[0], readLayers(doc))).toBe(top)
   })
 })

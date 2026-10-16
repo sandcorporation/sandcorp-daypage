@@ -4,6 +4,7 @@ import { readStrokes } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 import {
   addLayer,
+  deleteLayer,
   layerPlan,
   layerStats,
   MAX_LAYER_NAME,
@@ -17,6 +18,7 @@ import {
   type Layer,
   type LayerStats,
 } from './layers'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { paintLayers } from './render'
 
 /** 레이어 목록과 레이어별 획 수·그린 사람. 문서가 바뀌면(다른 사람 포함) 다시 읽는다. */
@@ -48,7 +50,8 @@ function Thumbnail({ doc, layer, version }: { doc: Y.Doc; layer: Layer; version:
 const EYE = 'M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z'
 const EYE_OFF = 'M2 10s3-6 8-6c2 0 3.6.8 4.9 1.8M18 10s-3 6-8 6c-2 0-3.6-.8-4.9-1.8M3 17L17 3'
 const PENCIL = 'M4 16l1-4 8-8 3 3-8 8z'
-const LOCK = 'M5 9h10v8H5zM7 9V6a3 3 0 016 0v3'
+const TRASH = 'M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11'
+const LOCK ='M5 9h10v8H5zM7 9V6a3 3 0 016 0v3'
 const UNLOCK = 'M5 9h10v8H5zM7 9V6a3 3 0 015.6-1.5'
 
 function Icon({ d, children }: { d: string; children?: ReactNode }) {
@@ -79,6 +82,9 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
   // 놓을 때는 렌더를 기다리지 않고 바로 읽는다
   const dragRef = useRef<string | null>(null)
   const active = layers.find((l) => l.id === current)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const doomed = layers.find((l) => l.id === deleting)
+  const doomedStats = doomed ? (stats.get(doomed.id) ?? { count: 0, authors: [] }) : null
 
   const indexOf = (id: string) => layers.findIndex((l) => l.id === id)
 
@@ -182,6 +188,16 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
               <button
                 type="button"
                 className="layer-icon-btn"
+                aria-label={`${layer.name} 지우기`}
+                title={layers.length <= 1 ? '마지막 남은 레이어는 지울 수 없어요' : '레이어 지우기'}
+                disabled={layers.length <= 1}
+                onClick={() => setDeleting(layer.id)}
+              >
+                <Icon d={TRASH} />
+              </button>
+              <button
+                type="button"
+                className="layer-icon-btn"
                 aria-label={`${layer.name} ${layer.locked ? '잠금 풀기' : '잠그기'}`}
                 title={layer.locked ? '잠금 풀기' : '잠그기: 아무도 이 레이어에 그리거나 지우지 못해요'}
                 aria-pressed={layer.locked}
@@ -234,6 +250,23 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
         <p className="tool-pop-caption">
           {full && `레이어는 ${MAX_LAYERS}개까지예요. `}위에 있는 레이어가 앞에 보여요. 글 상자는 항상 맨 위예요.
         </p>
+        {doomed && doomedStats && (
+          <ConfirmDialog
+            title={`‘${doomed.name}’을 지울까요?`}
+            confirmLabel="지우기"
+            onCancel={() => setDeleting(null)}
+            onConfirm={() => {
+              deleteLayer(doc, doomed.id, origin)
+              setDeleting(null)
+            }}
+          >
+            <p>
+              이 레이어의 획 {doomedStats.count}개가 함께 사라져요
+              {doomedStats.authors.length > 0 && ` (그린 사람: ${doomedStats.authors.join(', ')})`}.
+            </p>
+            <p>지운 뒤 되돌리기를 누르면 다시 살아나요.</p>
+          </ConfirmDialog>
+        )}
         <p className="tool-pop-caption">눈은 내 화면에서만 숨기고, 자물쇠는 모두가 못 그리고 못 지우게 해요. 이름·순서·불투명도도 모두에게 적용돼요.</p>
       </div>
     </div>
