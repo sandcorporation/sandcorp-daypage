@@ -76,8 +76,12 @@ services:
         - python
         - -c
         - "import os, urllib.request as u; h = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')[0]; u.urlopen(u.Request('http://127.0.0.1:8000/api/health', headers={'Host': h}), timeout=2)"
-      interval: 3s
-      retries: 40
+      # 검사마다 Python을 새로 띄워 CPU를 0.3초쯤 쓴다. 평소에는 드물게 보고,
+      # 뜨는 동안(start_period)에만 촘촘히 봐서 배포(deploy.sh)가 빨리 healthy를 알아챈다.
+      interval: 30s
+      start_period: 120s
+      start_interval: 2s
+      retries: 3
 
   backend2:
     <<: *backend
