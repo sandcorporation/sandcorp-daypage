@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type PointerEvent, type ReactNode } from 'react'
 import * as Y from 'yjs'
 import { addStroke, newId, readStrokes, round, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
@@ -12,7 +12,7 @@ import { straightPoints } from './straight'
 import { DEFAULT_SHAPE, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
 
 /** 곡선: 첫 점·직전 점에서 이만큼(화면 px) 안을 누르면 닫기·끝내기로 본다 */
-const CURVE_SNAP_PX = 14
+const CURVE_SNAP_PX = 22
 /** 곡선: 이 시간(ms) 안에 같은 자리를 다시 누르면 두 번 누르기 */
 const DOUBLE_TAP_MS = 400
 
@@ -35,6 +35,10 @@ type Props = {
   brush?: Brush
   /** 도형 도구에서 고른 도형 */
   shape?: ShapeKind
+  /** 곡선을 찍는 동안 찍은 점 수가 바뀔 때(0이면 곡선이 끝났다). 되돌리기 버튼을 켜고 끄는 데 쓴다 */
+  onCurveChange?: (points: number) => void
+  /** 곡선을 찍는 동안 바깥(되돌리기 키·버튼)에서 마지막 점을 지울 수 있게 채워 준다 */
+  curveControl?: MutableRefObject<{ undoPoint: () => void } | null>
   /** 필압 따라 굵기 바꾸기. 끄면 굵기가 일정한 획을 그린다 */
   pressureOn?: boolean
   /** 새 획을 넣을 레이어(지금 그리는 레이어) */
@@ -73,6 +77,8 @@ export function PageView({
   widthLevel,
   brush,
   shape = DEFAULT_SHAPE,
+  onCurveChange,
+  curveControl,
   pressureOn = true,
   layer,
   hiddenLayers,
@@ -109,6 +115,9 @@ export function PageView({
   const curve = useRef<{ controls: Point[]; last: { x: number; y: number; t: number } } | null>(null)
   // 찍은 점 수(완료·취소 막대를 보이고 숨기는 데만 쓴다)
   const [curveCount, setCurveCount] = useState(0)
+  // 곡선: 마지막으로 올려 둔 다음 점 자리, 그 자리가 첫 점 닫기 자리인지
+  const curveHover = useRef<Point | null>(null)
+  const curveNearFirst = useRef(false)
   // 지금 처리 중인 포인터. 두 번째 손가락·손바닥이 한 획에 섞이지 않게 한다.
   const activePointer = useRef<number | null>(null)
   // 마지막 포인터 화면 위치. 누른 채 스크롤하면 이 위치로 장 좌표를 다시 계산한다.
@@ -187,7 +196,9 @@ export function PageView({
     if (s.tool === 'highlighter') ctx.globalAlpha = 0.45
     paintStroke(ctx, s)
     ctx.globalAlpha = 1
-  }, [pixelScale])
+    const c = curve.current
+    if (c) paintCurveMarks(ctx, c.controls, curveNearFirst.current, scale)
+  }, [pixelScale, scale])
 
   function pagePoint(e: PointerEvent<HTMLDivElement>): Point {
     const rect = frameRef.current!.getBoundingClientRect()
@@ -238,12 +249,25 @@ export function PageView({
     }
   }
 
-  /** 곡선 미리보기: 찍은 점들(+ 다음 점 자리)을 지나는 곡선 */
+  /** p가 첫 점 닫기 자리에 있는지(점이 셋 이상일 때만 닫을 수 있다) */
+  function nearFirst(c: { controls: Point[] }, p: Point | null): boolean {
+    const first = c.controls[0]
+    return !!p && c.controls.length >= 3 && Math.hypot(p.x - first.x, p.y - first.y) * scale <= CURVE_SNAP_PX
+  }
+
+  /**
+   * 곡선 미리보기: 찍은 점들(+ 다음 점 자리)을 지나는 곡선. 다음 점이 첫 점 닫기 자리면 닫힌 모양을 보여 준다.
+   * next를 기억해 두어 점을 되돌린 뒤에도 같은 자리로 다시 그린다.
+   */
   function showCurve(next: Point | null) {
     const c = curve.current
     const s = drawing.current
     if (!c || !s) return
-    s.points = curvePoints(next ? [...c.controls, next] : c.controls, false)
+    curveHover.current = next
+    curveNearFirst.current = nearFirst(c, next)
+    s.points = curveNearFirst.current
+      ? curvePoints(c.controls, true)
+      : curvePoints(next ? [...c.controls, next] : c.controls, false)
     paintLive()
   }
 
@@ -254,16 +278,32 @@ export function PageView({
       curve.current = { controls: [p], last: { x: p.x, y: p.y, t } }
       drawing.current = shapeStroke()
       setCurveCount(1)
+      onCurveChange?.(1)
       showCurve(null)
       return
     }
     const near = (q: Point) => Math.hypot(p.x - q.x, p.y - q.y) * scale <= CURVE_SNAP_PX
-    if (c.controls.length >= 3 && near(c.controls[0])) return finishCurve(true)
+    if (nearFirst(c, p)) return finishCurve(true)
     if (t - c.last.t < DOUBLE_TAP_MS && near(c.last)) return finishCurve(false)
     c.controls.push(p)
     c.last = { x: p.x, y: p.y, t }
     setCurveCount(c.controls.length)
+    onCurveChange?.(c.controls.length)
     showCurve(null)
+  }
+
+  /** 곡선 중 되돌리기: 마지막으로 찍은 점만 지운다. 점이 하나뿐이면 곡선을 버린다. */
+  function undoCurvePoint() {
+    const c = curve.current
+    if (!c) return
+    c.controls.pop()
+    if (c.controls.length === 0) return cancelCurve()
+    const last = c.controls[c.controls.length - 1]
+    // 되돌린 바로 뒤 그 자리를 누른 것이 두 번 누르기로 잡히지 않게 한다
+    c.last = { x: last.x, y: last.y, t: -Infinity }
+    setCurveCount(c.controls.length)
+    onCurveChange?.(c.controls.length)
+    showCurve(curveHover.current)
   }
 
   /** 곡선을 저장한다(점이 둘 이상일 때). closed면 첫 점으로 닫는다. */
@@ -273,7 +313,9 @@ export function PageView({
     curve.current = null
     drawing.current = null
     activePointer.current = null
+    curveNearFirst.current = false
     setCurveCount(0)
+    onCurveChange?.(0)
     if (c && s && c.controls.length >= 2) addStroke(doc, { ...s, points: curvePoints(c.controls, closed) }, origin)
     paintLive()
   }
@@ -282,12 +324,21 @@ export function PageView({
     curve.current = null
     drawing.current = null
     activePointer.current = null
+    curveNearFirst.current = false
     setCurveCount(0)
+    onCurveChange?.(0)
     paintLive()
   }
-  // 최신 함수를 효과 안에서 부르기 위해 둔다
-  const curveActions = useRef({ finishCurve, cancelCurve })
-  curveActions.current = { finishCurve, cancelCurve }
+  // 최신 함수를 효과·바깥(되돌리기 버튼)에서 부르기 위해 둔다
+  const curveActions = useRef({ finishCurve, cancelCurve, undoCurvePoint })
+  curveActions.current = { finishCurve, cancelCurve, undoCurvePoint }
+  useEffect(() => {
+    if (!curveControl) return
+    curveControl.current = { undoPoint: () => curveActions.current.undoCurvePoint() }
+    return () => {
+      curveControl.current = null
+    }
+  }, [curveControl])
 
   // 곡선 중: Enter로 끝내고 Esc로 취소한다(글 상자 등에 쓰는 중이면 그대로 둔다)
   useEffect(() => {
@@ -313,15 +364,9 @@ export function PageView({
   function cancelGesture(e: PointerEvent<HTMLDivElement>) {
     if (activePointer.current === null) return
     activePointer.current = null
-    const cv = curve.current
-    if (cv) {
+    if (curve.current) {
       // 곡선: 이번에 찍은 점만 버리고 이어 찍을 수 있게 둔다
-      cv.controls.pop()
-      if (cv.controls.length === 0) cancelCurve()
-      else {
-        setCurveCount(cv.controls.length)
-        showCurve(null)
-      }
+      undoCurvePoint()
       return
     }
     if (drawing.current) {
@@ -543,11 +588,16 @@ export function PageView({
         <div className="curve-bar" role="toolbar" aria-label="곡선">
           <span>
             곡선 · 점 {curveCount}개
-            <span className="curve-bar-hint"> · 두 번 누르면 끝, 첫 점을 누르면 닫혀요</span>
+            <span className="curve-bar-hint"> · 두 번 누르면 끝 · 첫 점(고리)을 누르면 닫혀요 · Ctrl+Z로 점 지우기</span>
           </span>
           <button type="button" className="curve-bar-btn" onClick={() => cancelCurve()}>
             취소
           </button>
+          {curveCount >= 3 && (
+            <button type="button" className="curve-bar-btn" onClick={() => finishCurve(true)}>
+              닫기
+            </button>
+          )}
           <button type="button" className="curve-bar-btn primary" disabled={curveCount < 2} onClick={() => finishCurve(false)}>
             완료
           </button>
@@ -555,6 +605,37 @@ export function PageView({
       )}
     </div>
   )
+}
+
+/**
+ * 곡선을 찍는 동안의 표시(장 좌표로 그린다, 화면에서 일정한 크기): 찍은 점마다 작은 점,
+ * 점이 셋 이상이면 첫 점에 닫기 고리. 닫을 수 있는 자리에 올라가면 고리를 채운다.
+ */
+function paintCurveMarks(ctx: CanvasRenderingContext2D, controls: Point[], nearFirst: boolean, scale: number) {
+  const px = (v: number) => v / scale
+  ctx.save()
+  ctx.fillStyle = '#2A47B0'
+  for (const q of controls.slice(1)) {
+    ctx.beginPath()
+    ctx.arc(q.x, q.y, px(3.5), 0, Math.PI * 2)
+    ctx.fill()
+  }
+  const first = controls[0]
+  if (first) {
+    ctx.beginPath()
+    if (controls.length >= 3) {
+      ctx.arc(first.x, first.y, px(nearFirst ? 11 : 9), 0, Math.PI * 2)
+      ctx.lineWidth = px(2)
+      ctx.strokeStyle = '#2A47B0'
+      ctx.fillStyle = nearFirst ? 'rgba(42, 71, 176, 0.35)' : 'rgba(255, 255, 255, 0.85)'
+      ctx.fill()
+      ctx.stroke()
+    } else {
+      ctx.arc(first.x, first.y, px(3.5), 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  ctx.restore()
 }
 
 /** 강조한 레이어 둘레의 점선 상자와 이름표(장 좌표로 그린다, 화면에서 일정한 크기). 획이 없으면 그리지 않는다. */

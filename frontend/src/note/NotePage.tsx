@@ -68,6 +68,17 @@ export function NotePage({ initial }: Props) {
   // 내 변경에 붙이는 표식(되돌리기는 이것만 추적한다)
   const origin = useMemo(() => ({ local: true }), [])
   const history = useUndo(doc, origin)
+  // 도형 곡선을 찍는 중이면 되돌리기는 획 대신 마지막으로 찍은 점을 지운다.
+  const curveControl = useRef<{ undoPoint: () => void } | null>(null)
+  const [curvePoints, setCurvePoints] = useState(0)
+  const undo = useCallback(() => {
+    if (curvePoints > 0 && curveControl.current) curveControl.current.undoPoint()
+    else history.undo()
+  }, [curvePoints, history])
+  // 곡선 중에는 다시하기를 쉰다(되돌린 획이 곡선 위로 돌아오지 않게)
+  const redo = useCallback(() => {
+    if (curvePoints === 0) history.redo()
+  }, [curvePoints, history])
 
   // 레이어: 지금 그리는 레이어는 연결마다 따로다. 고른 레이어가 사라지면 맨 위 레이어로.
   const { layers } = useLayers(doc)
@@ -192,11 +203,11 @@ export function NotePage({ initial }: Props) {
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
-        if (e.shiftKey) history.redo()
-        else history.undo()
+        if (e.shiftKey) redo()
+        else undo()
       } else if (mod && e.key.toLowerCase() === 'y') {
         e.preventDefault()
-        history.redo()
+        redo()
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && edit.selected.length) {
         e.preventDefault()
         edit.deleteSelected()
@@ -204,7 +215,7 @@ export function NotePage({ initial }: Props) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [history, edit])
+  }, [undo, redo, edit])
 
   const rename = useCallback(
     async (name: string) => {
@@ -324,13 +335,13 @@ export function NotePage({ initial }: Props) {
           tool={tool}
           ink={ink}
           widthLevel={widthLevel}
-          canUndo={history.canUndo}
-          canRedo={history.canRedo}
+          canUndo={history.canUndo || curvePoints > 0}
+          canRedo={history.canRedo && curvePoints === 0}
           onTool={setTool}
           onInk={setInk}
           onWidth={setWidthLevel}
-          onUndo={history.undo}
-          onRedo={history.redo}
+          onUndo={undo}
+          onRedo={redo}
           font={font}
           onFont={chooseFont}
           showFont={tool === 'text' || editingBoxId !== null}
@@ -362,6 +373,8 @@ export function NotePage({ initial }: Props) {
           widthLevel={widthLevel}
           brush={brush}
           shape={shape}
+          onCurveChange={setCurvePoints}
+          curveControl={curveControl}
           pressureOn={pressureOn}
           layer={currentLayer}
           hiddenLayers={hiddenLayers}
