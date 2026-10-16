@@ -135,3 +135,13 @@ export function boundsOfPoints(pts: [number, number][]): Rect {
   const y = Math.min(...ys)
   return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
 }
+
+/** 돌리기 커서(둥근 화살표). 쓸 수 없는 브라우저에서는 grab */
+const ROTATE_CURSOR =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><path d='M19 12a7 7 0 1 1-2.05-4.95' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/><path d='M19 12a7 7 0 1 1-2.05-4.95' fill='none' stroke='%231F2128' stroke-width='2' stroke-linecap='round'/><path d='M14 4h5v5' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/><path d='M14 4h5v5' fill='none' stroke='%231F2128' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>\") 12 12, grab"
+
+/** 손잡이에 올렸을 때 커서. 모서리는 대각선 크기 조절, 위쪽 원은 회전. */
+export function cursorForHandle(h: Handle): string {
+  if (h === 'rotate') return ROTATE_CURSOR
+  return h === 'nw' || h === 'se' ? 'nwse-resize' : 'nesw-resize'
+}

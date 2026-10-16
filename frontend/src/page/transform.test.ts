@@ -2,6 +2,7 @@ import * as Y from 'yjs'
 import { addStroke, createPageDoc, readStrokes, transformStrokes, type Stroke } from './doc'
 import {
   apply,
+  cursorForHandle,
   handleAt,
   keepInPage,
   matrixScale,
@@ -111,5 +112,15 @@ describe('획에 반영', () => {
     const b = new Y.Doc()
     Y.applyUpdate(b, Y.encodeStateAsUpdate(a))
     close(readStrokes(b)[0].points, [110, 120, 0.5, 210, 120, 0.5])
+  })
+})
+
+describe('손잡이 커서', () => {
+  test('모서리는 대각선 크기 조절, 위쪽 원은 회전 커서', () => {
+    expect(cursorForHandle('nw')).toBe('nwse-resize')
+    expect(cursorForHandle('se')).toBe('nwse-resize')
+    expect(cursorForHandle('ne')).toBe('nesw-resize')
+    expect(cursorForHandle('sw')).toBe('nesw-resize')
+    expect(cursorForHandle('rotate')).toMatch(/grab$/)
   })
 })

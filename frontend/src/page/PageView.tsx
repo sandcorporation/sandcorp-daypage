@@ -14,6 +14,8 @@ export type PointerTool = {
   /** e는 스크롤로 다시 계산할 때 없다 */
   move?: (p: Point, e?: PointerEvent<HTMLDivElement>) => void
   up?: (p: Point, e: PointerEvent<HTMLDivElement>) => void
+  /** 누르지 않고 올려만 둔 위치에서 보일 커서(손잡이 등). null이면 도구 기본 커서. p가 null이면 지면을 벗어났다. */
+  hover?: (p: Point | null) => string | null
 }
 
 type Props = {
@@ -81,6 +83,8 @@ export function PageView({
   const liveCanvasRef = useRef<HTMLCanvasElement>(null)
   const [scale, setScale] = useState(0.5)
   const drawing = useRef<Stroke | null>(null)
+  // 손잡이 등에 올렸을 때의 커서(어느 도구가 정했는지와 함께)
+  const [hover, setHover] = useState<{ tool?: PointerTool; cursor: string | null }>({ cursor: null })
   // 만년필: 앞 점의 위치·시각·필압(속도로 필압을 만들 때 쓴다)
   const lastSample = useRef<{ x: number; y: number; t: number; p: number } | null>(null)
   // 지금 처리 중인 포인터. 두 번째 손가락·손바닥이 한 획에 섞이지 않게 한다.
@@ -266,7 +270,15 @@ export function PageView({
       paintLive()
       return
     }
-    pointerTool?.move?.(p, e)
+    if (activePointer.current === null) updateHover(p)
+    else pointerTool?.move?.(p, e)
+  }
+
+  /** 올려 둔 위치의 커서를 도구에게 묻는다. 바뀔 때만 다시 그린다. */
+  function updateHover(p: Point | null) {
+    if (!pointerTool?.hover) return
+    const cursor = pointerTool.hover(p)
+    if (hover.tool !== pointerTool || hover.cursor !== cursor) setHover({ tool: pointerTool, cursor })
   }
 
   function onUp(e: PointerEvent<HTMLDivElement>) {
@@ -298,8 +310,11 @@ export function PageView({
   }, [scale, pointerTool, onPointerMove])
 
   const width = PAGE_WIDTH * scale
+  // 도구가 바뀌면 이전 도구의 커서는 버린다(같은 도구일 때만 쓴다)
+  const hoverCursor = hover.tool === pointerTool ? hover.cursor : null
   const height = PAGE_HEIGHT * scale
-  const cursor = readOnly ? 'default' : tool === 'text' ? 'text' : tool === 'select' ? 'default' : 'crosshair'
+  const cursor =
+    hoverCursor ?? (readOnly ? 'default' : tool === 'text' ? 'text' : tool === 'select' ? 'default' : 'crosshair')
 
   return (
     <div ref={viewportRef} className="page-viewport">
@@ -314,6 +329,7 @@ export function PageView({
         onPointerLeave={() => {
           lastClient.current = null
           onPointerMove?.(null)
+          if (activePointer.current === null) updateHover(null)
         }}
       >
         <div

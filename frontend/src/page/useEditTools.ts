@@ -8,6 +8,7 @@ import type { PointerTool } from './PageView'
 import type { ToolKind } from './tools'
 import {
   anchorOf,
+  cursorForHandle,
   andThen,
   boundsOfPoints,
   handleAt,
@@ -20,6 +21,7 @@ import {
   scaleFactor,
   transformedCorners,
   translate,
+  type Handle,
   type Matrix,
 } from './transform'
 
@@ -38,6 +40,13 @@ type Drag =
   | { kind: 'band'; start: Point; end: Point }
   | { kind: 'erase'; last: Point }
 
+/** 끄는 모서리가 어느 손잡이인지 */
+function cornerOf(r: Rect, p: Point): Handle {
+  const left = p.x <= r.x + r.width / 2
+  const top = p.y <= r.y + r.height / 2
+  return top ? (left ? 'nw' : 'ne') : left ? 'sw' : 'se'
+}
+
 /** 변환한 묶음이 페이지 밖으로 나가면 안으로 밀어 넣는다 */
 function fitted(bounds: Rect, m: Matrix): Matrix {
   const { dx, dy } = keepInPage(boundsOfPoints(transformedCorners(bounds, m)))
@@ -55,6 +64,8 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
   // 끄는 동안에는 문서에 쓰지 않고 화면에서만 바꿔 보인다. 놓을 때 한 번만 저장한다.
   const [preview, setPreview] = useState<{ ids: string[]; m: Matrix } | null>(null)
   const drag = useRef<Drag | null>(null)
+  // 마우스를 올려 둔 손잡이(강조해 그린다)
+  const hovered = useRef<Handle | null>(null)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
 
   // 도구를 바꾸면 선택을 푼다.
@@ -104,6 +115,20 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
     }
     if (tool === 'select') {
       return {
+        hover(p) {
+          // 손잡이에 올리면 크기·회전 커서, 고른 묶음이나 획 위면 옮기기 커서
+          const box = p && selected.length ? selectionBox(selected) : null
+          const h = box && p ? handleAt(box, p, HANDLE_HIT / scale, ROTATE_OFFSET / scale) : null
+          if (hovered.current !== h) {
+            hovered.current = h
+            bump()
+          }
+          if (!p) return null
+          if (h) return cursorForHandle(h)
+          const inBox = box && p.x >= box.x && p.x <= box.x + box.width && p.y >= box.y && p.y <= box.y + box.height
+          if (inBox || topStrokeAt(editable(), p, PICK_TOLERANCE)) return 'move'
+          return null
+        },
         down(p) {
           // 고른 묶음의 손잡이: 모서리는 크기, 위쪽 원은 회전
           const box = selected.length ? selectionBox(selected) : null
@@ -212,13 +237,20 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
       ctx.moveTo(topMid[0], topMid[1])
       ctx.lineTo(rot[0], rot[1])
       ctx.stroke()
-      ctx.fillStyle = '#FFFFFF'
-      for (const [x, y] of corners) {
-        ctx.fillRect(x - hs / 2, y - hs / 2, hs, hs)
-        ctx.strokeRect(x - hs / 2, y - hs / 2, hs, hs)
-      }
+      // 올려 두었거나 끄는 중인 손잡이는 파랗게 채우고 조금 크게
+      const active: Handle | null =
+        d?.kind === 'rotate' ? 'rotate' : d?.kind === 'scale' ? cornerOf(d.bounds, d.corner) : hovered.current
+      const names: Handle[] = ['nw', 'ne', 'se', 'sw']
+      corners.forEach(([x, y], i) => {
+        const on = active === names[i]
+        const size = on ? hs * 1.4 : hs
+        ctx.fillStyle = on ? '#2A47B0' : '#FFFFFF'
+        ctx.fillRect(x - size / 2, y - size / 2, size, size)
+        ctx.strokeRect(x - size / 2, y - size / 2, size, size)
+      })
       ctx.beginPath()
-      ctx.arc(rot[0], rot[1], hs / 2 + 1 / scale, 0, Math.PI * 2)
+      ctx.arc(rot[0], rot[1], (active === 'rotate' ? hs * 0.75 : hs / 2) + 1 / scale, 0, Math.PI * 2)
+      ctx.fillStyle = active === 'rotate' ? '#2A47B0' : '#FFFFFF'
       ctx.fill()
       ctx.stroke()
       ctx.restore()
