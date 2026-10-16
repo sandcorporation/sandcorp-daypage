@@ -50,6 +50,8 @@ export function Toolbar(props: Props) {
   const { brush, onBrush, pressure, onPressure, noteColors, onAddColor, onRemoveColor, layerPanel, shape, onShape } = props
   const [shapeOpen, setShapeOpen] = useState(false)
   const shapeRef = useRef<HTMLButtonElement>(null)
+  const [widthOpen, setWidthOpen] = useState(false)
+  const widthRef = useRef<HTMLButtonElement>(null)
   const shapeInfo = SHAPES.find((s) => s.id === shape) ?? SHAPES[0]
   const [layersOpen, setLayersOpen] = useState(false)
   const layersRef = useRef<HTMLButtonElement>(null)
@@ -145,20 +147,60 @@ export function Toolbar(props: Props) {
       <div className="tool-sep" />
       <InkControl ink={ink} onInk={onInk} noteColors={noteColors} onAddColor={onAddColor} onRemoveColor={onRemoveColor} />
       <div className="tool-sep" />
-      {WIDTH_NAMES.map((name, i) => (
+      {/* 굵기: 넓은 화면에서는 셋을 늘어놓고, 휴대폰에서는 지금 굵기 버튼 하나로 접는다(CSS로 고른다) */}
+      <div className="width-inline">
+        {WIDTH_NAMES.map((name, i) => (
+          <button
+            key={name}
+            type="button"
+            className="swatch-btn"
+            aria-label={`굵기 ${name}`}
+            title={`굵기 ${name}`}
+            aria-pressed={widthLevel === i}
+            style={{ color: 'var(--ink-soft)' }}
+            onClick={() => onWidth(i as WidthLevel)}
+          >
+            <span className="width-dot" style={{ width: 6 + i * 6, height: 6 + i * 6 }} />
+          </button>
+        ))}
+      </div>
+      <div className="tool-anchor width-fold">
         <button
-          key={name}
+          ref={widthRef}
           type="button"
           className="swatch-btn"
-          aria-label={`굵기 ${name}`}
-          title={`굵기 ${name}`}
-          aria-pressed={widthLevel === i}
+          aria-label={`굵기: ${WIDTH_NAMES[widthLevel]}`}
+          title={`굵기: ${WIDTH_NAMES[widthLevel]}`}
+          aria-haspopup="dialog"
+          aria-expanded={widthOpen}
           style={{ color: 'var(--ink-soft)' }}
-          onClick={() => onWidth(i as WidthLevel)}
+          onClick={() => setWidthOpen((v) => !v)}
         >
-          <span className="width-dot" style={{ width: 6 + i * 6, height: 6 + i * 6 }} />
+          <span className="width-dot" style={{ width: 6 + widthLevel * 6, height: 6 + widthLevel * 6 }} />
+          <span className="tool-corner" aria-hidden="true" />
         </button>
-      ))}
+        {widthOpen && (
+          <ToolPopover title="굵기" anchor={widthRef} onClose={() => setWidthOpen(false)}>
+            <div className="width-options">
+              {WIDTH_NAMES.map((name, i) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="width-option"
+                  aria-pressed={widthLevel === i}
+                  onClick={() => {
+                    onWidth(i as WidthLevel)
+                    setWidthOpen(false)
+                  }}
+                >
+                  <span className="width-dot" style={{ width: 6 + i * 6, height: 6 + i * 6 }} />
+                  {name}
+                </button>
+              ))}
+            </div>
+          </ToolPopover>
+        )}
+      </div>
       <div className="tool-sep" />
       {layerPanel && (
         <div className="tool-anchor">

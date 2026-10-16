@@ -1391,3 +1391,103 @@
     display: none;
   }
 }
+
+/* 굵기: 넓은 화면은 셋을 늘어놓고, 휴대폰은 지금 굵기 버튼 하나로 접는다 */
+.width-inline {
+  display: contents;
+}
+.width-fold {
+  display: none;
+}
+.width-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+}
+.width-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.width-option .width-dot {
+  color: var(--ink-soft);
+}
+.width-option[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+@media (max-width: 720px) {
+  .width-inline {
+    display: none;
+  }
+  .width-fold {
+    display: flex;
+    flex: 0 0 auto;
+  }
+
+  /* 머리글을 한 줄로: 로고와 날짜를 빼고(늘 오늘이다) 이름·남은 시간·버튼만 작게 */
+  .note-header {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 6px 10px;
+  }
+  .note-header .icon-link {
+    display: none;
+  }
+  .note-header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .note-title {
+    width: 100%;
+  }
+  .note-name {
+    font-size: 15px;
+  }
+  .note-sub {
+    margin: 0;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .note-sub-date {
+    display: none;
+  }
+  .note-header-right {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .note-header-right .avatar:nth-child(n + 3) {
+    display: none;
+  }
+  .note-header .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  .note-header-right .btn {
+    min-height: 34px;
+    height: 34px;
+    min-width: 34px;
+    padding: 0 8px;
+  }
+  .note-header .member-badge {
+    font-size: 12px;
+    min-height: 30px;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+}

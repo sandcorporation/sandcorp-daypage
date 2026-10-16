@@ -42,7 +42,8 @@ export function NoteHeader({ note, pageDate, clockOffset, peers, onRename, onSha
         <div className="note-title">
           <NoteName name={note.name} editable={note.isOwner} onRename={onRename} />
           <p className="note-sub">
-            {formatPageDate(pageDate)} 페이지 · <Countdown nextMidnight={note.nextMidnight} clockOffset={clockOffset} />
+            <span className="note-sub-date">{formatPageDate(pageDate)} 페이지 · </span>
+            <Countdown nextMidnight={note.nextMidnight} clockOffset={clockOffset} />
           </p>
         </div>
       </div>
