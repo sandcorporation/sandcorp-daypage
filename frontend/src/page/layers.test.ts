@@ -1,6 +1,7 @@
 import * as Y from 'yjs'
 import { addStroke, createPageDoc, readStrokes, type Stroke } from './doc'
-import { addLayer, BASE_LAYER_ID, layerOf, layerPlan, MAX_LAYERS, readLayers } from './layers'
+import { addLayer, BASE_LAYER_ID, layerOf, layerPlan, MAX_LAYERS, moveLayer, readLayers, renameLayer, setLayerOpacity } from './layers'
+import { createUndoManager } from './undo'
 
 function stroke(partial: Partial<Stroke>): Stroke {
   return { id: 's', tool: 'pen', color: '#000000', width: 6, points: [0, 0, 0.5], author: 'me', createdAt: 0, ...partial }
@@ -87,5 +88,71 @@ describe('그리는 순서', () => {
       [BASE_LAYER_ID, ['base-hl', 'base-pen']],
       [top, ['top-hl', 'top-pen']],
     ])
+  })
+})
+
+describe('이름·순서·불투명도', () => {
+  test('이름을 바꾸면 다른 문서에도 반영된다. 빈 이름은 무시하고 길면 자른다', () => {
+    const a = createPageDoc('2026-10-16')
+    renameLayer(a, BASE_LAYER_ID, '  밑그림  ')
+    renameLayer(a, BASE_LAYER_ID, '   ')
+    const b = new Y.Doc()
+    sync(a, b)
+    expect(readLayers(b)[0].name).toBe('밑그림')
+    renameLayer(a, BASE_LAYER_ID, '가'.repeat(40))
+    expect(readLayers(a)[0].name).toHaveLength(20)
+  })
+
+  test('순서를 바꾸면 위에 있는 레이어가 앞에 그려진다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const b = addLayer(doc)!
+    const c = addLayer(doc)!
+    moveLayer(doc, c, 0) // 맨 아래로
+    expect(readLayers(doc).map((l) => l.id)).toEqual([c, BASE_LAYER_ID, b])
+    moveLayer(doc, BASE_LAYER_ID, 2) // 맨 위로
+    expect(readLayers(doc).map((l) => l.id)).toEqual([c, b, BASE_LAYER_ID])
+  })
+
+  test('두 사람이 동시에 순서를 바꿔도 합친 결과가 같다', () => {
+    const a = createPageDoc('2026-10-16')
+    const l2 = addLayer(a)!
+    const l3 = addLayer(a)!
+    const b = new Y.Doc()
+    sync(a, b)
+    moveLayer(a, l3, 0)
+    moveLayer(b, BASE_LAYER_ID, 2)
+    sync(a, b)
+    const ids = readLayers(a).map((l) => l.id)
+    expect(readLayers(b).map((l) => l.id)).toEqual(ids)
+    expect(new Set(ids)).toEqual(new Set([BASE_LAYER_ID, l2, l3]))
+  })
+
+  test('불투명도는 10%~100% 사이로 저장된다', () => {
+    const doc = createPageDoc('2026-10-16')
+    setLayerOpacity(doc, BASE_LAYER_ID, 0.4)
+    expect(readLayers(doc)[0].opacity).toBe(0.4)
+    setLayerOpacity(doc, BASE_LAYER_ID, 0)
+    expect(readLayers(doc)[0].opacity).toBe(0.1)
+  })
+
+  test('내 화면에서 숨긴 레이어는 그리지 않고, 숨기지 않으면(기록·이미지 저장) 모두 그린다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    const strokes = [stroke({ id: 'a' }), stroke({ id: 'b', layer: top })]
+    expect(layerPlan(strokes, readLayers(doc), new Set([top])).map((p) => p.layer.id)).toEqual([BASE_LAYER_ID])
+    expect(layerPlan(strokes, readLayers(doc)).map((p) => p.layer.id)).toEqual([BASE_LAYER_ID, top])
+  })
+
+  test('레이어 바꾸기는 내 작업으로 되돌릴 수 있다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const origin = { local: true }
+    const undo = createUndoManager(doc, origin)
+    renameLayer(doc, BASE_LAYER_ID, '밑그림', origin)
+    undo.stopCapturing()
+    setLayerOpacity(doc, BASE_LAYER_ID, 0.5, origin)
+    undo.undo()
+    expect(readLayers(doc)[0]).toMatchObject({ name: '밑그림', opacity: 1 })
+    undo.undo()
+    expect(readLayers(doc)[0].name).toBe('레이어 1')
   })
 })

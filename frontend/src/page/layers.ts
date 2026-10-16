@@ -83,6 +83,40 @@ export function addLayer(doc: Y.Doc, origin?: unknown): string | null {
   return id
 }
 
+/** 레이어 하나의 값을 바꾼다(기본 레이어만 있던 페이지면 먼저 기본 레이어를 쓴다). */
+function updateLayer(doc: Y.Doc, id: string, fields: Partial<Omit<Layer, 'id'>>, origin?: unknown): void {
+  doc.transact(() => {
+    const m = ensureLayers(doc).get(id)
+    if (!m) return
+    for (const [k, v] of Object.entries(fields)) m.set(k, v)
+  }, origin)
+}
+
+export const MAX_LAYER_NAME = 20
+
+export function renameLayer(doc: Y.Doc, id: string, name: string, origin?: unknown): void {
+  const clean = name.trim().slice(0, MAX_LAYER_NAME)
+  if (!clean) return
+  updateLayer(doc, id, { name: clean }, origin)
+}
+
+export function setLayerOpacity(doc: Y.Doc, id: string, opacity: number, origin?: unknown): void {
+  updateLayer(doc, id, { opacity: Math.round(Math.min(1, Math.max(0.1, opacity)) * 100) / 100 }, origin)
+}
+
+/**
+ * 레이어를 아래에서 index번째 자리로 옮긴다. 옮기는 레이어의 순서 키만 이웃 사이 값으로 바꾸므로
+ * 두 사람이 동시에 다른 레이어를 옮겨도 합친 결과가 같다.
+ */
+export function moveLayer(doc: Y.Doc, id: string, index: number, origin?: unknown): void {
+  const others = readLayers(doc).filter((l) => l.id !== id)
+  const i = Math.min(Math.max(0, index), others.length)
+  const below = others[i - 1]?.order
+  const above = others[i]?.order
+  const order = below === undefined ? above! - 1 : above === undefined ? below + 1 : (below + above) / 2
+  updateLayer(doc, id, { order }, origin)
+}
+
 /** 획이 속한 레이어. 없거나 없는 레이어를 가리키면 기본 레이어(없으면 맨 아래 레이어). */
 export function layerOf(stroke: Stroke, layers: Layer[]): string {
   if (stroke.layer && layers.some((l) => l.id === stroke.layer)) return stroke.layer

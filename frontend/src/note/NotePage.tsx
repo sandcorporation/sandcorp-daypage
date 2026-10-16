@@ -8,6 +8,7 @@ import { createTextBoxAt } from '../page/textbox'
 import { updateTextBox } from '../page/doc'
 import { fontOf } from '../page/fonts'
 import { LayerPanel, useLayers } from '../page/LayerPanel'
+import { loadHiddenLayers, saveHiddenLayers } from './hiddenLayers'
 import { Toolbar } from '../page/Toolbar'
 import { INKS, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
@@ -69,7 +70,19 @@ export function NotePage({ initial }: Props) {
   const { layers } = useLayers(doc)
   const [chosenLayer, setChosenLayer] = useState<string | null>(null)
   const currentLayer = layers.find((l) => l.id === chosenLayer)?.id ?? layers[layers.length - 1].id
-  const [hiddenLayers] = useState<ReadonlySet<string>>(() => new Set())
+  // 내 화면에서만 숨긴 레이어(이 브라우저에 노트·날짜별로 기억)
+  const [hiddenState, setHiddenState] = useState(() => ({ date: note.today, set: loadHiddenLayers(note.id, note.today) }))
+  const hiddenLayers = hiddenState.date === note.today ? hiddenState.set : loadHiddenLayers(note.id, note.today)
+  const toggleHidden = useCallback(
+    (id: string) => {
+      const next = new Set(hiddenLayers)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      saveHiddenLayers(note.id, note.today, next)
+      setHiddenState({ date: note.today, set: next })
+    },
+    [hiddenLayers, note.id, note.today],
+  )
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
   const reconnectRef = useRef<() => void>(() => {})
@@ -303,7 +316,7 @@ export function NotePage({ initial }: Props) {
               current={currentLayer}
               onCurrent={setChosenLayer}
               hidden={hiddenLayers}
-              onToggleHidden={() => {}}
+              onToggleHidden={toggleHidden}
             />
           }
         />
