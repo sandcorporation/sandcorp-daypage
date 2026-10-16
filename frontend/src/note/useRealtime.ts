@@ -21,6 +21,8 @@ export const CLOSE = {
 export const MESSAGE_PAGE_ROLLED = 100
 /** 수용 인원이 차 대기열에 섰다: {type: 'queued', position} (consumers.py의 MESSAGE_QUEUED) */
 export const MESSAGE_QUEUED = 101
+/** 노트 색이 바뀜: {type: 'note_colors', colors} (consumers.py의 MESSAGE_NOTE_COLORS) */
+export const MESSAGE_NOTE_COLORS = 102
 
 /** 다시 연결해도 소용없는 이유. full·away는 사람이 다시 시도할 때까지 접속하지 않는다. */
 export type FatalReason = 'unauthorized' | 'notFound' | 'crowded' | 'full' | 'away'
@@ -41,6 +43,8 @@ type Options = {
   onNotToday: () => void
   /** 다시 연결해도 소용없는 이유로 닫혔을 때 */
   onFatal: (reason: FatalReason) => void
+  /** 노트 색이 바뀌었을 때(누가 더하거나 뺐다) */
+  onNoteColors?: (colors: string[]) => void
 }
 
 export function wsBaseUrl(noteId: string): string {
@@ -48,7 +52,7 @@ export function wsBaseUrl(noteId: string): string {
   return `${proto}//${window.location.host}/ws/notes/${noteId}/pages`
 }
 
-export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options) {
+export function useRealtime({ noteId, date, doc, onNotToday, onFatal, onNoteColors }: Options) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [synced, setSynced] = useState(false)
@@ -74,6 +78,10 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal }: Options)
     p.messageHandlers[MESSAGE_QUEUED] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; position: number }
       if (msg.type === 'queued') setQueuePosition(msg.position)
+    }
+    p.messageHandlers[MESSAGE_NOTE_COLORS] = (_encoder, decoder) => {
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; colors: string[] }
+      if (msg.type === 'note_colors') onNoteColors?.(msg.colors)
     }
     setProvider(p)
     setSynced(false)

@@ -116,3 +116,11 @@ describe('노트 색', () => {
     expect(screen.getByText(/8개까지/)).toBeInTheDocument()
   })
 })
+
+test('색 만들기 창에서 노트 색을 뺄 수 있다', async () => {
+  const onRemoveColor = vi.fn()
+  setup({ noteColors: ['#16794f'], onRemoveColor })
+  await userEvent.click(screen.getByRole('button', { name: '색 추가' }))
+  await userEvent.click(screen.getByRole('button', { name: '노트 색 #16794f 빼기' }))
+  expect(onRemoveColor).toHaveBeenCalledWith('#16794f')
+})

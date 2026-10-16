@@ -87,3 +87,46 @@ def test_colors_stay_after_midnight(monkeypatch):
     later = dt.datetime(2030, 1, 2, 9, 0, tzinfo=clock.KST)
     monkeypatch.setattr(clock, "now", lambda: later)
     assert colors(owner, note_id) == ["#123456"]
+
+
+def remove(client, note_id, color):
+    return client.delete(f"/api/notes/{note_id}/colors/{color.lstrip('#')}")
+
+
+def test_member_removes_color():
+    owner = login_as(1)
+    note_id = create_note(owner)
+    add(owner, note_id, "#111111")
+    add(owner, note_id, "#222222")
+    guest = login_as(2)
+    guest.get(f"/api/notes/{note_id}")
+    res = remove(guest, note_id, "#111111")
+    assert res.status_code == 200
+    assert res.json()["colors"] == ["#222222"]
+    assert colors(owner, note_id) == ["#222222"]
+
+
+def test_removing_a_missing_color_changes_nothing():
+    owner = login_as(1)
+    note_id = create_note(owner)
+    add(owner, note_id, "#111111")
+    res = remove(owner, note_id, "#ABCDEF")
+    assert res.status_code == 200
+    assert res.json()["colors"] == ["#111111"]
+
+
+def test_non_member_cannot_remove():
+    owner = login_as(1)
+    note_id = create_note(owner)
+    add(owner, note_id, "#111111")
+    assert remove(login_as(2), note_id, "#111111").status_code == 403
+    assert colors(owner, note_id) == ["#111111"]
+
+
+def test_a_freed_slot_can_be_used_again():
+    owner = login_as(1)
+    note_id = create_note(owner)
+    for i in range(8):
+        add(owner, note_id, f"#00000{i}")
+    remove(owner, note_id, "#000000")
+    assert add(owner, note_id, "#ffffff").status_code == 200

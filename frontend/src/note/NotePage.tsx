@@ -8,7 +8,7 @@ import { createTextBoxAt } from '../page/textbox'
 import { updateTextBox } from '../page/doc'
 import { fontOf } from '../page/fonts'
 import { Toolbar } from '../page/Toolbar'
-import type { Brush, ToolKind, WidthLevel } from '../page/tools'
+import { INKS, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
 import { useEditTools } from '../page/useEditTools'
 import { isTypingTarget, useUndo } from '../page/useUndo'
 import { useNavigate } from 'react-router'
@@ -39,11 +39,14 @@ export function NotePage({ initial }: Props) {
   // 도구 상태. 마지막으로 고른 값을 이 브라우저에 기억해 새로고침·재방문 때 되살린다.
   const [prefs] = useState(loadToolPrefs)
   const [tool, setTool] = useState<ToolKind>(prefs.tool)
-  const [ink, setInk] = useState<string>(prefs.ink)
+  const [chosenInk, setInk] = useState<string>(prefs.ink)
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(prefs.widthLevel)
   const [font, setFont] = useState<string>(prefs.font)
   const [brush, setBrush] = useState<Brush>(prefs.brush)
   const [pressureOn, setPressureOn] = useState(prefs.pressure)
+  // 고른 노트 색이 노트에서 빠졌으면 기본 잉크로 돌아간다.
+  const ink =
+    INKS.some((i) => i.color === chosenInk) || note.colors.includes(chosenInk.toLowerCase()) ? chosenInk : INKS[0].color
   useEffect(
     () => saveToolPrefs({ tool, ink, widthLevel, font, brush, pressure: pressureOn }),
     [tool, ink, widthLevel, font, brush, pressureOn],
@@ -79,12 +82,14 @@ export function NotePage({ initial }: Props) {
   }, [note.id, note.today])
   useEffect(() => () => window.clearTimeout(retryTimer.current), [])
 
+  const setNoteColors = useCallback((colors: string[]) => setNote((n) => ({ ...n, colors })), [])
   const { provider, status, synced, queuePosition, reconnect } = useRealtime({
     noteId: note.id,
     date: note.today,
     doc,
     onNotToday: refreshToday,
     onFatal: setFatal,
+    onNoteColors: setNoteColors,
   })
   reconnectRef.current = reconnect
   const rejoin = useCallback(() => {
@@ -192,6 +197,18 @@ export function NotePage({ initial }: Props) {
     [note.id, show],
   )
 
+  const removeColor = useCallback(
+    async (color: string) => {
+      try {
+        const res = await api<{ colors: string[] }>(`/api/notes/${note.id}/colors/${color.slice(1)}`, { method: 'DELETE' })
+        setNote((n) => ({ ...n, colors: res.colors }))
+      } catch (e) {
+        show(e instanceof ApiError ? e.message : '색을 빼지 못했어요')
+      }
+    },
+    [note.id, show],
+  )
+
   const deleteNote = useCallback(async () => {
     setDeleting(true)
     try {
@@ -271,6 +288,7 @@ export function NotePage({ initial }: Props) {
           onPressure={setPressureOn}
           noteColors={note.colors}
           onAddColor={addColor}
+          onRemoveColor={(c) => void removeColor(c)}
         />
         <PageView
           doc={doc}

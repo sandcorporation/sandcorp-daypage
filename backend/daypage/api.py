@@ -194,7 +194,35 @@ def add_note_color(request, note_id: str, body: AddColorIn):
                 raise ApiError(400, "colors_full", f"노트 색은 {MAX_NOTE_COLORS}개까지 둘 수 있어요.")
             note.colors = [*note.colors, color]
             note.save(update_fields=["colors"])
+            announce_note_colors(note.id, note.colors)
     return {"colors": note.colors}
+
+
+@api.delete("/notes/{note_id}/colors/{color}")
+def remove_note_color(request, note_id: str, color: str):
+    """노트 색 빼기. 참여자라면 누구나. 그 색으로 이미 그린 획은 바뀌지 않는다."""
+    member_note(request, note_id)
+    color = clean_color(f"#{color}")
+    with transaction.atomic():
+        note = Note.objects.select_for_update().get(pk=note_id)
+        if color in note.colors:
+            note.colors = [c for c in note.colors if c != color]
+            note.save(update_fields=["colors"])
+            announce_note_colors(note.id, note.colors)
+    return {"colors": note.colors}
+
+
+def announce_note_colors(note_id: str, colors: list[str]) -> None:
+    """접속해 있는 사람들의 도구 막대를 바로 바꾸게 알린다(저장이 끝난 뒤)."""
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    from .consumers import note_group
+
+    def send() -> None:
+        async_to_sync(get_channel_layer().group_send)(note_group(note_id), {"type": "note.colors", "colors": colors})
+
+    transaction.on_commit(send)
 
 
 @api.get("/notes/{note_id}/pages")
