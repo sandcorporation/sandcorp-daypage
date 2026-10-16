@@ -1,6 +1,6 @@
 import * as Y from 'yjs'
 import { createPageDoc, readTextBoxes, textBoxContent } from './doc'
-import { createTextBoxAt, removeIfEmpty, MIN_BOX_WIDTH, clampBoxWidth, nudgeBox, fitBoxInPage } from './textbox'
+import { createTextBoxAt, removeIfEmpty, removeLeftoverEmptyBoxes, MIN_BOX_WIDTH, clampBoxWidth, nudgeBox, fitBoxInPage } from './textbox'
 
 test('글 상자 위치는 32px 칸에 맞춰진다', () => {
   const doc = createPageDoc('2026-10-15')
@@ -84,5 +84,25 @@ describe('장 아래로 넘친 상자', () => {
 
   test('장보다 큰 상자는 맨 위에 붙인다', () => {
     expect(fitBoxInPage(500, 3000)).toBe(0)
+  })
+})
+
+describe('들어올 때 남은 빈 상자 정리', () => {
+  function filled(doc: Y.Doc, author: string) {
+    const id = createTextBoxAt(doc, { x: 0, y: 200 }, { color: '#000', author })
+    const p = new Y.XmlElement('paragraph')
+    p.insert(0, [new Y.XmlText('글')])
+    textBoxContent(doc, id)!.insert(0, [p])
+    return id
+  }
+
+  test('내가 만든 빈 상자 중 아무도 쓰지 않는 것만 지운다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const mine = createTextBoxAt(doc, { x: 0, y: 0 }, { color: '#000', author: '나' })
+    const mineEditing = createTextBoxAt(doc, { x: 0, y: 64 }, { color: '#000', author: '나' })
+    const theirs = createTextBoxAt(doc, { x: 0, y: 128 }, { color: '#000', author: '남' })
+    const mineFilled = filled(doc, '나')
+    expect(removeLeftoverEmptyBoxes(doc, '나', new Set([mineEditing]))).toEqual([mine])
+    expect(readTextBoxes(doc).map((b) => b.id).sort()).toEqual([mineEditing, theirs, mineFilled].sort())
   })
 })

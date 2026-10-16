@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast'
 import * as Y from 'yjs'
 import { PageView, type PointerTool } from '../page/PageView'
 import { TextLayer } from '../page/TextLayer'
-import { createTextBoxAt } from '../page/textbox'
+import { createTextBoxAt, removeLeftoverEmptyBoxes } from '../page/textbox'
 import { updateTextBox } from '../page/doc'
 import { fontOf } from '../page/fonts'
 import { LayerPanel } from '../page/LayerPanel'
@@ -136,6 +136,16 @@ export function NotePage({ initial }: Props) {
   }, [reconnect])
   const presence = usePresence(provider, note.me)
   const { setEditing } = presence
+
+  // 들어와 동기화가 끝나면, 지난번에 비워 둔 채 나간 내 빈 상자를 정리한다.
+  // 다른 탭에서 쓰고 있는 상자는 남기도록, 접속자 정보가 들어올 틈을 둔다.
+  const editorsRef = useRef(presence.editors)
+  editorsRef.current = presence.editors
+  useEffect(() => {
+    if (!synced) return
+    const timer = window.setTimeout(() => removeLeftoverEmptyBoxes(doc, note.me.nickname, new Set(editorsRef.current.keys())), 1500)
+    return () => window.clearTimeout(timer)
+  }, [synced, doc, note.me.nickname])
 
   // 서버 알림을 놓쳐도 자정이 지나면 스스로 오늘 장을 다시 확인한다.
   useEffect(() => {

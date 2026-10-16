@@ -1,9 +1,24 @@
 import { useEditorState, type Editor } from '@tiptap/react'
-import { useState, type PointerEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { TEXT_COLORS, TEXT_SIZES } from './editorExtensions'
 
 // 누르는 동안 편집기의 선택·포커스를 지킨다.
 const keep = (e: PointerEvent) => e.preventDefault()
+
+const EDGE = 8
+
+/** 요소가 보일 수 있는 가로 범위: 화면과, 넘침을 잘라 내는 조상들이 겹친 영역 */
+function visibleBounds(el: HTMLElement) {
+  let left = EDGE
+  let right = window.innerWidth - EDGE
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (getComputedStyle(p).overflowX === 'visible') continue
+    const r = p.getBoundingClientRect()
+    left = Math.max(left, r.left + EDGE)
+    right = Math.min(right, r.right - EDGE)
+  }
+  return { left, right }
+}
 
 const MARKS = [
   { mark: 'bold', label: '굵게', short: 'Ctrl+B', glyph: 'B', style: { fontWeight: 800 } },
@@ -26,6 +41,17 @@ type Props = {
 /** 편집 중인 글 상자 위에 뜨는 서식 막대. 장 레이어의 축소를 거꾸로 키워 화면에서 일정한 크기로 보인다. */
 export function FormatBar({ editor, scale, below = false, alignRight = false, noteColors = [] }: Props) {
   const [colorsOpen, setColorsOpen] = useState(false)
+  const colorsRef = useRef<HTMLSpanElement>(null)
+  // 펼친 색 줄이 보이는 범위 밖으로 나가면 안쪽으로 민다(넓으면 왼쪽 끝을 맞춘다).
+  useLayoutEffect(() => {
+    const el = colorsRef.current
+    if (!colorsOpen || !el) return
+    el.style.translate = ''
+    const r = el.getBoundingClientRect()
+    const b = visibleBounds(el)
+    const dx = r.right > b.right ? Math.max(b.right - r.right, b.left - r.left) : r.left < b.left ? b.left - r.left : 0
+    if (dx) el.style.translate = `${dx}px 0`
+  }, [colorsOpen, noteColors.length])
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -92,7 +118,7 @@ export function FormatBar({ editor, scale, below = false, alignRight = false, no
           />
         </button>
         {colorsOpen && (
-          <span className="format-colors" role="group" aria-label="글자 색">
+          <span ref={colorsRef} className="format-colors" role="group" aria-label="글자 색">
             <button
               type="button"
               className="format-btn"

@@ -118,3 +118,42 @@ async def test_people_on_yesterdays_page_are_told_to_roll_over(monkeypatch):
     assert msg["bytes"][0] == MESSAGE_PAGE_ROLLED
     assert b'"date":"2026-10-16"' in msg["bytes"]
     assert await expect_close(y.ws) == 4409
+
+
+def box_update(boxes: dict[str, str]) -> bytes:
+    """글 상자(아이디 → 글)를 만든다. 글이 빈 문자열이면 빈 상자."""
+    from pycrdt import XmlElement, XmlFragment, XmlText
+
+    doc = Doc()
+    b = doc.get("textboxes", type=Map)
+    for bid, text in boxes.items():
+        fragment = XmlFragment()
+        b[bid] = Map({"author": "졸린 수달", "content": fragment})
+        paragraph = XmlElement("paragraph")
+        fragment.children.append(paragraph)
+        t = XmlText()
+        paragraph.children.append(t)
+        if text:
+            t.insert(0, text)
+    return doc.get_update()
+
+
+def test_empty_text_boxes_are_dropped_when_sealed(note_id, at):
+    at(kst(2026, 10, 15, 22, 0))
+    page = make_page(note_id, dt.date(2026, 10, 15), box_update({"empty": "", "full": "안녕"}))
+    at(kst(2026, 10, 16, 0, 1))
+    seal_due_pages()
+    page.refresh_from_db()
+    doc = Doc()
+    doc.apply_update(bytes(page.state))
+    assert list(doc.get("textboxes", type=Map).keys()) == ["full"]
+    assert page.is_empty is False
+
+
+def test_page_with_only_empty_text_boxes_is_sealed_as_empty(note_id, at):
+    at(kst(2026, 10, 15, 22, 0))
+    page = make_page(note_id, dt.date(2026, 10, 15), box_update({"a": "", "b": ""}))
+    at(kst(2026, 10, 16, 0, 1))
+    seal_due_pages()
+    page.refresh_from_db()
+    assert page.is_empty is True

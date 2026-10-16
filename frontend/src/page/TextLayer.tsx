@@ -1,4 +1,4 @@
-import { EditorContent, useEditor } from '@tiptap/react'
+import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import * as Y from 'yjs'
 import { readTextBox, textBoxContent, textboxesMap, updateTextBox, type TextBox } from './doc'
@@ -165,6 +165,10 @@ function TextBoxView({
   const y = drag?.y ?? box.y
   const width = drag?.width ?? box.width
   const others = editors.get(box.id) ?? []
+  // 아무도 쓰지 않는 빈 상자는 보이지 않게 둔다(나갔다 들어와 남은 상자 등).
+  // 포커스는 받을 수 있어야 하므로 visibility 대신 투명도로 숨긴다.
+  const empty = useEditorState({ editor, selector: ({ editor: e }) => e?.isEmpty ?? false })
+  const idleEmpty = empty && !focused && focusId !== box.id && others.length === 0 && !drag
 
   function frameRect(): { left: number; top: number } {
     const frame = rootRef.current?.closest('.page-frame')
@@ -230,7 +234,7 @@ function TextBoxView({
 
   return (
     <div
-      className={`textbox${focused ? ' is-focused' : ''}${interactive ? ' is-interactive' : ''}${tool === 'select' ? ' is-select' : ''}`}
+      className={`textbox${focused ? ' is-focused' : ''}${interactive ? ' is-interactive' : ''}${tool === 'select' ? ' is-select' : ''}${idleEmpty ? ' is-idle-empty' : ''}`}
       ref={rootRef}
       data-box-id={box.id}
       {...(interactive ? { 'data-page-ui': '' } : {})}

@@ -85,3 +85,16 @@ export function fitBoxInPage(y: number, height: number): number {
   if (y + height <= PAGE_HEIGHT) return y
   return Math.max(0, Math.floor((PAGE_HEIGHT - height) / LINE_GAP) * LINE_GAP)
 }
+
+/**
+ * 들어올 때 정리: 내가 만든 빈 상자 중 지금 아무도 쓰고 있지 않은 것을 지운다.
+ * 빈 상자는 편집을 마칠 때 지우지만, 새로고침하거나 나가면 그 단계 없이 남는다.
+ * 되돌리기 대상이 아니다(origin 없이 지운다). 지운 상자 id를 돌려준다.
+ */
+export function removeLeftoverEmptyBoxes(doc: Y.Doc, me: string, editing: ReadonlySet<string>): string[] {
+  const ids = readTextBoxes(doc)
+    .filter((b) => b.author === me && !editing.has(b.id) && textBoxText(doc, b.id).trim() === '')
+    .map((b) => b.id)
+  if (ids.length) doc.transact(() => ids.forEach((id) => deleteTextBox(doc, id)))
+  return ids
+}

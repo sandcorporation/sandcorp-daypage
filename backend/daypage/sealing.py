@@ -8,7 +8,7 @@ from django.db import transaction
 
 from . import clock
 from .models import Page
-from .pages import _merge, doc_stats
+from .pages import _merge, doc_stats, drop_empty_text_boxes
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,9 @@ def seal_page(page_id: int) -> bool:
         if page.sealed_at is not None:
             return False
         doc = _merge(page)
+        # 만들고 아무것도 쓰지 않은 채 남은 빈 글 상자는 기록에 남기지 않는다.
+        if drop_empty_text_boxes(doc):
+            page.state = doc.get_update()
         page.stroke_count, page.participant_count, page.is_empty = doc_stats(doc)
         page.sealed_at = clock.now()
         page.save(update_fields=["state", "stroke_count", "participant_count", "is_empty", "sealed_at"])

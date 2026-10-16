@@ -4,7 +4,7 @@ import datetime as dt
 
 from django.conf import settings
 from django.db import transaction
-from pycrdt import Doc, Map
+from pycrdt import Doc, Map, XmlFragment, XmlText
 
 from . import clock
 from .models import Note, Page, PageUpdate
@@ -82,6 +82,28 @@ def compact(page_id: int) -> None:
 
 def should_compact(pending: int) -> bool:
     return pending >= getattr(settings, "COMPACT_EVERY", 200)
+
+
+def _has_text(node) -> bool:
+    """글 상자 내용(XmlFragment) 안에 글자가 하나라도 있는지"""
+    if isinstance(node, XmlText):
+        return len(node) > 0
+    return any(_has_text(child) for child in getattr(node, "children", []))
+
+
+def drop_empty_text_boxes(doc: Doc) -> int:
+    """글자가 하나도 없는 글 상자를 지운다(만들고 아무것도 쓰지 않은 채 나간 상자). 지운 수를 돌려준다."""
+    boxes = doc.get("textboxes", type=Map)
+    empty = [
+        key
+        for key, box in list(boxes.items())
+        if isinstance(box, Map) and isinstance(box.get("content"), XmlFragment) and not _has_text(box.get("content"))
+    ]
+    if empty:
+        with doc.transaction():
+            for key in empty:
+                del boxes[key]
+    return len(empty)
 
 
 def doc_stats(doc: Doc) -> tuple[int, int, bool]:

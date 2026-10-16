@@ -322,6 +322,11 @@
 .textbox.is-interactive {
   cursor: text;
 }
+/* 아무도 쓰지 않는 빈 상자. 포커스는 받을 수 있게 투명하게만 둔다. */
+.textbox.is-idle-empty {
+  opacity: 0;
+  pointer-events: none;
+}
 .textbox.is-interactive:hover {
   border-color: rgba(42, 71, 176, 0.25);
 }
@@ -551,7 +556,7 @@
   box-shadow: 0 8px 20px rgba(31, 33, 40, 0.12);
   font-family: var(--sans);
   white-space: nowrap;
-  z-index: 10;
+  z-index: 25; /* 상자 손잡이(20)보다 위 */
   cursor: default;
 }
 .format-btn {
