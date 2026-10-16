@@ -58,7 +58,7 @@ export function Toolbar(props: Props) {
               type="button"
               className="tool-btn"
               aria-label={`펜 (${brushName})`}
-              title={`펜 (${brushName}) · 다시 누르면 펜 종류`}
+              title={`펜 (${brushName}) · 다시 누르면 펜 종류 · Shift+드래그로 직선`}
               aria-pressed={tool === 'pen'}
               aria-haspopup="dialog"
               aria-expanded={brushOpen}
@@ -93,7 +93,7 @@ export function Toolbar(props: Props) {
           type="button"
           className="tool-btn"
           aria-label={t.label}
-          title={t.label}
+          title={t.kind === 'highlighter' ? `${t.label} · Shift+드래그로 직선` : t.label}
           aria-pressed={tool === t.kind}
           onClick={() => onTool(t.kind)}
         >

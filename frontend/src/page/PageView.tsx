@@ -8,6 +8,7 @@ import { canvasPixelRatio, paintLayers, paintStroke } from './render'
 import { matrixScale, transformPoints, type Matrix } from './transform'
 import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { TouchPan, scrollNearest } from './touchPan'
+import { straightPoints } from './straight'
 
 export type PointerTool = {
   /** 이 도구가 포인터를 직접 처리하면 true를 돌려준다. */
@@ -91,6 +92,8 @@ export function PageView({
   const [hover, setHover] = useState<{ tool?: PointerTool; cursor: string | null }>({ cursor: null })
   // 만년필: 앞 점의 위치·시각·필압(속도로 필압을 만들 때 쓴다)
   const lastSample = useRef<{ x: number; y: number; t: number; p: number } | null>(null)
+  /** Shift 직선의 시작점(직선으로 바뀐 획만). 손을 떼면 비운다. */
+  const straight = useRef<{ x: number; y: number; p: number } | null>(null)
   // 지금 처리 중인 포인터. 두 번째 손가락·손바닥이 한 획에 섞이지 않게 한다.
   const activePointer = useRef<number | null>(null)
   // 마지막 포인터 화면 위치. 누른 채 스크롤하면 이 위치로 장 좌표를 다시 계산한다.
@@ -234,6 +237,7 @@ export function PageView({
       e.currentTarget.setPointerCapture(e.pointerId)
       activePointer.current = e.pointerId
       lastSample.current = null
+      straight.current = null
       const firstPressure = pressure(e, p)
       drawing.current = {
         id: newId(),
@@ -272,6 +276,14 @@ export function PageView({
     onPointerMove?.(p)
     const s = drawing.current
     if (s) {
+      // Shift를 누르면(그리는 도중이라도) 시작점에서 지금 위치까지 직선으로 바꾸고, 손을 뗄 때까지 직선으로 둔다.
+      if (e.shiftKey || straight.current) {
+        straight.current ??= { x: s.points[0], y: s.points[1], p: s.points[2] }
+        const start = straight.current
+        s.points = straightPoints(start, p, start.p)
+        paintLive()
+        return
+      }
       const events = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent]
       const rect = frameRef.current!.getBoundingClientRect()
       for (const ev of events.length ? events : [e.nativeEvent]) {
