@@ -7,7 +7,7 @@ import pytest
 from asgiref.sync import sync_to_async
 from uvicorn.protocols.utils import ClientDisconnected
 
-from daypage import awareness, clock, consumers
+from daypage import awareness, clock, consumers, hub, rooms
 from tests.helpers import create_note, login_as
 from tests.ws import join
 
@@ -41,7 +41,7 @@ async def test_idle_connection_gets_keepalive_that_changes_no_one(monkeypatch):
 
 
 class _Dead(consumers.PageConsumer):
-    """보내면 이미 끊긴 클라이언트처럼 ClientDisconnected를 낸다."""
+    """이미 떠난 클라이언트: 무엇을 보내든(데이터·닫기) uvicorn처럼 ClientDisconnected를 낸다."""
 
     def __init__(self):
         self.outbox = asyncio.Queue(1)
@@ -49,12 +49,17 @@ class _Dead(consumers.PageConsumer):
         self.closing = False
         self.closes = 0
 
-    async def send(self, text_data=None, bytes_data=None, close=False):
+    async def base_send(self, message):
+        if message["type"] == "websocket.close":
+            self.closes += 1
         raise ClientDisconnected()
 
-    async def base_send(self, message):
-        self.closes += 1
-        raise ClientDisconnected()
+
+async def test_sending_to_a_gone_client_does_not_raise():
+    """떠난 클라이언트에 보내다 난 오류가 연결 처리(consumer)를 죽이면 정리(disconnect)가 돌지 않는다."""
+    c = _Dead()
+    await c.send(bytes_data=b"x")
+    assert c.closing
 
 
 async def test_backed_up_connection_is_closed_once_and_quietly():
@@ -76,3 +81,21 @@ async def test_closing_an_already_gone_client_does_not_raise():
     c.push(b"b")
     await asyncio.sleep(0.05)
     assert c.closes == 1
+
+
+async def test_crashed_connection_still_leaves_room_and_online_list(monkeypatch):
+    """연결 처리 중 예상 못 한 오류로 consumer가 죽어도 방·접속 목록에서 빠진다(남으면 메모리와 인원이 샌다)."""
+    note_id, owner = await setup_note()
+    a = await join(owner, note_id, "2026-10-15")
+    assert len(hub.hub().rooms) == 1
+    assert len(await rooms.registry().connections(note_id)) == 1
+
+    async def boom(self, text_data=None, bytes_data=None):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(consumers.PageConsumer, "receive", boom)
+    await a.ws.send_to(bytes_data=b"\x00\x00")
+    with pytest.raises(RuntimeError):
+        await a.ws.wait(timeout=3)
+    assert hub.hub().rooms == {}
+    assert await rooms.registry().connections(note_id) == []

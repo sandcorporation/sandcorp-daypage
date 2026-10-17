@@ -200,13 +200,8 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(note_group(self.note_id), self.channel_name)
         self.sender = asyncio.create_task(self._send_loop())
         self.room = await hub.hub().join(page.id, self, lambda: db(pages.load_updates)(page.id))
-        try:
-            await self.send(bytes_data=create_sync_message(self.room.ydoc))
-        except ClientDisconnected:
-            # 들어오는 사이 클라이언트가 떠났다(페이지를 바로 닫음 등). 방에서 나가는 건 disconnect가 한다.
-            self.closing = True
-            self.entering = False
-            return
+        # 들어오는 사이 클라이언트가 떠났어도 send는 조용히 끝난다. 방에서 나가는 건 disconnect가 한다.
+        await self.send(bytes_data=create_sync_message(self.room.ydoc))
         # 이미 있는 사람들의 커서를 보낸다.
         if (present := self.room.presence_message()) is not None:
             self.push(present, volatile=True)
@@ -300,6 +295,14 @@ class PageConsumer(AsyncWebsocketConsumer):
         except Exception:  # 이미 끊긴 연결: 더 쌓지 않는다. 정리는 disconnect가 한다.
             self.closing = True
 
+    async def send(self, text_data=None, bytes_data=None, close=False) -> None:
+        """보낸다. 클라이언트가 이미 떠났으면(ClientDisconnected) 조용히 끝내고 닫는 중으로 둔다.
+        이 오류가 연결 처리(consumer)를 죽이면 정리(disconnect)가 돌지 않아 방·접속 목록에 남는다."""
+        try:
+            await super().send(text_data=text_data, bytes_data=bytes_data, close=close)
+        except ClientDisconnected:
+            self.closing = True
+
     async def close(self, code=None, reason=None) -> None:
         """닫는다. 클라이언트가 이미 떠났으면(ClientDisconnected) 닫을 것이 없으니 조용히 끝낸다."""
         self.closing = True
@@ -316,7 +319,24 @@ class PageConsumer(AsyncWebsocketConsumer):
 
     # ── 연결 종료 ──────────────────────────────────────────────
 
+    async def __call__(self, scope, receive, send) -> None:
+        """연결 처리. 어떻게 끝나든(예상 못 한 오류 포함) 정리(disconnect)를 한 번은 한다.
+        Channels는 처리 중 오류로 끝나면 disconnect를 부르지 않아, 하트비트·방·보낼 편집이 프로세스에 남아
+        메모리가 새고 떠난 사람이 접속 중으로 세어졌다."""
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            if hasattr(self, "outbox") and not getattr(self, "cleaned_up", False):
+                try:
+                    await asyncio.shield(self.disconnect(None))
+                except Exception:
+                    logger.exception("연결 정리 실패")
+
     async def disconnect(self, code) -> None:
+        if getattr(self, "cleaned_up", False):
+            return
+        self.cleaned_up = True
+        self.closing = True
         if self.heartbeat:
             self.heartbeat.cancel()
             # 하트비트가 접속 목록에 다시 올리는 중이었다면 끝난 뒤에 빼야 남지 않는다.
