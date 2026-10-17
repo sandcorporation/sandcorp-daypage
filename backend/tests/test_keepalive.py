@@ -1,0 +1,78 @@
+"""연결 유지: 혼자 있는 연결이 끊기지 않게 하고, 이미 끊긴 연결을 조용히 정리한다."""
+
+import asyncio
+import datetime as dt
+
+import pytest
+from asgiref.sync import sync_to_async
+from uvicorn.protocols.utils import ClientDisconnected
+
+from daypage import awareness, clock, consumers
+from tests.helpers import create_note, login_as
+from tests.ws import join
+
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.asyncio]
+
+TODAY = dt.datetime(2026, 10, 15, 15, 0, tzinfo=clock.KST)
+
+
+@pytest.fixture(autouse=True)
+def fixed_clock(monkeypatch):
+    monkeypatch.setattr(clock, "now", lambda: TODAY)
+
+
+@sync_to_async
+def setup_note():
+    owner = login_as(1)
+    return create_note(owner), owner
+
+
+async def test_idle_connection_gets_keepalive_that_changes_no_one(monkeypatch):
+    """y-websocket은 30초 동안 아무것도 받지 못하면 끊고 다시 붙는다. 혼자 있으면 서버가 보낼 것이 없으므로
+    한가할 때 빈 awareness를 보낸다(아무의 커서도 바뀌지 않는다)."""
+    monkeypatch.setattr(consumers, "KEEPALIVE_EVERY", 0.2)
+    note_id, owner = await setup_note()
+    a = await join(owner, note_id, "2026-10-15")
+    a.awareness.clear()
+    msg = await a.ws.receive_output(timeout=2)
+    assert msg["bytes"] == consumers.KEEPALIVE
+    assert awareness.decode_message(msg["bytes"]) == []
+    await a.close()
+
+
+class _Dead(consumers.PageConsumer):
+    """보내면 이미 끊긴 클라이언트처럼 ClientDisconnected를 낸다."""
+
+    def __init__(self):
+        self.outbox = asyncio.Queue(1)
+        self.page_id = 1
+        self.closing = False
+        self.closes = 0
+
+    async def send(self, text_data=None, bytes_data=None, close=False):
+        raise ClientDisconnected()
+
+    async def base_send(self, message):
+        self.closes += 1
+        raise ClientDisconnected()
+
+
+async def test_backed_up_connection_is_closed_once_and_quietly():
+    c = _Dead()
+    c.push(b"a")  # 자리를 채운다
+    for _ in range(5):
+        c.push(b"b")  # 넘친다: 처음 한 번만 닫는다
+    await asyncio.sleep(0.05)
+    assert c.closes == 1
+    assert c.closing
+
+
+async def test_closing_an_already_gone_client_does_not_raise():
+    c = _Dead()
+    await c.close(code=consumers.CLOSE_TOO_SLOW)
+    assert c.closing
+    # 닫기 시작한 연결에는 더 보내지 않는다(넘쳐도 다시 닫지 않는다)
+    c.push(b"a")
+    c.push(b"b")
+    await asyncio.sleep(0.05)
+    assert c.closes == 1

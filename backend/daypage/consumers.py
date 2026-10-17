@@ -24,6 +24,7 @@ import time
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
+from uvicorn.protocols.utils import ClientDisconnected
 from django.conf import settings
 from pycrdt import (
     YMessageType,
@@ -65,6 +66,12 @@ def daypage_message(kind: int, payload: dict) -> bytes:
 # 연결마다 보내기를 기다릴 수 있는 메시지 수. 넘치면 커서는 버리고, 편집이 넘치면 연결을 끊는다.
 OUTBOX_LIMIT = 512
 
+# 이만큼(초) 보낼 것이 없으면 빈 awareness를 보낸다. y-websocket 클라이언트는 30초 동안 아무것도 받지 못하면
+# 연결이 죽었다고 보고 끊었다 다시 붙는다(혼자 있는 노트에서 33초마다 다시 접속하던 원인).
+KEEPALIVE_EVERY = 10
+# 빈 awareness: 아무의 커서도 바꾸지 않는다.
+KEEPALIVE = awareness.encode_message([])
+
 
 def note_group(note_id: str) -> str:
     # 그룹 이름은 영문·숫자·-_. 만 쓸 수 있다. 노트 ID(urlsafe base64)는 그대로 쓸 수 있다.
@@ -101,6 +108,8 @@ class PageConsumer(AsyncWebsocketConsumer):
         self.last_input = 0.0
         self.input_reported = 0.0
         self.cursor_states: dict[int, tuple] = {}
+        # 닫기 시작했거나 보내다 끊긴 걸 안 연결. 더 보내지 않고 다시 닫지 않는다.
+        self.closing = False
         # 닫는 코드를 전하려면 먼저 수락해야 한다.
         await self.accept()
 
@@ -191,7 +200,13 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(note_group(self.note_id), self.channel_name)
         self.sender = asyncio.create_task(self._send_loop())
         self.room = await hub.hub().join(page.id, self, lambda: db(pages.load_updates)(page.id))
-        await self.send(bytes_data=create_sync_message(self.room.ydoc))
+        try:
+            await self.send(bytes_data=create_sync_message(self.room.ydoc))
+        except ClientDisconnected:
+            # 들어오는 사이 클라이언트가 떠났다(페이지를 바로 닫음 등). 방에서 나가는 건 disconnect가 한다.
+            self.closing = True
+            self.entering = False
+            return
         # 이미 있는 사람들의 커서를 보낸다.
         if (present := self.room.presence_message()) is not None:
             self.push(present, volatile=True)
@@ -262,21 +277,35 @@ class PageConsumer(AsyncWebsocketConsumer):
     # ── 방이 부르는 것(hub.Member) ──────────────────────────────
 
     def push(self, data: bytes, volatile: bool = False) -> None:
+        if self.closing:
+            return
         if not self.outbox.full():
             self.outbox.put_nowait(data)
         elif not volatile:
-            # 편집을 따라가지 못하는 연결은 끊는다. 다시 접속하면 문서 전체를 다시 맞춘다.
+            # 편집을 따라가지 못하는 연결은 끊는다(한 번만). 다시 접속하면 문서 전체를 다시 맞춘다.
             logger.warning("보낼 편집이 밀려 연결을 끊는다(장 %s)", self.page_id)
+            self.closing = True
             asyncio.create_task(self.close(code=CLOSE_TOO_SLOW))
 
     async def _send_loop(self) -> None:
         try:
             while True:
-                data = await self.outbox.get()
+                try:
+                    data = await asyncio.wait_for(self.outbox.get(), KEEPALIVE_EVERY)
+                except TimeoutError:
+                    data = KEEPALIVE  # 한가하면 연결이 살아 있다고 알린다
                 await self.send(bytes_data=data)
         except asyncio.CancelledError:
             pass
-        except Exception:  # 이미 끊긴 연결
+        except Exception:  # 이미 끊긴 연결: 더 쌓지 않는다. 정리는 disconnect가 한다.
+            self.closing = True
+
+    async def close(self, code=None, reason=None) -> None:
+        """닫는다. 클라이언트가 이미 떠났으면(ClientDisconnected) 닫을 것이 없으니 조용히 끝낸다."""
+        self.closing = True
+        try:
+            await super().close(code=code, reason=reason)
+        except ClientDisconnected:
             pass
 
     async def page_sealed(self) -> None:
