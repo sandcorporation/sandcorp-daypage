@@ -1,11 +1,13 @@
 import * as Y from 'yjs'
 import { DEFAULT_BRUSH, isBrush, type Brush } from './tools'
 import { matrixScale, transformPoints, type Matrix } from './transform'
+import { decodePoints, encodePoints } from './pointCodec'
 
 /**
  * 장 하나의 Yjs 문서 구조.
  *
- * strokes:   Y.Map<strokeId, Y.Map{ tool, color, width, points: number[], author, createdAt, brush?, steady?, layer? }>
+ * strokes:   Y.Map<strokeId, Y.Map{ tool, color, width, points: number[] 또는 pts: Uint8Array, author, createdAt, brush?, steady?, layer? }>
+ *            점은 옛 획은 숫자 배열(points), 바이너리로 쓴 획은 pts(pointCodec.ts). 읽을 때는 둘 다 읽는다.
  * layers:    레이어 목록(layers.ts)
  * textboxes: Y.Map<boxId, Y.Map{ x, y, width, color, fontSize, font, content: Y.XmlFragment, author }>
  * meta:      Y.Map{ date }
@@ -69,13 +71,52 @@ export function newId(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 }
 
-export function addStroke(doc: Y.Doc, stroke: Stroke, origin?: unknown): void {
+/**
+ * 새 획의 점을 바이너리(pts)로 쓸지. 1단계 배포에서는 읽기만 익힌다(false): 그 전 코드를 쓰는 화면은
+ * pts를 모르므로, 모두가 새로고침으로 이 코드를 받은 뒤(다음 배포) 켠다.
+ */
+export const WRITE_BINARY_POINTS = false
+
+// 바이너리 점을 풀어 둔 것. 다시 그릴 때마다 풀지 않는다(Yjs는 같은 값에 같은 Uint8Array를 돌려준다).
+const decoded = new WeakMap<Uint8Array, number[]>()
+
+/** 획의 점. 바이너리(pts)든 옛 숫자 배열(points)이든 읽는다. */
+export function strokePoints(m: Y.Map<unknown>): number[] {
+  const pts = m.get('pts')
+  if (pts instanceof Uint8Array) {
+    let points = decoded.get(pts)
+    if (!points) {
+      points = decodePoints(pts)
+      decoded.set(pts, points)
+    }
+    return points
+  }
+  return (m.get('points') as number[] | undefined) ?? []
+}
+
+/** 이미 있는 획이 바이너리 점인지. 옮기거나 키워도 원래 형식으로 둔다. */
+function isBinary(m: Y.Map<unknown>): boolean {
+  return m.get('pts') instanceof Uint8Array
+}
+
+/** 점을 쓴다. 다른 형식의 키가 남아 있으면 지운다(한 획에 한 형식만). */
+function writePoints(m: Y.Map<unknown>, points: number[], binary: boolean): void {
+  if (binary) {
+    m.set('pts', encodePoints(points))
+    if (m.doc && m.has('points')) m.delete('points')
+  } else {
+    m.set('points', points)
+    if (m.doc && m.has('pts')) m.delete('pts')
+  }
+}
+
+export function addStroke(doc: Y.Doc, stroke: Stroke, origin?: unknown, binary = WRITE_BINARY_POINTS): void {
   doc.transact(() => {
     const m = new Y.Map<unknown>()
     m.set('tool', stroke.tool)
     m.set('color', stroke.color)
     m.set('width', stroke.width)
-    m.set('points', stroke.points)
+    writePoints(m, stroke.points, binary)
     m.set('author', stroke.author)
     m.set('createdAt', stroke.createdAt)
     // 볼펜은 쓰지 않아도 같은 모양이므로 다른 펜 종류만 남긴다.
@@ -92,7 +133,7 @@ export function readStroke(id: string, m: Y.Map<unknown>): Stroke {
     tool: m.get('tool') as Tool,
     color: m.get('color') as string,
     width: m.get('width') as number,
-    points: m.get('points') as number[],
+    points: strokePoints(m),
     author: m.get('author') as string,
     createdAt: m.get('createdAt') as number,
     ...(m.has('brush') ? { brush: m.get('brush') as Brush } : {}),
@@ -119,10 +160,11 @@ export function moveStrokes(doc: Y.Doc, ids: string[], dx: number, dy: number, o
     for (const id of ids) {
       const m = strokesMap(doc).get(id)
       if (!m) continue
-      const points = m.get('points') as number[]
-      m.set(
-        'points',
+      const points = strokePoints(m)
+      writePoints(
+        m,
         points.map((v, i) => (i % 3 === 0 ? round(v + dx) : i % 3 === 1 ? round(v + dy) : v)),
+        isBinary(m),
       )
     }
   }, origin)
@@ -221,7 +263,7 @@ export function transformStrokes(doc: Y.Doc, ids: string[], m: Matrix, origin?: 
     for (const id of ids) {
       const s = strokesMap(doc).get(id)
       if (!s) continue
-      s.set('points', transformPoints(s.get('points') as number[], m))
+      writePoints(s, transformPoints(strokePoints(s), m), isBinary(s))
       if (Math.abs(k - 1) > 1e-6) s.set('width', round((s.get('width') as number) * k))
     }
   }, origin)
