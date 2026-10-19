@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ErrorScreen, MessageCard } from '../pages/ErrorScreen'
 import { ConnectionPill } from './ConnectionPill'
+import { NewsButton } from '../news/NewsButton'
 import { NoteHeader } from './NoteHeader'
 import { Cursors } from './Cursors'
 import { MemberLimitControl } from './MemberLimitControl'
@@ -413,7 +414,10 @@ export function NotePage({ initial }: Props) {
           <Cursors peers={presence.peers} scale={scale} />
         </PageView>
       </div>
-      <ConnectionPill status={status} synced={synced} newVersion={newVersion} />
+      <div className="status-corner">
+        <ConnectionPill status={status} synced={synced} newVersion={newVersion} />
+        <NewsButton />
+      </div>
       <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
       {confirmDelete && (
         <ConfirmDialog
