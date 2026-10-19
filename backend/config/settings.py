@@ -160,3 +160,6 @@ SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", "production")
 SENTRY_ENABLED = init_sentry(env("SENTRY_DSN"), debug=DEBUG, environment=SENTRY_ENVIRONMENT)
 # 프론트 오류 수집 DSN(/api/client-config로 내려준다). 백엔드와 같이 운영에서만 준다.
 SENTRY_FRONTEND_DSN = "" if DEBUG else env("SENTRY_FRONTEND_DSN")
+
+# 기능 건의: 한 사람이 하루(24시간)에 남길 수 있는 수
+SUGGESTIONS_PER_DAY = int(env("SUGGESTIONS_PER_DAY", "20"))

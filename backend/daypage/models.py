@@ -18,6 +18,8 @@ class User(AbstractBaseUser):
 
     kakao_id = models.BigIntegerField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # 운영자: 운영자 페이지(/admin)와 /api/admin을 쓸 수 있다. manage.py grant_staff로 켠다.
+    is_staff = models.BooleanField(default=False)
 
     USERNAME_FIELD = "kakao_id"
 
@@ -92,3 +94,23 @@ class PageUpdate(models.Model):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name="updates")
     update = models.BinaryField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Suggestion(models.Model):
+    """기능 건의. 사용자가 노트 화면에서 남기고 운영자 페이지에서 읽는다."""
+
+    class Status(models.TextChoices):
+        NEW = "new", "새 건의"
+        REVIEWING = "reviewing", "검토 중"
+        DONE = "done", "반영함"
+        DECLINED = "declined", "안 함"
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="suggestions")
+    # 어느 노트에서 보냈는지(노트가 지워지면 비운다)
+    note = models.ForeignKey(Note, on_delete=models.SET_NULL, null=True, blank=True, related_name="suggestions")
+    text = models.TextField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "created_at"])]

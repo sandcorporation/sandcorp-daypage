@@ -125,7 +125,7 @@ def test_logout_ends_session(client, fake_kakao):
 
 
 def test_me_for_anonymous(client):
-    assert client.get("/api/me").json() == {"authenticated": False, "notes": []}
+    assert client.get("/api/me").json() == {"authenticated": False, "isStaff": False, "notes": []}
 
 
 def test_dev_login_is_disabled_by_default(client, settings):

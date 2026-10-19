@@ -11,7 +11,7 @@ from ninja import NinjaAPI, Schema
 from ninja.security import django_auth
 
 from . import clock, membership, rooms
-from .models import Note, NoteMember, Page
+from .models import Note, NoteMember, Page, Suggestion
 
 
 class ApiError(Exception):
@@ -55,7 +55,7 @@ def me(request):
     # SPA가 POST 요청에 쓸 CSRF 쿠키를 여기서 내려준다.
     get_token(request)
     if not request.user.is_authenticated:
-        return {"authenticated": False, "notes": []}
+        return {"authenticated": False, "isStaff": False, "notes": []}
     memberships = (
         NoteMember.objects.filter(user=request.user)
         .select_related("note")
@@ -72,7 +72,33 @@ def me(request):
         }
         for m in memberships
     ]
-    return {"authenticated": True, "notes": notes}
+    return {"authenticated": True, "isStaff": request.user.is_staff, "notes": notes}
+
+
+class SuggestionIn(Schema):
+    text: str
+    noteId: str | None = None
+
+
+SUGGESTION_MAX = 1000
+
+
+@api.post("/suggestions", response={201: dict})
+def create_suggestion(request, payload: SuggestionIn):
+    """기능 건의 남기기. 보낸 노트는 그 노트 참여자일 때만 함께 남긴다."""
+    text = payload.text.strip()
+    if not text:
+        raise ApiError(400, "empty", "건의할 내용을 적어 주세요.")
+    if len(text) > SUGGESTION_MAX:
+        raise ApiError(400, "too_long", f"건의는 {SUGGESTION_MAX}자까지 쓸 수 있어요.")
+    since = clock.now() - dt.timedelta(days=1)
+    if Suggestion.objects.filter(user=request.user, created_at__gte=since).count() >= settings.SUGGESTIONS_PER_DAY:
+        raise ApiError(429, "too_many", "오늘은 건의를 많이 남기셨어요. 내일 다시 보내 주세요.")
+    note_id = payload.noteId
+    if note_id and not NoteMember.objects.filter(note_id=note_id, user=request.user).exists():
+        note_id = None
+    s = Suggestion.objects.create(user=request.user, note_id=note_id, text=text)
+    return 201, {"id": s.id}
 
 
 MIN_MEMBER_LIMIT = 2
@@ -272,3 +298,9 @@ def announce_note_deleted(note_id: str) -> None:
     from .consumers import note_group
 
     async_to_sync(get_channel_layer().group_send)(note_group(note_id), {"type": "note.deleted"})
+
+
+# 운영자 API는 따로 둔다(운영자만).
+from .admin_api import router as admin_router  # noqa: E402
+
+api.add_router("/admin", admin_router)
