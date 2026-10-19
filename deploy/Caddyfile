@@ -33,6 +33,18 @@
 		}
 	}
 
+	# 운영자 페이지(따로 빌드한 앱). 권한은 앱이 /api/me로, 데이터는 /api/admin이 운영자만 준다.
+	@admin path /admin /admin/*
+	handle @admin {
+		root * /srv
+		@adminAssets path /admin/assets/*
+		header @adminAssets Cache-Control "public, max-age=31536000, immutable"
+		header X-Robots-Tag "noindex"
+		redir /admin /admin/ 308
+		try_files {path} /admin/index.html
+		file_server
+	}
+
 	# 나머지는 SPA. 없는 경로는 index.html로(React Router가 처리)
 	handle {
 		root * /srv

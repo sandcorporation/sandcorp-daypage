@@ -10,8 +10,18 @@ RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm build
 
+# 운영자 페이지(/admin): 따로 빌드해 dist/admin에 둔다
+FROM node:22-alpine AS admin
+RUN corepack enable
+WORKDIR /src
+COPY admin/package.json admin/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY admin/ ./
+RUN pnpm build
+
 FROM alpine:3.22
 COPY --from=build /src/dist /dist
+COPY --from=admin /src/dist /dist/admin
 COPY deploy/publish-static.sh /publish-static.sh
 COPY deploy/Caddyfile /Caddyfile
 CMD ["sh", "/publish-static.sh"]
