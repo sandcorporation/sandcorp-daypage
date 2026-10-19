@@ -5,6 +5,7 @@
 방이 닫힐 때 malloc_trim으로 돌려준다(한 번 부르면 355MB → 229MB). 너무 자주 부르지 않게 간격을 둔다.
 """
 
+import asyncio
 import ctypes
 import ctypes.util
 import logging
@@ -35,14 +36,31 @@ def _trim() -> None:
         _libc.malloc_trim(0)
 
 
-def release() -> None:
-    """방이 닫혔다: 비운 메모리를 돌려준다(MIN_INTERVAL에 한 번)."""
-    global _last
-    now = time.monotonic()
-    if now - _last < MIN_INTERVAL:
-        return
-    _last = now
+_pending = None
+
+
+def _run() -> None:
+    global _last, _pending
+    _pending = None
+    _last = time.monotonic()
     try:
         _trim()
     except Exception:  # 메모리 돌려주기 실패가 방 닫기를 막지 않게
         logger.warning("malloc_trim 실패", exc_info=True)
+
+
+def release() -> None:
+    """비운 메모리를 돌려준다. MIN_INTERVAL 안에 또 부르면 건너뛰지 않고 간격이 끝날 때 한 번 한다
+    (건너뛰기만 하면 그 뒤에 놓은 메모리가 다음 기회까지 그대로 남았다)."""
+    global _pending
+    wait = _last + MIN_INTERVAL - time.monotonic()
+    if wait <= 0:
+        _run()
+        return
+    if _pending is not None:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # 이벤트 루프 밖(관리 명령 등): 다음 기회에
+        return
+    _pending = loop.call_later(wait, _run)

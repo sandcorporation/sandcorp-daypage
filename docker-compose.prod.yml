@@ -12,6 +12,9 @@ x-backend: &backend
     REDIS_URL: redis://redis:6379/0
     # glibc가 스레드마다 힙(arena)을 따로 만들어 놓은 메모리가 흩어진 채 남는 것을 줄인다(daypage/memory.py 참고)
     MALLOC_ARENA_MAX: "2"
+    # 큰 덩어리(장 문서·동기화 버퍼, 128KB 넘음)는 늘 따로 받아 놓자마자 돌려주고, 힙 꼭대기가 128KB 넘게 비면 바로 줄인다.
+    # (기본값은 큰 덩어리를 몇 번 놓으면 기준을 올려 힙에 남겼다. 큰 장을 되풀이해 열고 닫는 시험에서 힙 82→43MB)
+    GLIBC_TUNABLES: "glibc.malloc.mmap_threshold=131072:glibc.malloc.trim_threshold=131072"
   depends_on:
     postgres:
       condition: service_healthy

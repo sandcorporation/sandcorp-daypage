@@ -61,6 +61,37 @@ def test_release_is_rate_limited(monkeypatch):
     assert trims == [1, 1]
 
 
+async def test_release_inside_the_interval_is_deferred_not_dropped(monkeypatch):
+    """1분 안에 또 닫혀도 건너뛰지 않고 간격이 끝날 때 돌려준다(건너뛰면 놓은 메모리가 그대로 남았다)."""
+    import asyncio
+
+    trims = []
+    monkeypatch.setattr(memory, "_trim", lambda: trims.append(1))
+    monkeypatch.setattr(memory, "MIN_INTERVAL", 0.2)
+    monkeypatch.setattr(memory, "_last", 0.0)
+    monkeypatch.setattr(memory, "_pending", None)
+    memory.release()
+    memory.release()  # 간격 안: 미뤄 둔다
+    memory.release()  # 이미 미뤄 둔 것이 있으면 하나만
+    assert trims == [1]
+    await asyncio.sleep(0.4)
+    assert trims == [1, 1]
+
+
+async def test_hub_returns_memory_periodically(monkeypatch):
+    import asyncio
+
+    calls = []
+    monkeypatch.setattr(memory, "release", lambda: calls.append(1))
+    monkeypatch.setattr(hub, "TRIM_EVERY", 0.05)
+    h = hub.Hub()
+    await h._start()
+    await asyncio.sleep(0.18)
+    assert len(calls) >= 2
+    h.reader.cancel()
+    h.trimmer.cancel()
+
+
 def test_trim_is_harmless_where_glibc_is_missing():
     # 윈도·macOS(개발 환경)에서는 아무 일도 하지 않는다
     memory._trim()

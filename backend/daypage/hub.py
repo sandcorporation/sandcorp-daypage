@@ -36,6 +36,8 @@ FLUSH_EVERY = 0.3
 PRESENCE_TTL = 35
 # 채널 레이어 그룹은 하루가 지나면 만료되므로 방이 열려 있는 동안 가끔 다시 가입한다.
 REGROUP_EVERY = 600
+# 놓은 메모리를 운영체제에 돌려주는 주기(초). 방이 닫힐 때도 돌려준다(memory.py).
+TRIM_EVERY = 300
 
 EMPTY_UPDATE = b"\x00\x00"
 
@@ -276,11 +278,19 @@ class Hub:
         self.closing: dict[int, asyncio.Event] = {}
         self.channel: str | None = None
         self.reader: asyncio.Task | None = None
+        self.trimmer: asyncio.Task | None = None
 
     async def _start(self) -> None:
         if self.channel is None:
             self.channel = await self.layer.new_channel("daypage-hub")
             self.reader = asyncio.create_task(self._read())
+            self.trimmer = asyncio.create_task(self._trim_forever())
+
+    async def _trim_forever(self) -> None:
+        """방이 닫히지 않아도(편집·다시 접속만 오가도) 놓은 메모리가 쌓이므로 주기적으로 돌려준다."""
+        while True:
+            await asyncio.sleep(TRIM_EVERY)
+            memory.release()
 
     async def _read(self) -> None:
         while True:
