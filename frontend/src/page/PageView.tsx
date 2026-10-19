@@ -35,6 +35,8 @@ type Props = {
   brush?: Brush
   /** 도형 도구에서 고른 도형 */
   shape?: ShapeKind
+  /** 지우개 반지름(장 좌표). 주면 포인터 자리에 그 크기의 동그라미를 보인다(판타블렛처럼 커서가 없어도 지울 자리가 보이게) */
+  eraserRadius?: number
   /** 곡선을 찍는 동안 찍은 점 수가 바뀔 때(0이면 곡선이 끝났다). 되돌리기 버튼을 켜고 끄는 데 쓴다 */
   onCurveChange?: (points: number) => void
   /** 곡선을 찍는 동안 바깥(되돌리기 키·버튼)에서 마지막 점을 지울 수 있게 채워 준다 */
@@ -77,6 +79,7 @@ export function PageView({
   widthLevel,
   brush,
   shape = DEFAULT_SHAPE,
+  eraserRadius,
   onCurveChange,
   curveControl,
   pressureOn = true,
@@ -115,6 +118,8 @@ export function PageView({
   const curve = useRef<{ controls: Point[]; last: { x: number; y: number; t: number } } | null>(null)
   // 찍은 점 수(완료·취소 막대를 보이고 숨기는 데만 쓴다)
   const [curveCount, setCurveCount] = useState(0)
+  // 지우개 동그라미(포인터를 따라 자주 움직이므로 리액트 상태 대신 스타일을 바로 바꾼다)
+  const ringRef = useRef<HTMLDivElement>(null)
   // 곡선: 마지막으로 올려 둔 다음 점 자리, 그 자리가 첫 점 닫기 자리인지
   const curveHover = useRef<Point | null>(null)
   const curveNearFirst = useRef(false)
@@ -199,6 +204,20 @@ export function PageView({
     const c = curve.current
     if (c) paintCurveMarks(ctx, c.controls, curveNearFirst.current, scale)
   }, [pixelScale, scale])
+
+  /** 지우개 동그라미를 장 좌표 p(없으면 숨김)에 둔다. 화면에서 너무 작아지지 않게 최소 크기를 둔다. */
+  function placeRing(p: Point | null) {
+    const el = ringRef.current
+    if (!el) return
+    if (!p || !eraserRadius) {
+      el.style.display = 'none'
+      return
+    }
+    const r = Math.max(eraserRadius * scale, 5)
+    el.style.display = 'block'
+    el.style.width = el.style.height = `${r * 2}px`
+    el.style.transform = `translate(${p.x * scale - r}px, ${p.y * scale - r}px)`
+  }
 
   function pagePoint(e: PointerEvent<HTMLDivElement>): Point {
     const rect = frameRef.current!.getBoundingClientRect()
@@ -395,6 +414,7 @@ export function PageView({
     if (activePointer.current !== null) return
     lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
+    placeRing(p)
     onGestureStart?.()
     if (tool === 'shape') {
       if (!curve.current && !canDrawHere()) return
@@ -452,6 +472,7 @@ export function PageView({
     lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
     onPointerMove?.(p)
+    placeRing(p)
     if (tool === 'shape') {
       const c = curve.current
       if (c) {
@@ -544,7 +565,8 @@ export function PageView({
   const hoverCursor = hover.tool === pointerTool ? hover.cursor : null
   const height = PAGE_HEIGHT * scale
   const cursor =
-    hoverCursor ?? (readOnly ? 'default' : tool === 'text' ? 'text' : tool === 'select' ? 'default' : 'crosshair')
+    hoverCursor ??
+    (readOnly ? 'default' : tool === 'text' ? 'text' : tool === 'select' ? 'default' : eraserRadius ? 'none' : 'crosshair')
 
   return (
     <div ref={viewportRef} className="page-viewport">
@@ -559,6 +581,7 @@ export function PageView({
         onPointerLeave={() => {
           lastClient.current = null
           onPointerMove?.(null)
+          placeRing(null)
           if (activePointer.current === null) updateHover(null)
         }}
       >
@@ -583,6 +606,7 @@ export function PageView({
         <div className="page-layer" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
           {children}
         </div>
+        {eraserRadius ? <div ref={ringRef} className="eraser-ring" aria-hidden="true" /> : null}
       </div>
       {curveCount > 0 && (
         <div className="curve-bar" role="toolbar" aria-label="곡선">

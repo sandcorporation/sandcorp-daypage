@@ -143,6 +143,14 @@ export function editableStrokes(strokes: Stroke[], layers: Layer[], hidden?: Rea
 }
 
 /**
+ * 지우개가 지울 수 있는 획: 지금 그리는 레이어의 획만(잠겼거나 내가 숨긴 레이어면 없음).
+ * 다른 레이어의 그림은 지우개에 지워지지 않는다(레이어로 나눠 그리는 뜻이 있게).
+ */
+export function erasableStrokes(strokes: Stroke[], layers: Layer[], current: string, hidden?: ReadonlySet<string>): Stroke[] {
+  return editableStrokes(strokes, layers, hidden).filter((s) => layerOf(s, layers) === current)
+}
+
+/**
  * 레이어를 아래에서 index번째 자리로 옮긴다. 옮기는 레이어의 순서 키만 이웃 사이 값으로 바꾸므로
  * 두 사람이 동시에 다른 레이어를 옮겨도 합친 결과가 같다. 레이어가 하나뿐이면 아무것도 하지 않는다.
  */

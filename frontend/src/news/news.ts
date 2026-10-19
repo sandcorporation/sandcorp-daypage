@@ -23,6 +23,14 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-19-eraser',
+    date: '10월 19일 밤',
+    items: [
+      { kind: 'new', title: '지우개 동그라미', text: '지우개가 지울 자리를 동그라미로 보여 줘요. 판타블렛처럼 커서가 없어도 보여요. (건의해 주셔서 고마워요!)' },
+      { kind: 'fix', title: '레이어별로 지우기', text: '지우개는 지금 그리는 레이어의 그림만 지워요. 다른 레이어 그림은 그대로 남아요. (건의해 주셔서 고마워요!)' },
+    ],
+  },
+  {
     id: '2026-10-19-suggest',
     date: '10월 19일 저녁',
     items: [

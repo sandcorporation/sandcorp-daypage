@@ -6,6 +6,7 @@ import {
   canDrawOn,
   deleteLayer,
   editableStrokes,
+  erasableStrokes,
   grabIds,
   highlightPlan,
   layerOf,
@@ -195,6 +196,24 @@ describe('잠그기', () => {
     expect(ids).toEqual(['top'])
   })
 
+
+  test('지우개는 지금 그리는 레이어의 획만 지운다(다른 레이어 그림은 남는다)', () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    const strokes = [stroke({ id: 'base' }), stroke({ id: 'old' }), stroke({ id: 'top', layer: top })]
+    const layers = readLayers(doc)
+    expect(erasableStrokes(strokes, layers, top).map((s) => s.id)).toEqual(['top'])
+    expect(erasableStrokes(strokes, layers, BASE_LAYER_ID).map((s) => s.id)).toEqual(['base', 'old'])
+  })
+
+  test('지금 레이어가 잠겼거나 숨겨졌으면 지울 것이 없다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    const strokes = [stroke({ id: 'top', layer: top })]
+    expect(erasableStrokes(strokes, readLayers(doc), top, new Set([top]))).toEqual([])
+    setLayerLocked(doc, top, true)
+    expect(erasableStrokes(strokes, readLayers(doc), top)).toEqual([])
+  })
   test('잠긴 레이어에는 그릴 수 없다', () => {
     const doc = createPageDoc('2026-10-16')
     expect(canDrawOn(readLayers(doc), BASE_LAYER_ID)).toBe(true)

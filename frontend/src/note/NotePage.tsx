@@ -13,7 +13,7 @@ import { loadHiddenLayers, saveHiddenLayers } from './hiddenLayers'
 import { Toolbar } from '../page/Toolbar'
 import { INKS, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
 import type { ShapeKind } from '../page/shapes'
-import { useEditTools } from '../page/useEditTools'
+import { ERASER_RADIUS, useEditTools } from '../page/useEditTools'
 import { isTypingTarget, useUndo } from '../page/useUndo'
 import { useNavigate } from 'react-router'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -116,7 +116,7 @@ export function NotePage({ initial }: Props) {
     },
     [hiddenLayers, note.id, note.today],
   )
-  const edit = useEditTools(doc, tool, origin, hiddenLayers, scale)
+  const edit = useEditTools(doc, tool, origin, hiddenLayers, scale, currentLayer)
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
   const reconnectRef = useRef<() => void>(() => {})
@@ -375,6 +375,7 @@ export function NotePage({ initial }: Props) {
           widthLevel={widthLevel}
           brush={brush}
           shape={shape}
+          eraserRadius={tool === 'eraser' ? ERASER_RADIUS : undefined}
           onCurveChange={setCurvePoints}
           curveControl={curveControl}
           pressureOn={pressureOn}

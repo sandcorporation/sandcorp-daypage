@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Y from 'yjs'
 import { deleteStrokes, readStrokes, transformStrokes } from './doc'
 import type { Point } from './geometry'
-import { editableStrokes, grabIds, readLayers } from './layers'
+import { editableStrokes, erasableStrokes, grabIds, readLayers } from './layers'
 import { normalizeRect, strokeBounds, strokesHitBy, strokesInRect, topStrokeAt, unionRect, type Rect } from './hit'
 import type { PointerTool } from './PageView'
 import type { ToolKind } from './tools'
@@ -25,7 +25,8 @@ import {
   type Matrix,
 } from './transform'
 
-const ERASER_RADIUS = 10
+/** 지우개 반지름(장 좌표). 화면의 지우개 동그라미도 이 크기로 그린다. */
+export const ERASER_RADIUS = 10
 const PICK_TOLERANCE = 8
 /** 선택 상자 여백·손잡이 크기(화면 px). 장 좌표로는 배율로 나눈다. */
 const BOX_PAD = 6
@@ -55,10 +56,18 @@ function fitted(bounds: Rect, m: Matrix): Matrix {
 
 /**
  * 지우개와 선택·이동 도구. 그리기·글씨는 다른 곳에서 처리한다.
- * 잠긴 레이어와 내가 숨긴 레이어의 획은 지우거나 고를 수 없다.
+ * 잠긴 레이어와 내가 숨긴 레이어의 획은 지우거나 고를 수 없고, 지우개는 지금 그리는 레이어의 획만 지운다.
  * 고른 묶음은 끌어서 옮기고, 모서리 손잡이로 키우거나 줄이고, 위쪽 손잡이로 돌린다(놓을 때 한 번 저장).
  */
-export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hiddenLayers?: ReadonlySet<string>, scale = 1) {
+export function useEditTools(
+  doc: Y.Doc,
+  tool: ToolKind,
+  origin: unknown,
+  hiddenLayers?: ReadonlySet<string>,
+  scale = 1,
+  /** 지금 그리는 레이어. 지우개는 이 레이어의 획만 지운다(없으면 잠기지 않은 모든 레이어) */
+  currentLayer?: string,
+) {
   const [selected, setSelected] = useState<string[]>([])
   const [version, setVersion] = useState(0)
   // 끄는 동안에는 문서에 쓰지 않고 화면에서만 바꿔 보인다. 놓을 때 한 번만 저장한다.
@@ -95,17 +104,19 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
 
   const pointerTool = useMemo<PointerTool | undefined>(() => {
     const editable = () => editableStrokes(readStrokes(doc), readLayers(doc), hiddenLayers)
+    const erasable = () =>
+      currentLayer ? erasableStrokes(readStrokes(doc), readLayers(doc), currentLayer, hiddenLayers) : editable()
     if (tool === 'eraser') {
       return {
         down(p) {
           drag.current = { kind: 'erase', last: p }
-          deleteStrokes(doc, strokesHitBy(editable(), [p], ERASER_RADIUS), origin)
+          deleteStrokes(doc, strokesHitBy(erasable(), [p], ERASER_RADIUS), origin)
           return true
         },
         move(p) {
           const d = drag.current
           if (d?.kind !== 'erase') return
-          deleteStrokes(doc, strokesHitBy(editable(), [d.last, p], ERASER_RADIUS), origin)
+          deleteStrokes(doc, strokesHitBy(erasable(), [d.last, p], ERASER_RADIUS), origin)
           d.last = p
         },
         up() {
@@ -186,7 +197,7 @@ export function useEditTools(doc: Y.Doc, tool: ToolKind, origin: unknown, hidden
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox])
+  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)
