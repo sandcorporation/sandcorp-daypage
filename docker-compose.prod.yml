@@ -10,6 +10,8 @@ x-backend: &backend
     DJANGO_DEBUG: "false"
     POSTGRES_HOST: postgres
     REDIS_URL: redis://redis:6379/0
+    # glibc가 스레드마다 힙(arena)을 따로 만들어 놓은 메모리가 흩어진 채 남는 것을 줄인다(daypage/memory.py 참고)
+    MALLOC_ARENA_MAX: "2"
   depends_on:
     postgres:
       condition: service_healthy

@@ -23,7 +23,7 @@ from channels.exceptions import ChannelFull
 from channels.layers import get_channel_layer
 from pycrdt import Doc, create_update_message, merge_updates
 
-from . import awareness, pages
+from . import awareness, memory, pages
 from .models import Page
 
 logger = logging.getLogger(__name__)
@@ -292,13 +292,20 @@ class Hub:
                 logger.exception("프로세스 채널 읽기 실패")
                 await asyncio.sleep(1)
                 continue
-            room = self.rooms.get(event.get("page"))
-            if room is None:
-                continue
-            try:
-                await room.on_remote(event)
-            except Exception:
-                logger.exception("다른 프로세스 메시지 처리 실패: %s", event.get("type"))
+            await self._dispatch(event)
+            # 다음 메시지를 기다리는 동안 이번 메시지를 붙잡지 않는다
+            del event
+
+    async def _dispatch(self, event: dict) -> None:
+        """메시지 하나를 그 장의 방에 넘긴다. 방은 이 함수 안에서만 가리킨다: 루프의 지역 변수로 두면
+        다음 메시지를 기다리는 동안 마지막에 다룬 방을 붙잡아, 닫힌 방의 문서(수 MB)가 풀리지 않았다."""
+        room = self.rooms.get(event.get("page"))
+        if room is None:
+            return
+        try:
+            await room.on_remote(event)
+        except Exception:
+            logger.exception("다른 프로세스 메시지 처리 실패: %s", event.get("type"))
 
     async def join(self, page_id: int, member: Member, load: Callable[[], Awaitable[list[bytes]]]) -> Room:
         await self._start()
@@ -331,6 +338,8 @@ class Hub:
         finally:
             del self.closing[room.page_id]
             done.set()
+        # 닫힌 방의 문서가 놓은 메모리를 운영체제에 돌려준다(memory.py)
+        memory.release()
         return True
 
 
