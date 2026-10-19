@@ -1,6 +1,6 @@
 export type Zoom = 'fit' | number
 
-const STEPS = [0.35, 0.5, 0.75, 1]
+const STEPS = [0.35, 0.5, 0.75, 1, 1.5, 2]
 
 /** 다음 배율. 맞춤 배율에서 출발해 정해진 단계로 오르내린다. */
 export function stepZoom(current: number, direction: 1 | -1): number {
