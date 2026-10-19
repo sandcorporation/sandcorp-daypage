@@ -115,7 +115,8 @@
   flex: 1;
   display: flex;
   gap: 16px;
-  padding: 16px 20px 20px;
+  /* 아래 왼쪽·오른쪽 칩(연결·새 소식·건의·배율)이 노트 끝을 가리지 않게 */
+  padding: 16px 20px 72px;
   align-items: flex-start;
 }
 
@@ -275,7 +276,7 @@
   }
   .note-body {
     flex-direction: column;
-    padding: 12px;
+    padding: 12px 12px 60px;
   }
   .toolbar {
     position: sticky;
@@ -1612,5 +1613,71 @@
   }
   .news-btn-label {
     display: none;
+  }
+}
+
+/* 기능 건의 */
+.tool-pop-popover.suggest-pop {
+  width: min(380px, calc(100vw - 32px));
+}
+.suggest-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.suggest-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 120px;
+  resize: vertical;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+}
+.suggest-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.suggest-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.suggest-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+.suggest-error {
+  margin: 0;
+  font-size: 13px;
+  color: #b91c1c;
+}
+.suggest-done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.suggest-done > p:first-child {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+/* 연결 표시: 넓은 화면은 긴 말, 휴대폰은 짧은 말 */
+.pill-short {
+  display: none;
+}
+@media (max-width: 720px) {
+  .pill-long {
+    display: none;
+  }
+  .pill-short {
+    display: inline;
   }
 }

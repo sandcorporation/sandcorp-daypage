@@ -7,11 +7,31 @@ const LABEL: Record<ConnectionStatus, string> = {
   offline: '오프라인 · 다시 연결되면 맞춰져요',
 }
 
+/** 휴대폰에서 보이는 짧은 말(아래쪽에 새 소식·건의·배율이 함께 들어가도록) */
+const SHORT: Record<ConnectionStatus, string> = {
+  connecting: '연결 중…',
+  connected: '연결됨',
+  reconnecting: '다시 연결 중…',
+  offline: '오프라인',
+}
+
 type Props = {
   status: ConnectionStatus
   synced: boolean
   /** 서버에 새 버전이 올라왔으면 새로고침을 권한다 */
   newVersion?: boolean
+}
+
+/** 긴 말과 짧은 말을 함께 두고 화면 폭에 따라 하나만 보인다(읽어 주기는 늘 긴 말). */
+function Label({ long, short }: { long: React.ReactNode; short: string }) {
+  return (
+    <>
+      <span className="pill-long">{long}</span>
+      <span className="pill-short" aria-hidden="true">
+        {short}
+      </span>
+    </>
+  )
 }
 
 export function ConnectionPill({ status, synced, newVersion = false }: Props) {
@@ -21,16 +41,16 @@ export function ConnectionPill({ status, synced, newVersion = false }: Props) {
     return (
       <button type="button" className="connection-pill new-version" onClick={() => window.location.reload()}>
         <span className="status-dot new" aria-hidden="true" />
-        새 버전이 나왔어요 · <strong>새로고침</strong>
+        <Label long={<>새 버전이 나왔어요 · <strong>새로고침</strong></>} short="새로고침" />
       </button>
     )
   }
-  const label = status === 'connected' && !synced ? '맞추는 중…' : LABEL[status]
+  const syncing = status === 'connected' && !synced
   const tone = ready ? '' : status === 'offline' ? ' offline' : ' connecting'
   return (
     <div className="connection-pill" role="status" aria-live="polite">
       <span className={`status-dot${tone}`} aria-hidden="true" />
-      {label}
+      <Label long={syncing ? '맞추는 중…' : LABEL[status]} short={syncing ? '맞추는 중…' : SHORT[status]} />
     </div>
   )
 }

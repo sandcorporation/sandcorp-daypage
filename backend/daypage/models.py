@@ -19,7 +19,8 @@ class User(AbstractBaseUser):
     kakao_id = models.BigIntegerField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     # 운영자: 운영자 페이지(/admin)와 /api/admin을 쓸 수 있다. manage.py grant_staff로 켠다.
-    is_staff = models.BooleanField(default=False)
+    # db_default: 배포 중 잠깐 함께 도는 옛 코드가 이 열 없이 사용자를 만들어도 되게 DB가 기본값을 채운다
+    is_staff = models.BooleanField(default=False, db_default=False)
 
     USERNAME_FIELD = "kakao_id"
 

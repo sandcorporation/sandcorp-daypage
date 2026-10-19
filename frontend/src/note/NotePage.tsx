@@ -20,6 +20,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ErrorScreen, MessageCard } from '../pages/ErrorScreen'
 import { ConnectionPill } from './ConnectionPill'
 import { NewsButton } from '../news/NewsButton'
+import { SuggestButton } from '../suggest/SuggestButton'
 import { NoteHeader } from './NoteHeader'
 import { Cursors } from './Cursors'
 import { MemberLimitControl } from './MemberLimitControl'
@@ -417,6 +418,7 @@ export function NotePage({ initial }: Props) {
       <div className="status-corner">
         <ConnectionPill status={status} synced={synced} newVersion={newVersion} />
         <NewsButton />
+        <SuggestButton noteId={note.id} />
       </div>
       <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
       {confirmDelete && (
