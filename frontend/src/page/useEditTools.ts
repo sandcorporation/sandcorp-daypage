@@ -76,10 +76,18 @@ export function useEditTools(
   // 마우스를 올려 둔 손잡이(강조해 그린다)
   const hovered = useRef<Handle | null>(null)
   const bump = useCallback(() => setVersion((v) => v + 1), [])
+  // 지우개를 올려 둔 자리에서 누르면 지워질 획(화면에 흐리게 + 점선 상자로 보인다)
+  const [eraseTargets, setEraseTargets] = useState<string[]>([])
+  const showEraseTargets = useCallback(
+    (ids: string[]) =>
+      setEraseTargets((prev) => (prev.length === ids.length && prev.every((id, i) => id === ids[i]) ? prev : ids)),
+    [],
+  )
 
-  // 도구를 바꾸면 선택을 푼다.
+  // 도구를 바꾸면 선택과 지우개 표시를 푼다.
   useEffect(() => {
     if (tool !== 'select') setSelected([])
+    if (tool !== 'eraser') setEraseTargets([])
   }, [tool])
 
   // 다른 사람이 선택한 획을 지우면 선택에서도 뺀다.
@@ -108,9 +116,15 @@ export function useEditTools(
       currentLayer ? erasableStrokes(readStrokes(doc), readLayers(doc), currentLayer, hiddenLayers) : editable()
     if (tool === 'eraser') {
       return {
+        // 올려 두면 누를 때 지워질 획을 미리 알린다(화면에만 표시, 문서는 그대로)
+        hover(p) {
+          showEraseTargets(p ? strokesHitBy(erasable(), [p], ERASER_RADIUS) : [])
+          return null
+        },
         down(p) {
           drag.current = { kind: 'erase', last: p }
           deleteStrokes(doc, strokesHitBy(erasable(), [p], ERASER_RADIUS), origin)
+          showEraseTargets([])
           return true
         },
         move(p) {
@@ -197,7 +211,7 @@ export function useEditTools(
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer])
+  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, showEraseTargets])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)
@@ -269,5 +283,5 @@ export function useEditTools(
     [selected, preview, scale, selectionBox],
   )
 
-  return { pointerTool, overlay, overlayVersion: version, selected, deleteSelected, preview }
+  return { pointerTool, overlay, overlayVersion: version, selected, deleteSelected, preview, eraseTargets }
 }

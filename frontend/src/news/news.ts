@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-20-erase-preview',
+    date: '10월 20일 오후 -4',
+    items: [
+      {
+        kind: 'new',
+        title: '지워질 선 미리 보기',
+        text: '지우개를 선 위에 올리면 누를 때 지워질 선이 흐려지고 점선 상자로 표시돼요. 마우스·펜 태블릿에서 보여요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-20-toolbar-tidy',
     date: '10월 20일 오후 -3',
     items: [

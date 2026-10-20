@@ -439,6 +439,7 @@ export function NotePage({ initial }: Props) {
           overlay={edit.overlay}
           overlayVersion={edit.overlayVersion}
           preview={edit.preview}
+          eraseTargets={edit.eraseTargets}
           onGestureStart={history.stopCapturing}
         >
           <TextLayer

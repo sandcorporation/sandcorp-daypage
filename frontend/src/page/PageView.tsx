@@ -75,6 +75,8 @@ type Props = {
   overlayVersion?: number
   /** 끄는 중인 획을 문서에 쓰기 전에 옮겨 보여 준다(놓을 때 한 번만 저장) */
   preview?: { ids: string[]; m: Matrix } | null
+  /** 지우개를 올려 둔 자리에서 지워질 획 id. 흐리게 그리고 점선 상자로 감싼다(화면에만) */
+  eraseTargets?: string[]
 }
 
 export function PageView({
@@ -106,6 +108,7 @@ export function PageView({
   overlay,
   overlayVersion,
   preview,
+  eraseTargets,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -168,7 +171,20 @@ export function PageView({
       )
     }
     const layers = readLayers(doc)
-    paintLayers(ctx, highlightPlan(layerPlan(strokes, layers, hiddenLayers), highlightLayer), pixelScale)
+    // 지우개를 올려 둔 자리에서 지워질 획은 따로 흐리게 그리고 점선 상자로 감싼다
+    const doomedIds = eraseTargets?.length ? new Set(eraseTargets) : null
+    const kept = doomedIds ? strokes.filter((s) => !doomedIds.has(s.id)) : strokes
+    paintLayers(ctx, highlightPlan(layerPlan(kept, layers, hiddenLayers), highlightLayer), pixelScale)
+    if (doomedIds) {
+      const doomed = strokes.filter((s) => doomedIds.has(s.id))
+      const faded = layerPlan(doomed, layers, hiddenLayers).map((item) => ({
+        ...item,
+        layer: { ...item.layer, opacity: item.layer.opacity * ERASE_PREVIEW_ALPHA },
+      }))
+      paintLayers(ctx, faded, pixelScale)
+      ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+      paintEraseBoxes(ctx, doomed.map(strokeBounds), scale)
+    }
     const target = highlightLayer ? layers.find((l) => l.id === highlightLayer) : undefined
     if (target) {
       const box = unionRect(strokes.filter((s) => layerOf(s, layers) === target.id).map(strokeBounds))
@@ -179,7 +195,7 @@ export function PageView({
       ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
       overlay(ctx)
     }
-  }, [doc, pixelScale, overlay, preview, hiddenLayers, highlightLayer, scale])
+  }, [doc, pixelScale, overlay, preview, hiddenLayers, highlightLayer, scale, eraseTargets])
 
   // 문서가 바뀌면 다음 프레임에 한 번만 다시 그린다.
   useEffect(() => {
@@ -670,6 +686,21 @@ function paintCurveMarks(ctx: CanvasRenderingContext2D, controls: Point[], nearF
 }
 
 /** 강조한 레이어 둘레의 점선 상자와 이름표(장 좌표로 그린다, 화면에서 일정한 크기). 획이 없으면 그리지 않는다. */
+/** 지우개 미리보기에서 지워질 획을 흐리게 그리는 불투명도 */
+const ERASE_PREVIEW_ALPHA = 0.3
+
+/** 지워질 획마다 빨간 점선 상자(화면에서 일정한 굵기·간격) */
+function paintEraseBoxes(ctx: CanvasRenderingContext2D, boxes: { x: number; y: number; width: number; height: number }[], scale: number) {
+  const px = (v: number) => v / scale
+  const pad = px(6)
+  ctx.save()
+  ctx.strokeStyle = '#C2410C'
+  ctx.lineWidth = px(1.5)
+  ctx.setLineDash([px(6), px(4)])
+  for (const b of boxes) ctx.strokeRect(b.x - pad, b.y - pad, b.width + pad * 2, b.height + pad * 2)
+  ctx.restore()
+}
+
 function paintLayerTag(ctx: CanvasRenderingContext2D, box: { x: number; y: number; width: number; height: number } | null, name: string, scale: number) {
   if (!box) return
   const px = (v: number) => v / scale
