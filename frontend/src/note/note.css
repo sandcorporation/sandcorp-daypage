@@ -1761,6 +1761,34 @@
   border: 1.5px solid var(--line);
   cursor: pointer;
 }
+.paper-color-custom {
+  display: grid;
+  place-items: center;
+  color: transparent;
+}
+.paper-color-custom.empty {
+  color: var(--ink-soft);
+  background: conic-gradient(#fde2e4, #fff1c1, #dcfce7, #dbeafe, #ede9fe, #fde2e4);
+}
+.paper-color-custom:not(.empty):hover {
+  color: var(--ink-soft);
+}
+.paper-chip {
+  border: 1.5px solid var(--line);
+}
+.paper-sample {
+  width: 56px;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.paper-maker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
 .paper-color[aria-checked='true'] {
   box-shadow:
     0 0 0 3px var(--white),

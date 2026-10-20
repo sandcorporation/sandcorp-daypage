@@ -1,5 +1,6 @@
-import { useState, type PointerEvent } from 'react'
-import { hexToHsv, hsvToHex, MAX_NOTE_COLORS, normalizeHex, RECOMMENDED_COLORS, type Hsv } from './color'
+import { useState } from 'react'
+import { MAX_NOTE_COLORS, RECOMMENDED_COLORS } from './color'
+import { ColorField, useColorField } from './ColorField'
 
 type Props = {
   noteColors: string[]
@@ -11,31 +12,11 @@ type Props = {
 
 /** 새 색 만들기: 색판(채도·명도)·색상 띠·색 코드·추천 색에서 고르고 노트 색으로 더한다. */
 export function ColorPicker({ noteColors, onAdd, onRemove }: Props) {
-  const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(RECOMMENDED_COLORS[0]))
-  const [text, setText] = useState(RECOMMENDED_COLORS[0])
+  const field = useColorField(RECOMMENDED_COLORS[0])
+  const { color, setFromText } = field
   const [busy, setBusy] = useState(false)
-  const color = normalizeHex(text)
   const full = noteColors.length >= MAX_NOTE_COLORS
   const exists = color !== null && noteColors.includes(color)
-
-  const setFromHsv = (next: Hsv) => {
-    setHsv(next)
-    setText(hsvToHex(next))
-  }
-  const setFromText = (value: string) => {
-    setText(value)
-    const hex = normalizeHex(value)
-    if (hex) setHsv(hexToHsv(hex))
-  }
-
-  function onPlane(e: PointerEvent<HTMLDivElement>) {
-    if (e.type === 'pointermove' && e.buttons === 0) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const s = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
-    const v = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / rect.height))
-    if (e.type === 'pointerdown') e.currentTarget.setPointerCapture(e.pointerId)
-    setFromHsv({ ...hsv, s, v })
-  }
 
   async function add() {
     if (!color || busy) return
@@ -49,37 +30,16 @@ export function ColorPicker({ noteColors, onAdd, onRemove }: Props) {
     }
   }
 
-  const hueColor = hsvToHex({ h: hsv.h, s: 1, v: 1 })
   return (
     <div className="color-picker">
-      <div
-        className="color-plane"
-        aria-hidden="true"
-        style={{ background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${hueColor})` }}
-        onPointerDown={onPlane}
-        onPointerMove={onPlane}
-      >
-        <span className="color-plane-dot" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
-      </div>
-      <input
-        type="range"
-        className="color-hue"
-        aria-label="색상"
-        min={0}
-        max={359}
-        value={Math.round(hsv.h)}
-        onChange={(e) => setFromHsv({ ...hsv, h: Number(e.target.value) })}
+      <ColorField
+        field={field}
+        sample={
+          <svg width="72" height="44" viewBox="0 0 72 44" fill="none" aria-hidden="true">
+            <path d="M4 30c10-18 20 10 32-4s20-14 32-2" stroke={color ?? '#c9ccd6'} strokeWidth="5" strokeLinecap="round" />
+          </svg>
+        }
       />
-      <div className="color-row">
-        <span className="color-preview" style={{ background: color ?? 'transparent' }} />
-        <label className="color-code">
-          색 코드
-          <input type="text" value={text} spellCheck={false} onChange={(e) => setFromText(e.target.value)} aria-invalid={!color} />
-        </label>
-        <svg width="72" height="44" viewBox="0 0 72 44" fill="none" aria-hidden="true">
-          <path d="M4 30c10-18 20 10 32-4s20-14 32-2" stroke={color ?? '#c9ccd6'} strokeWidth="5" strokeLinecap="round" />
-        </svg>
-      </div>
       <p className="tool-pop-caption">추천 색</p>
       <div className="color-chips">
         {RECOMMENDED_COLORS.map((c) => (

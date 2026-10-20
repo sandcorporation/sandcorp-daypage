@@ -8,7 +8,7 @@ from django.db.models import Count
 from django.http import Http404, HttpResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
-from ninja import NinjaAPI, Schema
+from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
 from . import clock, membership, paper, rooms
@@ -168,7 +168,8 @@ def note_detail(request, note_id: str):
 class PaperIn(Schema):
     pattern: Literal["lined", "grid", "dot", "blank"] | None = None
     margin: bool | None = None
-    color: Literal["white", "cream", "gray", "chalk"] | None = None
+    # 기본 색 이름이나 직접 만든 색 코드(#rrggbb)
+    color: str | None = Field(None, pattern=paper.COLOR_INPUT)
 
 
 @api.patch("/notes/{note_id}/paper")

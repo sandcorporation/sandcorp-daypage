@@ -66,3 +66,21 @@ def test_old_sealed_page_without_paper_shows_the_default():
     note = Note.objects.get(pk=note_id)
     Page.objects.create(note=note, date=clock.today_kst() - dt.timedelta(days=2), is_empty=False, sealed_at=clock.now())
     assert owner.get(f"/api/notes/{note_id}/pages").json()[0]["paper"] == DEFAULT
+
+
+def test_custom_paper_color_is_a_hex_code():
+    owner = login_as(1)
+    note_id = create_note(owner)
+    res = owner.patch(f"/api/notes/{note_id}/paper", {"color": "#FDE8EF"}, content_type="application/json")
+    assert res.status_code == 200
+    assert res.json()["color"] == "#fde8ef"
+    assert owner.get(f"/api/notes/{note_id}").json()["paper"]["color"] == "#fde8ef"
+    for bad in ("#fde8e", "fde8ef", "#gggggg", "chalk"):
+        assert owner.patch(f"/api/notes/{note_id}/paper", {"color": bad}, content_type="application/json").status_code == 422
+
+
+def test_removed_chalk_paper_falls_back_to_white():
+    owner = login_as(1)
+    note_id = create_note(owner)
+    Note.objects.filter(pk=note_id).update(paper={"pattern": "dot", "margin": False, "color": "chalk"})
+    assert owner.get(f"/api/notes/{note_id}").json()["paper"] == {"pattern": "dot", "margin": False, "color": "white"}

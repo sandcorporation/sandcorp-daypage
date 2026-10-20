@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { DEFAULT_PAPER, normalizePaper, paperStyle, PAPER_COLORS } from './paper'
+import { DEFAULT_PAPER, normalizePaper, paperPalette, paperStyle, PAPER_COLORS } from './paper'
 
 describe('노트 종이', () => {
   test('모르는 값·빠진 값은 기본 줄 노트로 채운다', () => {
@@ -29,3 +29,30 @@ describe('노트 종이', () => {
     expect(paperStyle({ pattern: 'dot', margin: false, color: 'white' }).backgroundImage).toContain('radial-gradient')
   })
 })
+
+describe('직접 고른 종이 색', () => {
+  test('색 코드는 소문자로 받아들이고, 없앤 칠판은 흰 종이가 된다', () => {
+    expect(normalizePaper({ color: '#FDE8EF' }).color).toBe('#fde8ef')
+    expect(normalizePaper({ color: 'chalk' }).color).toBe('white')
+    expect(normalizePaper({ color: '#fde8e' }).color).toBe('white')
+  })
+
+  test('밝은 색이면 무늬를 바탕보다 조금 어둡게, 어두운 색이면 조금 밝게 그린다', () => {
+    const light = paperPalette('#fde8ef')
+    expect(light.ground).toBe('#fde8ef')
+    expect(luma(light.rule)).toBeLessThan(luma(light.ground))
+    expect(luma(light.dot)).toBeLessThan(luma(light.rule))
+    const dark = paperPalette('#203040')
+    expect(luma(dark.rule)).toBeGreaterThan(luma(dark.ground))
+  })
+
+  test('기본 색은 정해 둔 색표를 그대로 쓴다', () => {
+    expect(paperPalette('white')).toEqual(PAPER_COLORS.white)
+    expect(paperStyle({ pattern: 'lined', margin: false, color: '#fde8ef' }).backgroundColor).toBe('#fde8ef')
+  })
+})
+
+function luma(hex: string): number {
+  const n = parseInt(hex.slice(1), 16)
+  return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114
+}

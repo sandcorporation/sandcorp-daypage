@@ -6,8 +6,12 @@ const MARGIN_X_FULL = MARGIN_X
 
 /** 노트 종이: 노트 전체 설정(참여자 누구나 바꾼다). 봉인한 장에는 그날 종이가 남는다(backend/daypage/paper.py). */
 export type PaperPattern = 'lined' | 'grid' | 'dot' | 'blank'
-export type PaperColor = 'white' | 'cream' | 'gray' | 'chalk'
+/** 기본 종이 색 */
+export type PaperPreset = 'white' | 'cream' | 'gray'
+/** 기본 종이 색이거나 직접 고른 색 코드(#rrggbb, 소문자) */
+export type PaperColor = PaperPreset | `#${string}`
 export type Paper = { pattern: PaperPattern; margin: boolean; color: PaperColor }
+type Palette = { name: string; ground: string; rule: string; dot: string; margin: string }
 
 export const DEFAULT_PAPER: Paper = { pattern: 'lined', margin: true, color: 'white' }
 
@@ -18,16 +22,48 @@ export const PAPER_PATTERNS: { id: PaperPattern; name: string }[] = [
   { id: 'blank', name: '무지' },
 ]
 
-/** 종이 색마다 바탕·무늬·여백 선 색 */
-export const PAPER_COLORS: Record<PaperColor, { name: string; ground: string; rule: string; dot: string; margin: string }> = {
+/** 기본 종이 색마다 바탕·무늬·여백 선 색 */
+export const PAPER_COLORS: Record<PaperPreset, Palette> = {
   white: { name: '흰 종이', ground: '#ffffff', rule: '#e9ecf2', dot: '#c3c8d3', margin: '#f1b5a4' },
   cream: { name: '미색 종이', ground: '#fbf5e6', rule: '#e6dcc4', dot: '#c9bfa6', margin: '#eeaa95' },
   gray: { name: '연회색 종이', ground: '#eef0f3', rule: '#dde1ea', dot: '#b8becb', margin: '#e9a898' },
-  chalk: { name: '칠판', ground: '#24342d', rule: 'rgba(255,255,255,0.12)', dot: 'rgba(255,255,255,0.28)', margin: 'rgba(241,181,164,0.55)' },
 }
 
 const isPattern = (v: unknown): v is PaperPattern => PAPER_PATTERNS.some((p) => p.id === v)
-const isColor = (v: unknown): v is PaperColor => typeof v === 'string' && v in PAPER_COLORS
+const isPreset = (v: unknown): v is PaperPreset => typeof v === 'string' && Object.hasOwn(PAPER_COLORS, v)
+export const isCustomPaperColor = (v: string): v is `#${string}` => /^#[0-9a-f]{6}$/.test(v)
+
+function readColor(v: unknown): PaperColor {
+  if (isPreset(v)) return v
+  if (typeof v === 'string' && isCustomPaperColor(v.toLowerCase())) return v.toLowerCase() as `#${string}`
+  return DEFAULT_PAPER.color
+}
+
+/** 두 색을 t(0~1)만큼 섞는다. */
+function mix(a: string, b: string, t: number): string {
+  const ca = parseInt(a.slice(1), 16)
+  const cb = parseInt(b.slice(1), 16)
+  const ch = (shift: number) => Math.round(((ca >> shift) & 255) * (1 - t) + ((cb >> shift) & 255) * t)
+  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join('')}`
+}
+
+/**
+ * 종이 색의 바탕·무늬·여백 선 색. 직접 고른 색은 바탕에서 무늬 색을 만든다:
+ * 밝은 바탕은 짙은 남색 쪽으로, 어두운 바탕은 흰색 쪽으로 조금씩 섞어 바탕과 어울리게 한다.
+ */
+export function paperPalette(color: PaperColor): Palette {
+  if (isPreset(color)) return PAPER_COLORS[color]
+  const n = parseInt(color.slice(1), 16)
+  const luma = (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255
+  const ink = luma > 0.5 ? '#1e2a4a' : '#ffffff'
+  return {
+    name: '직접 고른 색',
+    ground: color,
+    rule: mix(color, ink, luma > 0.5 ? 0.1 : 0.14),
+    dot: mix(color, ink, luma > 0.5 ? 0.26 : 0.3),
+    margin: mix(color, '#e0603f', luma > 0.5 ? 0.4 : 0.5),
+  }
+}
 
 /** 서버·메시지에서 온 값. 모르는 값이나 빠진 항목은 기본값으로 채운다. */
 export function normalizePaper(raw: unknown): Paper {
@@ -35,7 +71,7 @@ export function normalizePaper(raw: unknown): Paper {
   return {
     pattern: isPattern(r.pattern) ? r.pattern : DEFAULT_PAPER.pattern,
     margin: typeof r.margin === 'boolean' ? r.margin : DEFAULT_PAPER.margin,
-    color: isColor(r.color) ? r.color : DEFAULT_PAPER.color,
+    color: readColor(r.color),
   }
 }
 
@@ -44,7 +80,7 @@ export function normalizePaper(raw: unknown): Paper {
  * scale을 주면 그만큼 작게 그린다(종이 고르기의 미리보기 칸). 선 굵기는 1px 그대로라 작아도 보인다.
  */
 export function paperStyle(paper: Paper, scale = 1): CSSProperties {
-  const c = PAPER_COLORS[paper.color]
+  const c = paperPalette(paper.color)
   const LINE_GAP = Math.round(LINE_GAP_FULL * scale)
   const MARGIN_X = MARGIN_X_FULL * scale
   const layers: { image: string; size: string; position: string }[] = []
@@ -81,7 +117,7 @@ export function paperStyle(paper: Paper, scale = 1): CSSProperties {
 
 /** 이미지 저장용 종이(캔버스). 화면 CSS 배경과 같은 모양으로 그린다. */
 export function paintPaperOn(ctx: CanvasRenderingContext2D, pixelScale: number, paper: Paper = DEFAULT_PAPER): void {
-  const c = PAPER_COLORS[paper.color]
+  const c = paperPalette(paper.color)
   ctx.save()
   ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
   ctx.fillStyle = c.ground
