@@ -183,7 +183,7 @@ export function PageView({
       }))
       paintLayers(ctx, faded, pixelScale)
       ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
-      paintEraseBoxes(ctx, doomed.map(strokeBounds), scale)
+      paintEraseOutlines(ctx, doomed, scale, pixelScale, eraserRadius ?? 10)
     }
     const target = highlightLayer ? layers.find((l) => l.id === highlightLayer) : undefined
     if (target) {
@@ -195,7 +195,7 @@ export function PageView({
       ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
       overlay(ctx)
     }
-  }, [doc, pixelScale, overlay, preview, hiddenLayers, highlightLayer, scale, eraseTargets])
+  }, [doc, pixelScale, overlay, preview, hiddenLayers, highlightLayer, scale, eraseTargets, eraserRadius])
 
   // 문서가 바뀌면 다음 프레임에 한 번만 다시 그린다.
   useEffect(() => {
@@ -685,22 +685,76 @@ function paintCurveMarks(ctx: CanvasRenderingContext2D, controls: Point[], nearF
   ctx.restore()
 }
 
-/** 강조한 레이어 둘레의 점선 상자와 이름표(장 좌표로 그린다, 화면에서 일정한 크기). 획이 없으면 그리지 않는다. */
 /** 지우개 미리보기에서 지워질 획을 흐리게 그리는 불투명도 */
 const ERASE_PREVIEW_ALPHA = 0.3
+/** 화면에서 이보다 작은 획(점 등)은 테두리가 지우개 동그라미에 가려 점선 동그라미를 더한다(px) */
+const ERASE_SMALL_PX = 20
 
-/** 지워질 획마다 빨간 점선 상자(화면에서 일정한 굵기·간격) */
-function paintEraseBoxes(ctx: CanvasRenderingContext2D, boxes: { x: number; y: number; width: number; height: number }[], scale: number) {
-  const px = (v: number) => v / scale
-  const pad = px(6)
+/**
+ * 지워질 획마다 획 모양을 따라 빨간 테두리(화면에서 2px, 획에서 3px 띄움).
+ * 다른 획을 지우지 않게 따로 그린 캔버스에서 바깥 굵은 선을 긋고 안쪽을 도려낸 뒤 얹는다.
+ * 점처럼 작은 획은 지우개 동그라미보다 큰 점선 동그라미를 더한다.
+ */
+function paintEraseOutlines(
+  ctx: CanvasRenderingContext2D,
+  strokes: Stroke[],
+  scale: number,
+  pixelScale: number,
+  eraserRadius: number,
+) {
+  const off = document.createElement('canvas')
+  off.width = ctx.canvas.width
+  off.height = ctx.canvas.height
+  const o = off.getContext('2d')
+  if (!o) return
+  o.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+  o.lineCap = 'round'
+  o.lineJoin = 'round'
+  o.strokeStyle = ERASE_COLOR
+  const trace = (s: Stroke) => {
+    o.beginPath()
+    for (let i = 0; i + 1 < s.points.length; i += 3) {
+      if (i === 0) o.moveTo(s.points[i], s.points[i + 1])
+      else o.lineTo(s.points[i], s.points[i + 1])
+    }
+    if (s.points.length <= 3) o.lineTo(s.points[0] + 0.01, s.points[1])
+  }
+  const gap = 3 / scale
+  const ring = 2 / scale
+  for (const s of strokes) {
+    trace(s)
+    o.lineWidth = s.width + (gap + ring) * 2
+    o.stroke()
+  }
+  o.globalCompositeOperation = 'destination-out'
+  for (const s of strokes) {
+    trace(s)
+    o.lineWidth = s.width + gap * 2
+    o.stroke()
+  }
   ctx.save()
-  ctx.strokeStyle = '#C2410C'
-  ctx.lineWidth = px(1.5)
-  ctx.setLineDash([px(6), px(4)])
-  for (const b of boxes) ctx.strokeRect(b.x - pad, b.y - pad, b.width + pad * 2, b.height + pad * 2)
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.drawImage(off, 0, 0)
+  ctx.restore()
+
+  const small = strokes.map(strokeBounds).filter((b) => Math.max(b.width, b.height) * scale < ERASE_SMALL_PX)
+  if (small.length === 0) return
+  ctx.save()
+  ctx.strokeStyle = ERASE_COLOR
+  ctx.lineWidth = 1.5 / scale
+  ctx.setLineDash([5 / scale, 4 / scale])
+  for (const b of small) {
+    const r = Math.max(Math.max(b.width, b.height) / 2, eraserRadius) + 7 / scale
+    ctx.beginPath()
+    ctx.arc(b.x + b.width / 2, b.y + b.height / 2, r, 0, Math.PI * 2)
+    ctx.stroke()
+  }
   ctx.restore()
 }
 
+const ERASE_COLOR = '#C2410C'
+
+/** 강조한 레이어 둘레의 점선 상자와 이름표(장 좌표로 그린다, 화면에서 일정한 크기). 획이 없으면 그리지 않는다. */
 function paintLayerTag(ctx: CanvasRenderingContext2D, box: { x: number; y: number; width: number; height: number } | null, name: string, scale: number) {
   if (!box) return
   const px = (v: number) => v / scale
