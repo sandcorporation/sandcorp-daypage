@@ -23,6 +23,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-20-paper',
+    date: '10월 20일',
+    items: [
+      {
+        kind: 'new',
+        title: '종이 고르기',
+        text: '위쪽 ‘종이’ 버튼으로 줄 노트·모눈·점·무지, 왼쪽 여백 선, 종이 색(흰색·미색·연회색·칠판)을 골라요. 함께 쓰는 모두의 화면이 같이 바뀌어요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-19-eraser',
     date: '10월 19일 밤',
     items: [

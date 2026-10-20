@@ -38,14 +38,16 @@ def history(monkeypatch):
     write(note_id, dt.date(2026, 10, 16), {"today": "졸린 수달"})
     return note_id, owner
 
+DEFAULT_PAPER = {"pattern": "lined", "margin": True, "color": "white"}
+
 
 def test_sealed_pages_newest_first_without_empty_ones(history):
     note_id, owner = history
     res = owner.get(f"/api/notes/{note_id}/pages")
     assert res.status_code == 200
     assert res.json() == [
-        {"date": "2026-10-15", "participantCount": 1, "strokeCount": 1},
-        {"date": "2026-10-13", "participantCount": 2, "strokeCount": 3},
+        {"date": "2026-10-15", "participantCount": 1, "strokeCount": 1, "paper": DEFAULT_PAPER},
+        {"date": "2026-10-13", "participantCount": 2, "strokeCount": 3, "paper": DEFAULT_PAPER},
     ]
 
 

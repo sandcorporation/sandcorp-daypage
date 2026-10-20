@@ -62,6 +62,13 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
       if (!a || !el) return
       const margin = 8
       const h = el.offsetHeight
+      const w = el.offsetWidth
+      // 오른쪽에 자리가 없으면(머리글 오른쪽 끝의 버튼 등) 버튼 아래에 오른쪽 끝을 맞춰 연다
+      if (a.right + 12 + w > window.innerWidth - margin) {
+        const top = Math.min(a.bottom + 8, window.innerHeight - h - margin)
+        setPos({ top: Math.max(margin, top), left: Math.max(margin, a.right - w) })
+        return
+      }
       const wanted = align === 'bottom' ? a.bottom - h : a.top
       // 위쪽은 노트 머리말(약 64px) 아래로
       const top = Math.max(72, Math.min(wanted, window.innerHeight - h - margin))

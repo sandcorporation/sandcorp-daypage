@@ -10,6 +10,7 @@ import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLev
 import { TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
 import { DEFAULT_SHAPE, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
+import { DEFAULT_PAPER, paperStyle, type Paper } from './paper'
 
 /** 곡선: 첫 점·직전 점에서 이만큼(화면 px) 안을 누르면 닫기·끝내기로 본다 */
 const CURVE_SNAP_PX = 22
@@ -35,6 +36,8 @@ type Props = {
   brush?: Brush
   /** 도형 도구에서 고른 도형 */
   shape?: ShapeKind
+  /** 노트 종이(모양·여백 선·색). 없으면 기본 줄 노트 */
+  paper?: Paper
   /** 지우개 반지름(장 좌표). 주면 포인터 자리에 그 크기의 동그라미를 보인다(판타블렛처럼 커서가 없어도 지울 자리가 보이게) */
   eraserRadius?: number
   /** 곡선을 찍는 동안 찍은 점 수가 바뀔 때(0이면 곡선이 끝났다). 되돌리기 버튼을 켜고 끄는 데 쓴다 */
@@ -80,6 +83,7 @@ export function PageView({
   brush,
   shape = DEFAULT_SHAPE,
   eraserRadius,
+  paper = DEFAULT_PAPER,
   onCurveChange,
   curveControl,
   pressureOn = true,
@@ -587,7 +591,7 @@ export function PageView({
       >
         <div
           className="page-layer paper"
-          style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}
+          style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})`, ...paperStyle(paper) }}
         />
         <canvas
           ref={inkCanvasRef}

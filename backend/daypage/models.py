@@ -2,6 +2,7 @@ import secrets
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.db import models
+from django.db.models import Value
 
 
 class UserManager(BaseUserManager):
@@ -46,6 +47,8 @@ class Note(models.Model):
     member_limit = models.PositiveSmallIntegerField(null=True, blank=True)
     # 노트 색: 참여자가 더한 잉크 색(#rrggbb, 더한 순서). 날짜와 상관없이 남는다.
     colors = models.JSONField(default=list, blank=True)
+    # 노트 종이(paper.py). 빈 값이면 기본 줄 노트. db_default: 배포 중 옛 코드가 이 열 없이 노트를 만들어도 되게.
+    paper = models.JSONField(default=dict, blank=True, db_default=Value({}, output_field=models.JSONField()))
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
@@ -82,6 +85,8 @@ class Page(models.Model):
     stroke_count = models.PositiveIntegerField(default=0)
     participant_count = models.PositiveIntegerField(default=0)
     is_empty = models.BooleanField(default=True)
+    # 봉인할 때의 노트 종이(지난 기록이 그날 종이로 보이게). 봉인 전·옛 장은 비어 있다.
+    paper = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

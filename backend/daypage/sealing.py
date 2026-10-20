@@ -7,7 +7,7 @@ from channels.layers import get_channel_layer
 from django.db import transaction
 
 from . import clock
-from .models import Page
+from .models import Note, Page
 from .pages import _merge, doc_stats, drop_empty_text_boxes
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,9 @@ def seal_page(page_id: int) -> bool:
             page.state = doc.get_update()
         page.stroke_count, page.participant_count, page.is_empty = doc_stats(doc)
         page.sealed_at = clock.now()
-        page.save(update_fields=["state", "stroke_count", "participant_count", "is_empty", "sealed_at"])
+        # 그날 쓰던 노트 종이를 남긴다(뒤에 노트 종이를 바꿔도 지난 기록은 그대로 보이게)
+        page.paper = Note.objects.filter(pk=page.note_id).values_list("paper", flat=True).first() or {}
+        page.save(update_fields=["state", "stroke_count", "participant_count", "is_empty", "sealed_at", "paper"])
         return True
 
 

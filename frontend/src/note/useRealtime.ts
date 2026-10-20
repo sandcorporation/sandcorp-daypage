@@ -23,6 +23,8 @@ export const MESSAGE_PAGE_ROLLED = 100
 export const MESSAGE_QUEUED = 101
 /** 노트 색이 바뀜: {type: 'note_colors', colors} (consumers.py의 MESSAGE_NOTE_COLORS) */
 export const MESSAGE_NOTE_COLORS = 102
+/** 노트 종이가 바뀜: {type: 'note_paper', paper} (consumers.py의 MESSAGE_NOTE_PAPER) */
+export const MESSAGE_NOTE_PAPER = 103
 
 /** 다시 연결해도 소용없는 이유. full·away는 사람이 다시 시도할 때까지 접속하지 않는다. */
 export type FatalReason = 'unauthorized' | 'notFound' | 'crowded' | 'full' | 'away'
@@ -45,6 +47,8 @@ type Options = {
   onFatal: (reason: FatalReason) => void
   /** 노트 색이 바뀌었을 때(누가 더하거나 뺐다) */
   onNoteColors?: (colors: string[]) => void
+  /** 노트 종이가 바뀜(누가 바꿨든) */
+  onNotePaper?: (paper: unknown) => void
 }
 
 export function wsBaseUrl(noteId: string): string {
@@ -52,7 +56,7 @@ export function wsBaseUrl(noteId: string): string {
   return `${proto}//${window.location.host}/ws/notes/${noteId}/pages`
 }
 
-export function useRealtime({ noteId, date, doc, onNotToday, onFatal, onNoteColors }: Options) {
+export function useRealtime({ noteId, date, doc, onNotToday, onFatal, onNoteColors, onNotePaper }: Options) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [synced, setSynced] = useState(false)
@@ -82,6 +86,10 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal, onNoteColo
     p.messageHandlers[MESSAGE_NOTE_COLORS] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; colors: string[] }
       if (msg.type === 'note_colors') onNoteColors?.(msg.colors)
+    }
+    p.messageHandlers[MESSAGE_NOTE_PAPER] = (_encoder, decoder) => {
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; paper: unknown }
+      if (msg.type === 'note_paper') onNotePaper?.(msg.paper)
     }
     setProvider(p)
     setSynced(false)

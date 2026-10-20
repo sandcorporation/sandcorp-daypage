@@ -282,7 +282,10 @@ class Hub:
 
     async def _start(self) -> None:
         if self.channel is None:
-            self.channel = await self.layer.new_channel("daypage-hub")
+            # 연결(consumer) 채널과 같은 기본 앞부분으로 만든다. channels_redis는 프로세스마다 받기 잠금이 하나라,
+            # 앞부분이 다르면 잠금을 쥔 쪽이 자기 앞부분 목록만 기다려 다른 쪽 메시지가 쌓인 채 읽히지 않았다
+            # (운영에서 노트 색·종이 알림이 안 오고, 다른 프로세스 편집이 늦게 갈 수 있었다. tests/test_redis_layer.py).
+            self.channel = await self.layer.new_channel()
             self.reader = asyncio.create_task(self._read())
             self.trimmer = asyncio.create_task(self._trim_forever())
 

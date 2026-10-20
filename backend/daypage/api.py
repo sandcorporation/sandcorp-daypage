@@ -1,5 +1,6 @@
 import datetime as dt
 import re
+from typing import Literal
 
 from django.conf import settings
 from django.db import transaction
@@ -10,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from ninja import NinjaAPI, Schema
 from ninja.security import django_auth
 
-from . import clock, membership, rooms
+from . import clock, membership, paper, rooms
 from .models import Note, NoteMember, Page, Suggestion
 
 
@@ -160,7 +161,28 @@ def note_detail(request, note_id: str):
         "memberCount": note.members.count(),
         "memberLimit": note.member_limit,
         "colors": note.colors,
+        "paper": paper.normalize(note.paper),
     }
+
+
+class PaperIn(Schema):
+    pattern: Literal["lined", "grid", "dot", "blank"] | None = None
+    margin: bool | None = None
+    color: Literal["white", "cream", "gray", "chalk"] | None = None
+
+
+@api.patch("/notes/{note_id}/paper")
+def update_paper(request, note_id: str, body: PaperIn):
+    """노트 종이 바꾸기. 참여자라면 누구나. 준 항목만 바꾸고, 접속해 있는 사람들의 화면도 바로 바꾼다."""
+    member_note(request, note_id)
+    with transaction.atomic():
+        note = Note.objects.select_for_update().get(pk=note_id)
+        current = paper.normalize(note.paper)
+        changes = {k: v for k, v in body.dict().items() if v is not None}
+        note.paper = paper.normalize({**current, **changes})
+        note.save(update_fields=["paper"])
+        announce_note_event(note.id, {"type": "note.paper", "paper": note.paper})
+    return note.paper
 
 
 class UpdateNoteIn(Schema):
@@ -246,13 +268,18 @@ def remove_note_color(request, note_id: str, color: str):
 
 def announce_note_colors(note_id: str, colors: list[str]) -> None:
     """접속해 있는 사람들의 도구 막대를 바로 바꾸게 알린다(저장이 끝난 뒤)."""
+    announce_note_event(note_id, {"type": "note.colors", "colors": colors})
+
+
+def announce_note_event(note_id: str, event: dict) -> None:
+    """노트에 접속해 있는 연결들에 알린다(저장이 끝난 뒤)."""
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
 
     from .consumers import note_group
 
     def send() -> None:
-        async_to_sync(get_channel_layer().group_send)(note_group(note_id), {"type": "note.colors", "colors": colors})
+        async_to_sync(get_channel_layer().group_send)(note_group(note_id), event)
 
     transaction.on_commit(send)
 
@@ -262,7 +289,13 @@ def sealed_pages(request, note_id: str):
     note = member_note(request, note_id)
     pages = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date")
     return [
-        {"date": p.date.isoformat(), "participantCount": p.participant_count, "strokeCount": p.stroke_count}
+        {
+            "date": p.date.isoformat(),
+            "participantCount": p.participant_count,
+            "strokeCount": p.stroke_count,
+            # 그날 쓰던 종이(종이 설정 전에 봉인한 장은 기본 줄 노트)
+            "paper": paper.normalize(p.paper),
+        }
         for p in pages
     ]
 

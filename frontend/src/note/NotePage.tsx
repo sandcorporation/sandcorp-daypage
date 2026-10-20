@@ -20,6 +20,8 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ErrorScreen, MessageCard } from '../pages/ErrorScreen'
 import { ConnectionPill } from './ConnectionPill'
 import { NewsButton } from '../news/NewsButton'
+import { PaperButton } from './PaperButton'
+import { normalizePaper, type Paper } from '../page/paper'
 import { SuggestButton } from '../suggest/SuggestButton'
 import { NoteHeader } from './NoteHeader'
 import { Cursors } from './Cursors'
@@ -137,6 +139,23 @@ export function NotePage({ initial }: Props) {
   useEffect(() => () => window.clearTimeout(retryTimer.current), [])
 
   const setNoteColors = useCallback((colors: string[]) => setNote((n) => ({ ...n, colors })), [])
+  const setNotePaper = useCallback((raw: unknown) => setNote((n) => ({ ...n, paper: normalizePaper(raw) })), [])
+  const paper = normalizePaper(note.paper)
+  // 종이 바꾸기: 화면은 바로 바꾸고 저장한다(실패하면 되돌린다). 다른 사람에게는 서버가 알린다.
+  const changePaper = useCallback(
+    async (change: Partial<Paper>) => {
+      const before = note.paper
+      setNote((n) => ({ ...n, paper: { ...normalizePaper(n.paper), ...change } }))
+      try {
+        const saved = await api<Paper>(`/api/notes/${note.id}/paper`, { method: 'PATCH', body: JSON.stringify(change) })
+        setNotePaper(saved)
+      } catch {
+        setNote((n) => ({ ...n, paper: before }))
+        show('종이를 바꾸지 못했어요. 잠시 뒤 다시 해 주세요.')
+      }
+    },
+    [note.id, note.paper, setNotePaper, show],
+  )
   const { provider, status, synced, queuePosition, reconnect } = useRealtime({
     noteId: note.id,
     date: note.today,
@@ -144,6 +163,7 @@ export function NotePage({ initial }: Props) {
     onNotToday: refreshToday,
     onFatal: setFatal,
     onNoteColors: setNoteColors,
+    onNotePaper: setNotePaper,
   })
   reconnectRef.current = reconnect
   const rejoin = useCallback(() => {
@@ -323,13 +343,16 @@ export function NotePage({ initial }: Props) {
         onRename={rename}
         onShare={share}
         settings={
-          <MemberLimitControl
+          <>
+            <PaperButton paper={paper} onChange={(c) => void changePaper(c)} />
+            <MemberLimitControl
             memberCount={note.memberCount}
             memberLimit={note.memberLimit}
             editable={note.isOwner}
             onChange={changeLimit}
             onDelete={note.isOwner ? () => setConfirmDelete(true) : undefined}
           />
+          </>
         }
       />
       <div className="note-body">
@@ -370,6 +393,7 @@ export function NotePage({ initial }: Props) {
         />
         <PageView
           doc={doc}
+          paper={paper}
           tool={tool}
           ink={ink}
           widthLevel={widthLevel}

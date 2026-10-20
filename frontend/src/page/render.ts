@@ -2,7 +2,7 @@ import { getStroke, type StrokeOptions } from 'perfect-freehand'
 import { brushOf, type Stroke } from './doc'
 import type { LayerPlanItem } from './layers'
 import { grainPattern, grainSeed } from './texture'
-import { LINE_GAP, MARGIN_X, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
+import { DEFAULT_PAPER, paintPaperOn, type Paper } from './paper'
 
 export const HIGHLIGHTER_ALPHA = 0.45
 
@@ -130,27 +130,9 @@ export function paintStrokes(ctx: CanvasRenderingContext2D, strokes: Stroke[], p
   for (const s of pens) paintStroke(ctx, s)
 }
 
-/** 줄노트 종이(이미지 저장용). 화면에서는 CSS 배경을 쓴다. */
-export function paintPaper(ctx: CanvasRenderingContext2D, pixelScale: number): void {
-  ctx.save()
-  ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT)
-  ctx.strokeStyle = '#e9ecf2'
-  ctx.lineWidth = 1
-  for (let y = LINE_GAP; y < PAGE_HEIGHT; y += LINE_GAP) {
-    ctx.beginPath()
-    ctx.moveTo(0, y + 0.5)
-    ctx.lineTo(PAGE_WIDTH, y + 0.5)
-    ctx.stroke()
-  }
-  ctx.strokeStyle = '#f1b5a4'
-  ctx.lineWidth = 2
-  ctx.beginPath()
-  ctx.moveTo(MARGIN_X - 24, 0)
-  ctx.lineTo(MARGIN_X - 24, PAGE_HEIGHT)
-  ctx.stroke()
-  ctx.restore()
+/** 종이(이미지 저장용). 화면에서는 CSS 배경(paper.ts의 paperStyle)을 쓴다. */
+export function paintPaper(ctx: CanvasRenderingContext2D, pixelScale: number, paper: Paper = DEFAULT_PAPER): void {
+  paintPaperOn(ctx, pixelScale, paper)
 }
 
 /**

@@ -6,13 +6,14 @@ import { useToast } from '../components/Toast'
 import { formatShortDate } from '../note/time'
 import type { NoteDetail } from '../note/types'
 import { downloadBlob, exportFileName, renderPagePng } from '../page/exportPng'
+import { normalizePaper, type Paper } from '../page/paper'
 import { PageView } from '../page/PageView'
 import { TextLayer } from '../page/TextLayer'
 import { ErrorScreen } from '../pages/ErrorScreen'
 import '../note/note.css'
 import './history.css'
 
-type SealedPage = { date: string; participantCount: number; strokeCount: number }
+type SealedPage = { date: string; participantCount: number; strokeCount: number; paper?: unknown }
 
 const noop = () => {}
 const NO_EDITORS = new Map()
@@ -99,14 +100,22 @@ export function HistoryPage() {
               ))}
             </ol>
           </section>
-          {selected && <SealedPageView key={selected} noteId={noteId} noteName={note.name} date={selected} />}
+          {selected && (
+            <SealedPageView
+              key={selected}
+              noteId={noteId}
+              noteName={note.name}
+              date={selected}
+              paper={normalizePaper(pages?.find((p) => p.date === selected)?.paper)}
+            />
+          )}
         </main>
       )}
     </div>
   )
 }
 
-function SealedPageView({ noteId, noteName, date }: { noteId: string; noteName: string; date: string }) {
+function SealedPageView({ noteId, noteName, date, paper }: { noteId: string; noteName: string; date: string; paper: Paper }) {
   const doc = useMemo(() => new Y.Doc(), [])
   const [loaded, setLoaded] = useState<'loading' | 'ok' | 'missing'>('loading')
   const [scale, setScale] = useState(0.5)
@@ -125,7 +134,7 @@ function SealedPageView({ noteId, noteName, date }: { noteId: string; noteName: 
   async function save() {
     setSaving(true)
     try {
-      downloadBlob(await renderPagePng(doc, 1), exportFileName(noteName, date))
+      downloadBlob(await renderPagePng(doc, 1, paper), exportFileName(noteName, date))
     } catch {
       show('이미지를 만들지 못했어요')
     } finally {
@@ -153,7 +162,7 @@ function SealedPageView({ noteId, noteName, date }: { noteId: string; noteName: 
       {loaded === 'missing' ? (
         <p className="empty">이 페이지를 불러오지 못했어요.</p>
       ) : (
-        <PageView doc={doc} tool="select" ink="#000" widthLevel={1} author="" readOnly onScale={setScale}>
+        <PageView doc={doc} paper={paper} tool="select" ink="#000" widthLevel={1} author="" readOnly onScale={setScale}>
           <TextLayer
             doc={doc}
             tool="select"

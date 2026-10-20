@@ -3,6 +3,7 @@ import { readStrokes, readTextBoxes, textBoxContent, type TextBox } from './doc'
 import { LINE_GAP, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 import { layerPlan, readLayers } from './layers'
 import { paintLayers, paintPaper } from './render'
+import type { Paper } from './paper'
 import { textStyle } from './textStyle'
 
 export type Marks = Record<string, Record<string, unknown> | undefined>
@@ -133,14 +134,14 @@ function paintTextBox(ctx: CanvasRenderingContext2D, doc: Y.Doc, box: TextBox): 
 }
 
 /** 장 전체를 한 장의 PNG로 그린다(종이 + 획 + 글 상자). */
-export async function renderPagePng(doc: Y.Doc, pixelScale = 1): Promise<Blob> {
+export async function renderPagePng(doc: Y.Doc, pixelScale = 1, paper?: Paper): Promise<Blob> {
   await document.fonts?.ready
   const canvas = document.createElement('canvas')
   canvas.width = PAGE_WIDTH * pixelScale
   canvas.height = PAGE_HEIGHT * pixelScale
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas를 쓸 수 없어요')
-  paintPaper(ctx, pixelScale)
+  paintPaper(ctx, pixelScale, paper)
   // 내가 숨긴 레이어도 담는다(모두가 본 페이지 그대로).
   paintLayers(ctx, layerPlan(readStrokes(doc), readLayers(doc)), pixelScale)
   ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
