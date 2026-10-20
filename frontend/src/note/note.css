@@ -1924,3 +1924,103 @@
     gap: 3px;
   }
 }
+
+/* 굵기 직접 정하기(px) */
+.width-custom-btn {
+  flex-direction: column;
+  gap: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink-soft);
+}
+.width-custom-btn small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted-2);
+}
+.width-custom-btn[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.width-panel {
+  min-width: 220px;
+}
+.width-custom {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.width-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.width-custom-row input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.width-px {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.width-px input {
+  width: 56px;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  text-align: right;
+}
+.width-preview {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  margin-top: 6px;
+}
+.width-preview span {
+  display: block;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--ink-soft);
+}
+.width-custom[data-active='false'] .width-preview span {
+  background: var(--muted-2);
+}
+
+/* 글자 크기 px 조절(서식 막대) */
+.format-px {
+  display: inline-flex;
+  align-items: center;
+}
+.format-px .format-btn {
+  min-width: 26px;
+  font-size: 16px;
+}
+.format-px .format-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.format-px-value {
+  min-width: 38px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+/* 높이가 낮은 화면의 세로 도구 막대: 굵기를 버튼 하나로 접는다(휴대폰과 같은 굵기 창) */
+@media (min-width: 721px) and (max-height: 900px) {
+  .toolbar:not([data-dock='top']):not([data-dock='bottom']) .width-inline {
+    display: none;
+  }
+  .toolbar:not([data-dock='top']):not([data-dock='bottom']) .width-fold {
+    display: flex;
+  }
+}

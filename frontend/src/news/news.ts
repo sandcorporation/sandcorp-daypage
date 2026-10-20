@@ -1,6 +1,7 @@
 /**
  * 새 소식(업데이트 내역). 사용자에게 보이는 변화가 있는 배포마다 맨 위에 한 덩어리를 더한다.
  * id는 한 번 정하면 바꾸지 않는다(본 기록이 id로 남는다).
+ * date는 '10월 20일 오후'처럼 날짜와 시간대(오전·오후·밤). 같은 날 같은 시간대에 여럿이면 '오후 -1', '오후 -2'로 번호를 붙인다.
  */
 export type NewsKind = 'new' | 'fix' | 'start'
 
@@ -23,8 +24,24 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-20-sizes',
+    date: '10월 20일 오후 -2',
+    items: [
+      {
+        kind: 'new',
+        title: '굵기를 px로',
+        text: '굵기 버튼 옆 px를 누르면 1~80px 사이에서 밀대나 숫자로 굵기를 정할 수 있어요. 펜·형광펜·도형에 그대로 쓰여요.',
+      },
+      {
+        kind: 'new',
+        title: '글자 크기를 px로',
+        text: '글 상자 서식 막대의 − / + 로 글자 크기를 2px씩 바꿔요. 작게·보통·크게도 그대로 있어요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-20-toolbar-dock',
-    date: '10월 20일 저녁',
+    date: '10월 20일 오후 -1',
     items: [
       {
         kind: 'new',
@@ -35,7 +52,7 @@ export const NEWS: NewsEntry[] = [
   },
   {
     id: '2026-10-20-paper-color',
-    date: '10월 20일 오후',
+    date: '10월 20일 오전 -2',
     items: [
       {
         kind: 'new',
@@ -47,7 +64,7 @@ export const NEWS: NewsEntry[] = [
   },
   {
     id: '2026-10-20-paper',
-    date: '10월 20일',
+    date: '10월 20일 오전 -1',
     items: [
       {
         kind: 'new',
@@ -66,7 +83,7 @@ export const NEWS: NewsEntry[] = [
   },
   {
     id: '2026-10-19-suggest',
-    date: '10월 19일 저녁',
+    date: '10월 19일 오후 -2',
     items: [
       { kind: 'new', title: '기능 건의', text: '아래 왼쪽 말풍선 버튼으로 바라는 기능이나 불편한 점을 보내 주세요.' },
       { kind: 'fix', text: '아래쪽 표시들이 노트 끝을 가리지 않게 여백을 두었어요.' },
@@ -74,7 +91,7 @@ export const NEWS: NewsEntry[] = [
   },
   {
     id: '2026-10-19-zoom',
-    date: '10월 19일',
+    date: '10월 19일 오후 -1',
     items: [{ kind: 'new', title: '150%·200% 확대', text: '작은 글씨나 그림을 더 크게 보며 그릴 수 있어요. 오른쪽 아래 + 버튼으로요.' }],
   },
   {

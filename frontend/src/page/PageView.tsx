@@ -32,6 +32,8 @@ type Props = {
   tool: ToolKind
   ink: string
   widthLevel: WidthLevel
+  /** 직접 정한 굵기(px). 있으면 단계 대신 쓴다 */
+  customWidth?: number | null
   /** 펜 종류(펜·도형일 때 쓴다) */
   brush?: Brush
   /** 도형 도구에서 고른 도형 */
@@ -80,6 +82,7 @@ export function PageView({
   tool,
   ink,
   widthLevel,
+  customWidth = null,
   brush,
   shape = DEFAULT_SHAPE,
   eraserRadius,
@@ -262,7 +265,7 @@ export function PageView({
       id: newId(),
       tool: 'pen',
       color: ink,
-      width: strokeWidth('pen', widthLevel),
+      width: strokeWidth('pen', widthLevel, customWidth),
       points: [],
       author,
       createdAt: Date.now(),
@@ -445,7 +448,7 @@ export function PageView({
         id: newId(),
         tool,
         color: ink,
-        width: strokeWidth(tool, widthLevel),
+        width: strokeWidth(tool, widthLevel, customWidth),
         points: [round(p.x), round(p.y), firstPressure],
         author,
         createdAt: Date.now(),

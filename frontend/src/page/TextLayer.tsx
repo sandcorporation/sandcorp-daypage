@@ -269,6 +269,7 @@ function TextBoxView({
           below={y * scale < 56}
           alignRight={x + FORMAT_BAR_WIDTH / scale > PAGE_WIDTH}
           noteColors={noteColors}
+          baseSize={box.fontSize}
         />}
       {interactive && (
         <button

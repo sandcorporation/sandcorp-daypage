@@ -1,6 +1,7 @@
 import { useEditorState, type Editor } from '@tiptap/react'
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { TEXT_COLORS, TEXT_SIZES } from './editorExtensions'
+import { resolveFontSize } from './textStyle'
 
 // 누르는 동안 편집기의 선택·포커스를 지킨다.
 const keep = (e: PointerEvent) => e.preventDefault()
@@ -36,10 +37,17 @@ type Props = {
   alignRight?: boolean
   /** 노트 색(#rrggbb). 기본 글자 색 뒤에 붙는다 */
   noteColors?: string[]
+  /** 상자 기본 글자 크기(px). 작게·크게 비율과 px 조절의 기준 */
+  baseSize?: number
 }
 
+/** 글자 크기를 px로 정할 때의 범위와 한 번에 바꾸는 양 */
+const TEXT_PX_MIN = 10
+const TEXT_PX_MAX = 72
+const TEXT_PX_STEP = 2
+
 /** 편집 중인 글 상자 위에 뜨는 서식 막대. 장 레이어의 축소를 거꾸로 키워 화면에서 일정한 크기로 보인다. */
-export function FormatBar({ editor, scale, below = false, alignRight = false, noteColors = [] }: Props) {
+export function FormatBar({ editor, scale, below = false, alignRight = false, noteColors = [], baseSize = 28 }: Props) {
   const [colorsOpen, setColorsOpen] = useState(false)
   const colorsRef = useRef<HTMLSpanElement>(null)
   // 펼친 색 줄이 보이는 범위 밖으로 나가면 안쪽으로 민다(넓으면 왼쪽 끝을 맞춘다).
@@ -65,6 +73,12 @@ export function FormatBar({ editor, scale, below = false, alignRight = false, no
   })
 
   const run = (fn: () => void) => () => fn()
+  // 지금 글자 크기(px). 마크가 없으면 상자 기본 크기
+  const px = resolveFontSize(baseSize, state.fontSize)
+  const setPx = (next: number) => () => {
+    const v = Math.min(TEXT_PX_MAX, Math.max(TEXT_PX_MIN, next))
+    editor.chain().focus().setFontSize(`${v}px`).run()
+  }
   // 색을 고르면 펼친 색 줄을 닫는다. null이면 상자 기본색으로 되돌린다.
   const pickColor = (color: string | null) => () => {
     if (color === null) editor.chain().focus().unsetColor().run()
@@ -168,6 +182,34 @@ export function FormatBar({ editor, scale, below = false, alignRight = false, no
           <span style={{ fontSize: s.id === 'small' ? 11 : s.id === 'large' ? 17 : 14 }}>가</span>
         </button>
       ))}
+      {/* px로 직접: 지금 크기에서 2px씩 */}
+      <span className="format-px">
+        <button
+          type="button"
+          className="format-btn"
+          aria-label="글자 크기 2px 작게"
+          title="글자 크기 2px 작게"
+          disabled={px <= TEXT_PX_MIN}
+          onPointerDown={keep}
+          onClick={setPx(px - TEXT_PX_STEP)}
+        >
+          −
+        </button>
+        <span className="format-px-value" title="글자 크기(px)">
+          {px}px
+        </span>
+        <button
+          type="button"
+          className="format-btn"
+          aria-label="글자 크기 2px 크게"
+          title="글자 크기 2px 크게"
+          disabled={px >= TEXT_PX_MAX}
+          onPointerDown={keep}
+          onClick={setPx(px + TEXT_PX_STEP)}
+        >
+          +
+        </button>
+      </span>
     </div>
   )
 }

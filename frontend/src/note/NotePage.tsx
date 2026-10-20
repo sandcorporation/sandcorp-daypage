@@ -56,6 +56,12 @@ export function NotePage({ initial }: Props) {
   const [tool, setTool] = useState<ToolKind>(prefs.tool)
   const [chosenInk, setInk] = useState<string>(prefs.ink)
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(prefs.widthLevel)
+  const [customWidth, setCustomWidth] = useState<number | null>(prefs.customWidth)
+  // 기본 굵기를 고르면 직접 정한 굵기는 쓰지 않는다
+  const chooseWidth = useCallback((level: WidthLevel) => {
+    setWidthLevel(level)
+    setCustomWidth(null)
+  }, [])
   const [font, setFont] = useState<string>(prefs.font)
   const [brush, setBrush] = useState<Brush>(prefs.brush)
   const [pressureOn, setPressureOn] = useState(prefs.pressure)
@@ -64,8 +70,8 @@ export function NotePage({ initial }: Props) {
   const ink =
     INKS.some((i) => i.color === chosenInk) || note.colors.includes(chosenInk.toLowerCase()) ? chosenInk : INKS[0].color
   useEffect(
-    () => saveToolPrefs({ tool, ink, widthLevel, font, brush, shape, pressure: pressureOn }),
-    [tool, ink, widthLevel, font, brush, shape, pressureOn],
+    () => saveToolPrefs({ tool, ink, widthLevel, customWidth, font, brush, shape, pressure: pressureOn }),
+    [tool, ink, widthLevel, customWidth, font, brush, shape, pressureOn],
   )
   const [scale, setScale] = useState(0.5)
   const [zoom, setZoom] = useState<Zoom>('fit')
@@ -372,7 +378,9 @@ export function NotePage({ initial }: Props) {
           canRedo={history.canRedo && curvePoints === 0}
           onTool={setTool}
           onInk={setInk}
-          onWidth={setWidthLevel}
+          onWidth={chooseWidth}
+          customWidth={customWidth}
+          onCustomWidth={setCustomWidth}
           onUndo={undo}
           onRedo={redo}
           font={font}
@@ -405,6 +413,7 @@ export function NotePage({ initial }: Props) {
           tool={tool}
           ink={ink}
           widthLevel={widthLevel}
+          customWidth={customWidth}
           brush={brush}
           shape={shape}
           eraserRadius={tool === 'eraser' ? ERASER_RADIUS : undefined}

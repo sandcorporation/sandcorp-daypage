@@ -203,3 +203,30 @@ describe('도구 막대 옮기기', () => {
     expect(screen.getByRole('navigation', { name: '도구' })).toHaveAttribute('data-dock', 'top')
   })
 })
+
+describe('굵기', () => {
+  test('기본 굵기를 고르면 그 단계로 바꾼다', async () => {
+    const props = setup({ widthLevel: 1 })
+    await userEvent.click(screen.getByRole('button', { name: '굵기 굵게' }))
+    expect(props.onWidth).toHaveBeenCalledWith(2)
+  })
+
+  test('직접 정하기에서 px로 굵기를 넣는다(1~80으로 맞춘다)', async () => {
+    const onCustomWidth = vi.fn()
+    setup({ customWidth: null, onCustomWidth })
+    await userEvent.click(screen.getByRole('button', { name: /굵기 직접 정하기/ }))
+    const input = screen.getByRole('spinbutton', { name: '굵기(px)' })
+    await userEvent.clear(input)
+    await userEvent.type(input, '18{Enter}')
+    expect(onCustomWidth).toHaveBeenLastCalledWith(18)
+    await userEvent.clear(input)
+    await userEvent.type(input, '500{Enter}')
+    expect(onCustomWidth).toHaveBeenLastCalledWith(80)
+  })
+
+  test('직접 정한 굵기가 있으면 기본 굵기는 골라져 보이지 않고 버튼에 px가 보인다', () => {
+    setup({ widthLevel: 1, customWidth: 18, onCustomWidth: vi.fn() })
+    expect(screen.getByRole('button', { name: '굵기 보통' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: '굵기 직접 정하기: 18px' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})

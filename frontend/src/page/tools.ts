@@ -31,8 +31,19 @@ export const WIDTH_NAMES = ['가늘게', '보통', '굵게'] as const
 const PEN_WIDTHS = [3, 6, 12]
 const HIGHLIGHTER_WIDTHS = [14, 24, 36]
 
-export function strokeWidth(tool: 'pen' | 'highlighter', level: WidthLevel): number {
-  return (tool === 'pen' ? PEN_WIDTHS : HIGHLIGHTER_WIDTHS)[level]
+/** 직접 정하는 굵기(px)의 범위 */
+export const CUSTOM_WIDTH_MIN = 1
+export const CUSTOM_WIDTH_MAX = 80
+
+/** 획 굵기(px). 직접 정한 굵기가 있으면 단계 대신 그 값을 펜·형광펜·도형에 그대로 쓴다. */
+export function strokeWidth(tool: 'pen' | 'highlighter', level: WidthLevel, customWidth: number | null = null): number {
+  return customWidth ?? (tool === 'pen' ? PEN_WIDTHS : HIGHLIGHTER_WIDTHS)[level]
+}
+
+/** 입력한 굵기를 범위 안의 정수로 맞춘다. 숫자가 아니면 null. */
+export function clampCustomWidth(value: number): number | null {
+  if (!Number.isFinite(value)) return null
+  return Math.min(CUSTOM_WIDTH_MAX, Math.max(CUSTOM_WIDTH_MIN, Math.round(value)))
 }
 
 /**

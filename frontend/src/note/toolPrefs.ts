@@ -1,12 +1,14 @@
 import { DEFAULT_FONT, FONTS } from '../page/fonts'
 import { DEFAULT_SHAPE, isShape, type ShapeKind } from '../page/shapes'
-import { DEFAULT_BRUSH, INKS, isBrush, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
+import { clampCustomWidth, DEFAULT_BRUSH, INKS, isBrush, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
 
 /** 이 브라우저에서 마지막으로 고른 도구 설정. 사람마다·기기마다 다른 편의 설정이라 브라우저에만 둔다. */
 export type ToolPrefs = {
   tool: ToolKind
   ink: string
   widthLevel: WidthLevel
+  /** 직접 정한 굵기(px). 있으면 단계 대신 쓴다 */
+  customWidth: number | null
   font: string
   brush: Brush
   /** 도형 도구에서 고른 도형 */
@@ -19,6 +21,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   tool: 'pen',
   ink: INKS[0].color,
   widthLevel: 1,
+  customWidth: null,
   font: DEFAULT_FONT.id,
   brush: DEFAULT_BRUSH,
   shape: DEFAULT_SHAPE,
@@ -57,6 +60,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     // 기본 잉크이거나 노트 색(#rrggbb). 노트 색이 빠졌는지는 노트를 연 뒤 확인한다.
     ink: INKS.some((i) => i.color === raw.ink) || isHexColor(raw.ink) ? (raw.ink as string) : d.ink,
     widthLevel: [0, 1, 2].includes(raw.widthLevel as number) ? (raw.widthLevel as WidthLevel) : d.widthLevel,
+    customWidth: typeof raw.customWidth === 'number' ? clampCustomWidth(raw.customWidth) : null,
     font: FONTS.some((f) => f.id === raw.font) ? (raw.font as string) : d.font,
     brush: isBrush(raw.brush) ? raw.brush : d.brush,
     shape: isShape(raw.shape) ? raw.shape : d.shape,

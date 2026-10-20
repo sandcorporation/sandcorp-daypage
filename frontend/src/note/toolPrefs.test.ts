@@ -11,7 +11,7 @@ function memoryStorage(initial: Record<string, string> = {}) {
 
 test('저장한 도구 설정을 다시 읽는다', () => {
   const storage = memoryStorage()
-  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false } as const
+  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false } as const
   saveToolPrefs(prefs, storage)
   expect(loadToolPrefs(storage)).toEqual(prefs)
 })
@@ -44,4 +44,9 @@ test('저장소를 쓸 수 없는 환경(시크릿 창 등)에서도 깨지지 �
 test('노트 색(#rrggbb)도 고른 잉크로 기억한다', () => {
   const storage = memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ ink: '#16794f' }) })
   expect(loadToolPrefs(storage).ink).toBe('#16794f')
+})
+
+test('직접 정한 굵기는 1~80으로 맞추고, 숫자가 아니면 쓰지 않는다', () => {
+  expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ customWidth: 300 }) })).customWidth).toBe(80)
+  expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ customWidth: 'big' }) })).customWidth).toBeNull()
 })

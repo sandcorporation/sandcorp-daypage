@@ -77,3 +77,8 @@ describe('글 상자 1000자 제한', () => {
     editor.destroy()
   })
 })
+
+test('px로 정한 글자 크기는 그 크기 그대로 그린다', () => {
+  const style = textStyle({ color: '#2A47B0', fontSize: 28, font: 'pen' }, { textStyle: { fontSize: '40px' } })
+  expect(style.size).toBe(40)
+})
