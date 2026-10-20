@@ -1,5 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { ToolPopover } from '../components/ToolPopover'
+import { createPortal } from 'react-dom'
+import { PopoverSideContext, ToolPopover } from '../components/ToolPopover'
+import type { PopoverSide } from '../components/popoverPlacement'
+import { dockAt, type ToolbarDock } from './toolbarDock'
 import { BrushPicker } from './BrushPicker'
 import { ShapePicker } from './ShapePicker'
 import { SHAPES, type ShapeKind } from './shapes'
@@ -34,6 +37,63 @@ type Props = {
   onRemoveColor?: (color: string) => void
   /** 레이어 버튼으로 여는 레이어 패널 내용. 없으면 버튼을 보이지 않는다 */
   layerPanel?: ReactNode
+  /** 넓은 화면에서 도구 막대를 붙인 가장자리(휴대폰은 늘 위) */
+  dock?: ToolbarDock
+  /** 손잡이로 옮겼을 때. 없으면 손잡이를 보이지 않는다 */
+  onDock?: (dock: ToolbarDock) => void
+}
+
+/** 도구 창은 도구 막대가 붙은 가장자리의 반대쪽으로 연다 */
+const POPOVER_SIDE: Record<ToolbarDock, PopoverSide> = { left: 'right', right: 'left', top: 'below', bottom: 'above' }
+const ARROW_DOCK: Record<string, ToolbarDock> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'top', ArrowDown: 'bottom' }
+
+/**
+ * 도구 막대 손잡이. 끌면 가장 가까운 가장자리를 미리 보이고, 놓으면 그곳에 붙인다. 화살표 키로도 옮긴다.
+ */
+function DockGrip({ dock, onDock }: { dock: ToolbarDock; onDock: (dock: ToolbarDock) => void }) {
+  const [target, setTarget] = useState<ToolbarDock | null>(null)
+  const start = useRef<{ x: number; y: number } | null>(null)
+  const view = () => ({ width: window.innerWidth, height: window.innerHeight })
+  return (
+    <>
+      <button
+        type="button"
+        className="toolbar-grip"
+        aria-label="도구 막대 옮기기"
+        title="끌어서 왼쪽·오른쪽·위·아래로 옮겨요 (화살표 키로도)"
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId)
+          start.current = { x: e.clientX, y: e.clientY }
+        }}
+        onPointerMove={(e) => {
+          const s = start.current
+          if (!s) return
+          if (target === null && Math.hypot(e.clientX - s.x, e.clientY - s.y) < 6) return
+          setTarget(dockAt({ x: e.clientX, y: e.clientY }, view()))
+        }}
+        onPointerUp={() => {
+          if (target && target !== dock) onDock(target)
+          start.current = null
+          setTarget(null)
+        }}
+        onPointerCancel={() => {
+          start.current = null
+          setTarget(null)
+        }}
+        onKeyDown={(e) => {
+          const next = ARROW_DOCK[e.key]
+          if (!next) return
+          e.preventDefault()
+          onDock(next)
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          {[4, 8, 12].flatMap((y) => [6, 10].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.3" fill="currentColor" />))}
+        </svg>
+      </button>
+      {target && createPortal(<div className="dock-preview" data-dock={target} aria-hidden="true" />, document.body)}
+    </>
+  )
 }
 
 const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
@@ -58,8 +118,11 @@ export function Toolbar(props: Props) {
   const [brushOpen, setBrushOpen] = useState(false)
   const penRef = useRef<HTMLButtonElement>(null)
   const brushName = BRUSHES.find((b) => b.id === brush)?.name ?? BRUSHES[0].name
+  const dock = props.dock ?? 'left'
   return (
-    <nav aria-label="도구" className="toolbar">
+    <PopoverSideContext.Provider value={POPOVER_SIDE[dock]}>
+    <nav aria-label="도구" className="toolbar" data-dock={dock}>
+      {props.onDock && <DockGrip dock={dock} onDock={props.onDock} />}
       {TOOLS.map((t) =>
         t.kind === 'pen' ? (
           <div key={t.kind} className="tool-anchor">
@@ -237,5 +300,6 @@ export function Toolbar(props: Props) {
         </svg>
       </button>
     </nav>
+    </PopoverSideContext.Provider>
   )
 }

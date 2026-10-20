@@ -23,6 +23,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-20-toolbar-dock',
+    date: '10월 20일 저녁',
+    items: [
+      {
+        kind: 'new',
+        title: '도구 막대 옮기기',
+        text: '넓은 화면에서 도구 막대 맨 앞의 점 손잡이를 끌어 왼쪽·오른쪽·위·아래에 붙일 수 있어요. 고른 자리는 이 브라우저에 기억해요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-20-paper-color',
     date: '10월 20일 오후',
     items: [

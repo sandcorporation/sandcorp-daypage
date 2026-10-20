@@ -1799,3 +1799,128 @@
   padding-top: 12px;
   border-top: 1px solid var(--line-soft);
 }
+
+/* 도구 막대 옮기기: 손잡이로 끌어 왼쪽·오른쪽·위·아래에 붙인다(넓은 화면만, 휴대폰은 늘 위) */
+.toolbar-grip {
+  width: 48px;
+  height: 14px;
+  margin-bottom: -2px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+}
+.toolbar-grip:hover {
+  background: var(--paper-dark);
+  color: var(--ink-soft);
+}
+.toolbar-grip:active {
+  cursor: grabbing;
+}
+.dock-preview {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  border-radius: 16px;
+  background: rgba(42, 71, 176, 0.1);
+}
+.dock-preview[data-dock='left'],
+.dock-preview[data-dock='right'] {
+  top: calc(var(--note-header-h, 72px) + 12px);
+  bottom: 12px;
+  width: 76px;
+}
+.dock-preview[data-dock='left'] {
+  left: 12px;
+}
+.dock-preview[data-dock='right'] {
+  right: 12px;
+}
+.dock-preview[data-dock='top'],
+.dock-preview[data-dock='bottom'] {
+  left: 12px;
+  right: 12px;
+  height: 76px;
+}
+.dock-preview[data-dock='top'] {
+  top: calc(var(--note-header-h, 72px) + 8px);
+}
+.dock-preview[data-dock='bottom'] {
+  bottom: 12px;
+}
+
+@media (min-width: 721px) {
+  .note-body[data-dock='right'] {
+    flex-direction: row-reverse;
+  }
+  .note-body[data-dock='top'],
+  .note-body[data-dock='bottom'] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .note-body[data-dock='top'] .page-viewport,
+  .note-body[data-dock='bottom'] .page-viewport {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .toolbar[data-dock='top'],
+  .toolbar[data-dock='bottom'] {
+    flex-direction: row;
+    align-items: center;
+    align-self: center;
+    max-width: 100%;
+  }
+  .toolbar[data-dock='bottom'] {
+    order: 2;
+    top: auto;
+    /* 아래 칩(연결·새 소식·건의·배율) 위에 뜬다 */
+    bottom: 68px;
+  }
+  .toolbar[data-dock='top'] .tool-sep,
+  .toolbar[data-dock='bottom'] .tool-sep {
+    width: 1px;
+    height: auto;
+    align-self: stretch;
+    margin: 6px 4px;
+  }
+  .toolbar[data-dock='top'] .toolbar-grip,
+  .toolbar[data-dock='bottom'] .toolbar-grip {
+    width: 16px;
+    height: 48px;
+    margin: 0 -2px 0 0;
+  }
+  .toolbar[data-dock='top'] .toolbar-grip svg,
+  .toolbar[data-dock='bottom'] .toolbar-grip svg {
+    transform: rotate(90deg);
+  }
+  .toolbar[data-dock='right'] .font-menu {
+    left: auto;
+    right: calc(100% + 10px);
+  }
+  .toolbar[data-dock='top'] .font-menu {
+    left: 0;
+    top: calc(100% + 8px);
+  }
+  .toolbar[data-dock='bottom'] .font-menu {
+    left: 0;
+    top: auto;
+    bottom: calc(100% + 8px);
+  }
+}
+@media (max-width: 720px) {
+  .toolbar-grip {
+    display: none;
+  }
+}
+/* 높이가 낮은 화면: 세로 도구 막대가 아래 칩(연결·배율)에 닿지 않게 간격을 줄인다 */
+@media (min-width: 721px) and (max-height: 900px) {
+  .toolbar:not([data-dock='top']):not([data-dock='bottom']) {
+    gap: 3px;
+  }
+}

@@ -178,3 +178,28 @@ describe('도형', () => {
     expect(screen.queryByRole('dialog', { name: '도형' })).not.toBeInTheDocument()
   })
 })
+
+describe('도구 막대 옮기기', () => {
+  test('손잡이에서 화살표 키로 붙일 가장자리를 바꾼다', async () => {
+    const onDock = vi.fn()
+    setup({ dock: 'left', onDock })
+    const grip = screen.getByRole('button', { name: '도구 막대 옮기기' })
+    grip.focus()
+    await userEvent.keyboard('{ArrowRight}')
+    expect(onDock).toHaveBeenLastCalledWith('right')
+    await userEvent.keyboard('{ArrowUp}')
+    expect(onDock).toHaveBeenLastCalledWith('top')
+    await userEvent.keyboard('{ArrowDown}')
+    expect(onDock).toHaveBeenLastCalledWith('bottom')
+  })
+
+  test('옮기기를 받지 않으면 손잡이가 없다', () => {
+    setup()
+    expect(screen.queryByRole('button', { name: '도구 막대 옮기기' })).not.toBeInTheDocument()
+  })
+
+  test('붙인 가장자리를 알린다(가로 막대 모양은 CSS가 고른다)', () => {
+    setup({ dock: 'top', onDock: vi.fn() })
+    expect(screen.getByRole('navigation', { name: '도구' })).toHaveAttribute('data-dock', 'top')
+  })
+})

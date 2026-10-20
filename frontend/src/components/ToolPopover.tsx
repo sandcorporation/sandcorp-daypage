@@ -1,6 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { placePopover, type PopoverSide } from './popoverPlacement'
 import { useIsPhone } from './useIsPhone'
+
+/** 안에서 여는 도구 창을 버튼의 어느 쪽에 열지(도구 막대가 붙은 가장자리의 반대쪽). 기본은 오른쪽. */
+export const PopoverSideContext = createContext<PopoverSide>('right')
 
 type Props = {
   title: string
@@ -52,7 +56,8 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
     }
   }, [anchor])
 
-  // 데스크톱: 버튼 오른쪽에 붙이되 화면 안에 들어오게 위아래를 맞춘다(아래쪽 버튼에서 열어도 잘리지 않게).
+  // 데스크톱: 버튼 옆(도구 막대를 붙인 가장자리의 반대쪽)에 붙이되 화면 안에 들어오게 민다.
+  const side = useContext(PopoverSideContext)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   useLayoutEffect(() => {
     if (phone) return
@@ -60,19 +65,8 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
       const a = anchor.current?.getBoundingClientRect()
       const el = ref.current
       if (!a || !el) return
-      const margin = 8
-      const h = el.offsetHeight
-      const w = el.offsetWidth
-      // 오른쪽에 자리가 없으면(머리글 오른쪽 끝의 버튼 등) 버튼 아래에 오른쪽 끝을 맞춰 연다
-      if (a.right + 12 + w > window.innerWidth - margin) {
-        const top = Math.min(a.bottom + 8, window.innerHeight - h - margin)
-        setPos({ top: Math.max(margin, top), left: Math.max(margin, a.right - w) })
-        return
-      }
-      const wanted = align === 'bottom' ? a.bottom - h : a.top
-      // 위쪽은 노트 머리말(약 64px) 아래로
-      const top = Math.max(72, Math.min(wanted, window.innerHeight - h - margin))
-      setPos({ top, left: a.right + 12 })
+      const size = { width: el.offsetWidth, height: el.offsetHeight }
+      setPos(placePopover(a, size, { width: window.innerWidth, height: window.innerHeight }, side, align))
     }
     place()
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
@@ -84,7 +78,7 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
     }
-  }, [phone, anchor, align])
+  }, [phone, anchor, align, side])
 
   const variant = phone ? 'sheet' : 'popover'
   return createPortal(

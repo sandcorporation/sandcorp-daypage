@@ -27,6 +27,7 @@ import { NoteHeader } from './NoteHeader'
 import { Cursors } from './Cursors'
 import { MemberLimitControl } from './MemberLimitControl'
 import { loadToolPrefs, saveToolPrefs } from './toolPrefs'
+import { loadToolbarDock, saveToolbarDock, type ToolbarDock } from '../page/toolbarDock'
 import { ZoomControl, type Zoom } from './ZoomControl'
 import { uniquePeople, usePresence } from './usePresence'
 import { useNewVersion } from './useNewVersion'
@@ -47,6 +48,11 @@ export function NotePage({ initial }: Props) {
 
   // 도구 상태. 마지막으로 고른 값을 이 브라우저에 기억해 새로고침·재방문 때 되살린다.
   const [prefs] = useState(loadToolPrefs)
+  const [dock, setDock] = useState<ToolbarDock>(loadToolbarDock)
+  const moveToolbar = useCallback((next: ToolbarDock) => {
+    setDock(next)
+    saveToolbarDock(next)
+  }, [])
   const [tool, setTool] = useState<ToolKind>(prefs.tool)
   const [chosenInk, setInk] = useState<string>(prefs.ink)
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(prefs.widthLevel)
@@ -355,8 +361,10 @@ export function NotePage({ initial }: Props) {
           </>
         }
       />
-      <div className="note-body">
+      <div className="note-body" data-dock={dock}>
         <Toolbar
+          dock={dock}
+          onDock={moveToolbar}
           tool={tool}
           ink={ink}
           widthLevel={widthLevel}
