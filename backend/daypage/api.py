@@ -11,8 +11,8 @@ from django.shortcuts import get_object_or_404
 from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
-from . import clock, membership, paper, rooms
-from .models import Note, NoteMember, Page, Suggestion
+from . import clock, membership, moderation, paper, rooms
+from .models import Note, NoteBan, NoteMember, Page, Suggestion
 
 
 class ApiError(Exception):
@@ -28,6 +28,12 @@ api = NinjaAPI(title="Daypage API", urls_namespace="api", auth=django_auth)
 @api.exception_handler(ApiError)
 def _api_error(request, exc: ApiError):
     return api.create_response(request, {"code": exc.code, "detail": exc.detail}, status=exc.status)
+
+
+@api.exception_handler(moderation.Blocked)
+def _blocked(request, exc: moderation.Blocked):
+    """닫힌 노트·정지된 사용자·내보낸 사람(moderation.py). 화면은 code로 안내를 고른다."""
+    return api.create_response(request, {"code": exc.code, "detail": exc.detail}, status=403)
 
 
 def share_url(note_id: str) -> str:
@@ -56,7 +62,7 @@ def me(request):
     # SPA가 POST 요청에 쓸 CSRF 쿠키를 여기서 내려준다.
     get_token(request)
     if not request.user.is_authenticated:
-        return {"authenticated": False, "isStaff": False, "notes": []}
+        return {"authenticated": False, "isStaff": False, "notes": [], "suspension": None}
     memberships = (
         NoteMember.objects.filter(user=request.user)
         .select_related("note")
@@ -73,7 +79,13 @@ def me(request):
         }
         for m in memberships
     ]
-    return {"authenticated": True, "isStaff": request.user.is_staff, "notes": notes}
+    return {
+        "authenticated": True,
+        "isStaff": request.user.is_staff,
+        "notes": notes,
+        # 정지 중이면 {until(영구면 null), reason}. 첫 화면이 사유를 보인다.
+        "suspension": moderation.suspension(request.user),
+    }
 
 
 class SuggestionIn(Schema):
@@ -128,6 +140,7 @@ def clean_name(name: str | None) -> str:
 
 @api.post("/notes")
 def create_note(request, body: CreateNoteIn):
+    moderation.check_user(request.user)
     note = Note.objects.create(
         name=clean_name(body.name), owner=request.user, member_limit=clean_limit(body.memberLimit)
     )
@@ -144,6 +157,7 @@ def preview(request, note_id: str):
 @api.get("/notes/{note_id}")
 def note_detail(request, note_id: str):
     note = get_object_or_404(Note, pk=note_id)
+    moderation.check_note(note, request.user)
     try:
         member = membership.join(note, request.user)
     except membership.NoteFull:
@@ -218,6 +232,7 @@ def update_note(request, note_id: str, body: UpdateNoteIn):
 
 def member_note(request, note_id: str) -> Note:
     note = get_object_or_404(Note, pk=note_id)
+    moderation.check_note(note, request.user)
     if not NoteMember.objects.filter(note=note, user=request.user).exists():
         raise ApiError(403, "not_member", "이 노트의 참여자만 볼 수 있어요.")
     return note
@@ -332,6 +347,51 @@ def announce_note_deleted(note_id: str) -> None:
     from .consumers import note_group
 
     async_to_sync(get_channel_layer().group_send)(note_group(note_id), {"type": "note.deleted"})
+
+
+# ── 참여자 내보내기(노트를 만든 사람만) ─────────────────────────
+
+
+@api.get("/notes/{note_id}/members")
+def note_members(request, note_id: str):
+    """참여자와 내보낸 사람 목록. 만든 사람만 본다."""
+    note = owned_note(request, note_id)
+    members = NoteMember.objects.filter(note=note).order_by("joined_at", "id")
+    return {
+        "members": [
+            {
+                "id": m.id,
+                "nickname": m.nickname,
+                "color": m.color,
+                "isOwner": m.user_id == note.owner_id,
+                "lastVisitedAt": m.last_visited_at.isoformat(),
+            }
+            for m in members
+        ],
+        "kicked": [
+            {"id": b.id, "nickname": b.nickname, "at": b.created_at.isoformat()}
+            for b in NoteBan.objects.filter(note=note).order_by("-created_at")
+        ],
+    }
+
+
+@api.post("/notes/{note_id}/members/{member_id}/kick")
+def kick_member(request, note_id: str, member_id: int):
+    """참여자를 내보낸다. 접속해 있으면 바로 끊고, 다시 허용할 때까지 들어오지 못한다."""
+    note = owned_note(request, note_id)
+    member = get_object_or_404(NoteMember, pk=member_id, note=note)
+    if member.user_id == note.owner_id:
+        raise ApiError(400, "kick_owner", "노트를 만든 사람은 내보낼 수 없어요.")
+    moderation.kick(note, member)
+    return {"ok": True}
+
+
+@api.delete("/notes/{note_id}/kicked/{ban_id}")
+def allow_again(request, note_id: str, ban_id: int):
+    """내보낸 사람을 다시 들어올 수 있게 한다(다시 들어오면 새 닉네임을 받는다)."""
+    note = owned_note(request, note_id)
+    get_object_or_404(NoteBan, pk=ban_id, note=note).delete()
+    return HttpResponse(status=204)
 
 
 # 운영자 API는 따로 둔다(운영자만).

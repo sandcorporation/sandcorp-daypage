@@ -11,6 +11,9 @@
 - 4430: 서비스 수용 인원이 찼고 대기열도 가득 참
 - 4408: 대기자에게 자리를 돌리려고 자리 비움인 사람을 내보냄. 클라이언트는 자동으로 다시 접속하지 않는다.
 - 1013: 보낼 편집이 너무 밀림. 클라이언트는 다시 접속해 문서를 처음부터 맞춘다.
+- 4403: 운영자가 정지한 사용자(moderation.py). 다시 접속하지 않는다.
+- 4410: 운영자가 닫은 노트. 다시 접속하지 않는다.
+- 4411: 노트를 만든 사람이 내보낸 참여자. 다시 접속하지 않는다.
 
 수용 인원이 차면 연결을 연 채 대기열에 세운다(admission.py). 대기자는 문서·커서 대신 메시지 101(queued)을
 받다가, 차례가 오면 같은 연결에서 평소 입장(방 참가, sync step1)이 이어진다.
@@ -35,7 +38,7 @@ from pycrdt import (
     write_message,
 )
 
-from . import admission, awareness, clock, hub, pages, rooms
+from . import admission, awareness, clock, hub, moderation, pages, rooms
 from .hub import EMPTY_UPDATE, db, page_group  # noqa: F401  page_group은 다른 모듈이 여기서 가져간다
 from .models import Note, NoteMember
 
@@ -48,6 +51,9 @@ CLOSE_CROWDED = 4429
 CLOSE_FULL = 4430
 CLOSE_AWAY = 4408
 CLOSE_TOO_SLOW = 1013
+CLOSE_SUSPENDED = 4403
+CLOSE_CLOSED = 4410
+CLOSE_KICKED = 4411
 
 # y-websocket 메시지 종류 0(sync)·1(awareness) 외의 Daypage 전용 메시지.
 # 텍스트 프레임은 y-websocket 클라이언트가 바이너리로 읽다 깨지므로 바이너리로 보낸다.
@@ -78,6 +84,20 @@ KEEPALIVE = awareness.encode_message([])
 def note_group(note_id: str) -> str:
     # 그룹 이름은 영문·숫자·-_. 만 쓸 수 있다. 노트 ID(urlsafe base64)는 그대로 쓸 수 있다.
     return f"note.{note_id}"
+
+
+@database_sync_to_async
+def _blocked_code(note: Note, user) -> int | None:
+    """운영 조치로 들어올 수 없으면 닫는 코드(moderation.py)."""
+    try:
+        moderation.check_note(note, user)
+    except moderation.NoteClosed:
+        return CLOSE_CLOSED
+    except moderation.Suspended:
+        return CLOSE_SUSPENDED
+    except moderation.Kicked:
+        return CLOSE_KICKED
+    return None
 
 
 @database_sync_to_async
@@ -128,6 +148,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         note, member = await _lookup(self.note_id, user)
         if note is None:
             return await self.close(code=CLOSE_NOT_FOUND)
+        blocked = await _blocked_code(note, user)
+        if blocked is not None:
+            return await self.close(code=blocked)
         if member is None:
             return await self.close(code=CLOSE_UNAUTHORIZED)
         if date != clock.today_kst():
@@ -200,6 +223,8 @@ class PageConsumer(AsyncWebsocketConsumer):
         self.page_id = page.id
         # 노트 지움·자정 교체 알림은 노트 그룹으로 온다.
         await self.channel_layer.group_add(note_group(self.note_id), self.channel_name)
+        # 정지·내보내기는 사용자에게 알린다(그 사람의 모든 연결을 끊는다)
+        await self.channel_layer.group_add(moderation.user_group(self.member.user_id), self.channel_name)
         self.sender = asyncio.create_task(self._send_loop())
         self.room = await hub.hub().join(page.id, self, lambda: db(pages.load_updates)(page.id))
         # 들어오는 사이 클라이언트가 떠났어도 send는 조용히 끝난다. 방에서 나가는 건 disconnect가 한다.
@@ -366,6 +391,7 @@ class PageConsumer(AsyncWebsocketConsumer):
             return
         room = self.room
         await self.channel_layer.group_discard(note_group(self.note_id), self.channel_name)
+        await self.channel_layer.group_discard(moderation.user_group(self.member.user_id), self.channel_name)
         # 이 연결이 보낸 커서를 다른 사람 화면에서 지운다.
         if self.presence:
             await room.local_awareness(self, [(cid, clk + 1, None) for cid, clk in self.presence.items()])
@@ -471,3 +497,18 @@ class PageConsumer(AsyncWebsocketConsumer):
         if self.room is not None:
             self.room.gone = True
         await self.close(code=CLOSE_NOT_FOUND)
+
+    # ── 운영 조치(moderation.py) ────────────────────────────────
+
+    async def note_closed(self, event) -> None:
+        """운영자가 노트를 닫았다. 장은 그대로 두고(저장도 평소처럼) 연결만 닫는다."""
+        await self.close(code=CLOSE_CLOSED)
+
+    async def user_suspended(self, event) -> None:
+        """운영자가 이 사용자를 정지했다."""
+        await self.close(code=CLOSE_SUSPENDED)
+
+    async def member_kicked(self, event) -> None:
+        """노트를 만든 사람이 이 사용자를 내보냈다(다른 노트 연결은 그대로)."""
+        if event.get("note") == self.note_id:
+            await self.close(code=CLOSE_KICKED)

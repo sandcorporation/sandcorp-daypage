@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { api } from '../api/client'
-import { logout, useMe, type MyNote } from '../auth/me'
+import { api, ApiError } from '../api/client'
+import { logout, useMe, type MyNote, type Suspension } from '../auth/me'
 import { Brand, KakaoIcon, kakaoLoginHref } from '../components/Brand'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { MemberLimitPicker } from '../components/MemberLimitPicker'
@@ -10,7 +10,11 @@ import './home.css'
 export function HomePage() {
   const { me, reload } = useMe()
   if (!me) return <div className="grid-bg" />
-  return me.authenticated ? <MyNotes notes={me.notes} onChanged={reload} /> : <Landing />
+  return me.authenticated ? (
+    <MyNotes notes={me.notes} onChanged={reload} suspension={me.suspension ?? null} />
+  ) : (
+    <Landing />
+  )
 }
 
 function Landing() {
@@ -103,7 +107,7 @@ function Landing() {
   )
 }
 
-function MyNotes({ notes, onChanged }: { notes: MyNote[]; onChanged: () => void }) {
+function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged: () => void; suspension: Suspension | null }) {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [memberLimit, setMemberLimit] = useState<number | null>(null)
@@ -137,8 +141,10 @@ function MyNotes({ notes, onChanged }: { notes: MyNote[]; onChanged: () => void 
         body: JSON.stringify({ name, memberLimit }),
       })
       navigate(`/note/${note.id}`)
-    } catch {
-      setError('노트를 만들지 못했어요. 잠시 후 다시 시도해 주세요.')
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.code === 'suspended' ? err.message : '노트를 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
+      )
       setCreating(false)
     }
   }
@@ -157,6 +163,17 @@ function MyNotes({ notes, onChanged }: { notes: MyNote[]; onChanged: () => void 
         </button>
       </header>
       <main className="mynotes">
+        {suspension && (
+          <section className="card suspended-card" role="alert">
+            <h2>이용이 정지된 계정이에요</h2>
+            <p>
+              {suspension.until
+                ? `${new Date(suspension.until).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}까지 노트에 들어가거나 새 노트를 만들 수 없어요.`
+                : '노트에 들어가거나 새 노트를 만들 수 없어요.'}
+            </p>
+            <p className="suspended-reason">사유: {suspension.reason}</p>
+          </section>
+        )}
         <form className="card new-note" onSubmit={create}>
           <p className="hand new-note-kicker">새 페이지를 펼쳐요</p>
           <h1>새 노트 만들기</h1>

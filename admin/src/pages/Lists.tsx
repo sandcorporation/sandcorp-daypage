@@ -21,7 +21,7 @@ export function Notes() {
   return (
     <div className="table-wrap">
       <table className="table">
-        <caption className="muted small">최근에 열린 순 · 최대 300개 · 노트 내용은 보지 않습니다</caption>
+        <caption className="muted small">최근에 열린 순 · 최대 300개 · 노트를 열면 참여자·페이지와 읽기 전용 보기가 있어요(열람 기록)</caption>
         <thead>
           <tr>
             <th scope="col">이름</th>
@@ -36,7 +36,8 @@ export function Notes() {
           {rows.map((n) => (
             <tr key={n.id}>
               <td>
-                {n.name}
+                <a href={`#notes/${n.id}`}>{n.name}</a>
+                {n.closed && <span className="badge danger">닫힘</span>}
                 <span className="muted small"> · 만든 사람 #{n.ownerId}</span>
               </td>
               <td className="num">
@@ -78,8 +79,9 @@ export function Users() {
           {rows.map((u) => (
             <tr key={u.id}>
               <td>
-                #{u.id}
+                <a href={`#users/${u.id}`}>#{u.id}</a>
                 {u.isStaff && <span className="badge">운영자</span>}
+                {u.suspended && <span className="badge danger">정지</span>}
               </td>
               <td className="num">{u.ownedNotes}</td>
               <td className="num">{u.memberships}</td>

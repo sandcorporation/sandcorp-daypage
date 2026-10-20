@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useMe } from '../auth/me'
 import { NotePage } from '../note/NotePage'
 import type { NoteDetail } from '../note/types'
-import { ErrorScreen } from './ErrorScreen'
+import { blockedKind, ErrorScreen, type BlockedKind } from './ErrorScreen'
 import { InvitePage } from './InvitePage'
 
 type Preview = { name: string; online: number; isFull: boolean }
@@ -14,6 +14,7 @@ type State =
   | { kind: 'invite'; preview: Preview; loggedIn: boolean }
   | { kind: 'note'; note: NoteDetail }
   | { kind: 'missing' }
+  | { kind: 'blocked'; reason: BlockedKind; detail: string }
   | { kind: 'error' }
 
 export function NoteRoute() {
@@ -35,6 +36,8 @@ export function NoteRoute() {
         set({ kind: 'note', note: await api<NoteDetail>(`/api/notes/${noteId}`) })
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) return set({ kind: 'missing' })
+        const blocked = e instanceof ApiError ? blockedKind(e.code) : null
+        if (blocked) return set({ kind: 'blocked', reason: blocked, detail: (e as ApiError).message })
         if (e instanceof ApiError && e.code === 'note_full') {
           const preview = await api<Preview>(`/api/notes/${noteId}/preview`).catch(() => null)
           return set({
@@ -58,6 +61,8 @@ export function NoteRoute() {
       return <div className="grid-bg" />
     case 'missing':
       return <ErrorScreen kind="missing" />
+    case 'blocked':
+      return <ErrorScreen kind={state.reason} detail={state.detail} />
     case 'error':
       return <ErrorScreen kind="server" />
     case 'invite':

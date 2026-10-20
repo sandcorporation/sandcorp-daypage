@@ -329,3 +329,25 @@
 .note-item .note-card {
   padding-right: 56px;
 }
+
+/* 운영자 정지 안내 */
+.suspended-card {
+  align-self: start;
+  padding: 20px 24px;
+  border-color: #f3c4c4;
+  background: #fff7f7;
+}
+.suspended-card h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: #b91c1c;
+}
+.suspended-card p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.suspended-reason {
+  color: var(--muted);
+}

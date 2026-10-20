@@ -9,7 +9,10 @@ export type MyNote = {
   memberLimit: number | null
 }
 
-export type Me = { authenticated: boolean; notes: MyNote[] }
+/** 운영자 정지(until이 null이면 영구) */
+export type Suspension = { until: string | null; reason: string }
+
+export type Me = { authenticated: boolean; notes: MyNote[]; suspension?: Suspension | null }
 
 export function useMe() {
   const [me, setMe] = useState<Me | null>(null)

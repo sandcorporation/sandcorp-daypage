@@ -97,3 +97,28 @@ test('고르고 있던 노트 색이 빠지면 기본 잉크로 돌아간다', a
   act(() => latest().receive(102, { type: 'note_colors', colors: [] }))
   expect(screen.getByRole('button', { name: '잉크: 잉크 파랑' })).toBeInTheDocument()
 })
+
+test('운영자가 노트를 닫으면 다시 붙지 않고, 서버가 알려 준 사유와 함께 닫힌 노트 안내를 보인다', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      new Response(JSON.stringify({ code: 'note_closed', detail: '운영 정책에 따라 닫힌 노트예요. 사유: 광고 글' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
+  )
+  renderNote()
+  const first = latest()
+  act(() => first.emit('connection-close', [{ code: 4410 }]))
+  expect(first.shouldConnect).toBe(false)
+  expect(screen.getByRole('heading', { name: '닫힌 노트예요' })).toBeInTheDocument()
+  expect(await screen.findByText(/사유: 광고 글/)).toBeInTheDocument()
+})
+
+test('내보내지거나 정지되면 다시 붙지 않고 그 안내를 보인다', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 500 })))
+  renderNote()
+  act(() => latest().emit('connection-close', [{ code: 4411 }]))
+  expect(screen.getByRole('heading', { name: '이 노트에 들어갈 수 없어요' })).toBeInTheDocument()
+})

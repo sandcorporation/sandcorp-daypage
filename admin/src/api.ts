@@ -27,6 +27,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(res.status, message)
   }
+  if (res.status === 204) return undefined as T
+  const type = res.headers.get('Content-Type') ?? ''
+  if (!type.includes('application/json')) return (await res.text()) as T
   return (await res.json()) as T
 }
 
@@ -63,6 +66,8 @@ export type NoteRow = {
   pageCount: number
   lastVisitedAt: string | null
   todayBytes: number
+  /** 운영자가 닫은 노트 */
+  closed: boolean
 }
 
 export type UserRow = {
@@ -73,4 +78,40 @@ export type UserRow = {
   suggestions: number
   lastVisitedAt: string | null
   isStaff: boolean
+  /** 지금 정지 중 */
+  suspended: boolean
+}
+
+/** 정지(until이 null이면 영구) */
+export type Suspension = { until: string | null; reason: string }
+
+export type NoteDetail = {
+  id: string
+  name: string
+  createdAt: string
+  ownerId: number
+  memberLimit: number | null
+  closed: { at: string; reason: string } | null
+  today: string
+  members: { id: number; userId: number; nickname: string; color: string; joinedAt: string; lastVisitedAt: string }[]
+  pages: { date: string; participantCount: number; strokeCount: number }[]
+}
+
+export type UserDetail = {
+  id: number
+  createdAt: string
+  isStaff: boolean
+  suspension: Suspension | null
+  notes: { id: string; name: string; nickname: string; isOwner: boolean; lastVisitedAt: string; closed: boolean }[]
+}
+
+export type LogRow = {
+  id: number
+  at: string
+  staffId: number | null
+  action: 'view_note' | 'view_page' | 'close_note' | 'reopen_note' | 'suspend_user' | 'unsuspend_user'
+  noteId: string | null
+  noteName: string | null
+  targetUserId: number | null
+  detail: string
 }

@@ -15,6 +15,12 @@ export const CLOSE = {
   full: 4430,
   /** 대기자에게 자리를 돌리려고 자리 비움인 사람을 내보냄 */
   away: 4408,
+  /** 운영자가 정지한 사용자 */
+  suspended: 4403,
+  /** 운영자가 닫은 노트 */
+  closed: 4410,
+  /** 노트를 만든 사람이 내보낸 참여자 */
+  kicked: 4411,
 } as const
 
 /** 서버 전용 메시지 종류(consumers.py의 MESSAGE_PAGE_ROLLED) */
@@ -27,7 +33,7 @@ export const MESSAGE_NOTE_COLORS = 102
 export const MESSAGE_NOTE_PAPER = 103
 
 /** 다시 연결해도 소용없는 이유. full·away는 사람이 다시 시도할 때까지 접속하지 않는다. */
-export type FatalReason = 'unauthorized' | 'notFound' | 'crowded' | 'full' | 'away'
+export type FatalReason = 'unauthorized' | 'notFound' | 'crowded' | 'full' | 'away' | 'closed' | 'suspended' | 'kicked'
 
 const FATAL_CODES: Record<number, FatalReason> = {
   [CLOSE.unauthorized]: 'unauthorized',
@@ -35,6 +41,9 @@ const FATAL_CODES: Record<number, FatalReason> = {
   [CLOSE.crowded]: 'crowded',
   [CLOSE.full]: 'full',
   [CLOSE.away]: 'away',
+  [CLOSE.suspended]: 'suspended',
+  [CLOSE.closed]: 'closed',
+  [CLOSE.kicked]: 'kicked',
 }
 
 type Options = {

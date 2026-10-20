@@ -1,4 +1,7 @@
-"""운영자 API(/api/admin/...). 운영자(User.is_staff)만 쓴다. 노트 내용은 돌려주지 않고 개수·날짜만 본다."""
+"""운영자 API(/api/admin/...). 운영자(User.is_staff)만 쓴다.
+
+목록은 개수·날짜만 보인다. 노트 내용은 노트 하나를 열어야 보이고, 열람과 조치(닫기·정지)는
+모두 운영자 기록(AdminLog)에 남는다(moderation.py)."""
 
 import datetime as dt
 from typing import Literal
@@ -6,12 +9,13 @@ from typing import Literal
 from asgiref.sync import sync_to_async
 from django.db.models import Count, Max, Q, Sum
 from django.db.models.functions import Coalesce, ExtractHour, Length, TruncDate
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router, Schema
 from ninja.security import SessionAuth
 
-from . import admission, clock
-from .models import Note, Page, Suggestion, User
+from . import admission, clock, moderation, pages
+from .models import AdminLog, Note, NoteMember, Page, Suggestion, User
 
 
 class StaffAuth(SessionAuth):
@@ -193,6 +197,7 @@ def list_notes(request):
             "lastVisitedAt": n.last_visit.isoformat() if n.last_visit else None,
             # 오늘 장의 저장 크기(바이트). 내용은 보지 않는다.
             "todayBytes": sizes.get(n.id, 0),
+            "closed": n.closed_at is not None,
         }
         for n in notes
     ]
@@ -215,6 +220,160 @@ def list_users(request):
             "suggestions": u.suggested,
             "lastVisitedAt": u.last_visit.isoformat() if u.last_visit else None,
             "isStaff": u.is_staff,
+            "suspended": moderation.suspension(u) is not None,
         }
         for u in users
+    ]
+
+
+# ── 노트 하나 보기(읽기 전용, 열람 기록) ─────────────────────────
+
+
+def _bad_request(detail: str) -> HttpResponse:
+    return HttpResponse(detail, status=400, content_type="text/plain; charset=utf-8")
+
+
+@router.get("/notes/{note_id}")
+def note_detail(request, note_id: str):
+    note = get_object_or_404(Note, pk=note_id)
+    moderation.log(request.auth, "view_note", note=note)
+    members = NoteMember.objects.filter(note=note).order_by("joined_at", "id")
+    sealed = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date")
+    return {
+        "id": note.id,
+        "name": note.name,
+        "createdAt": note.created_at.isoformat(),
+        "ownerId": note.owner_id,
+        "memberLimit": note.member_limit,
+        "paper": note.paper,
+        "closed": moderation.closed(note),
+        "today": clock.today_kst().isoformat(),
+        "members": [
+            {
+                "id": m.id,
+                "userId": m.user_id,
+                "nickname": m.nickname,
+                "color": m.color,
+                "joinedAt": m.joined_at.isoformat(),
+                "lastVisitedAt": m.last_visited_at.isoformat(),
+            }
+            for m in members
+        ],
+        "pages": [
+            {"date": p.date.isoformat(), "participantCount": p.participant_count, "strokeCount": p.stroke_count, "paper": p.paper}
+            for p in sealed
+        ],
+    }
+
+
+@router.get("/notes/{note_id}/pages/{date}")
+def note_page(request, note_id: str, date: str):
+    """장 하나의 Yjs 문서(바이너리). 봉인된 장은 그대로, 오늘 장은 스냅샷과 증분을 합쳐 준다."""
+    note = get_object_or_404(Note, pk=note_id)
+    try:
+        day = dt.date.fromisoformat(date)
+    except ValueError:
+        raise Http404
+    page = get_object_or_404(Page, note=note, date=day)
+    moderation.log(request.auth, "view_page", note=note, detail=day.isoformat())
+    if page.sealed_at is not None:
+        data = bytes(page.state)
+    else:
+        data = pages.build_doc(pages.load_updates(page.id)).get_update()
+    res = HttpResponse(data, content_type="application/octet-stream")
+    res["Cache-Control"] = "no-store"
+    return res
+
+
+class ReasonIn(Schema):
+    reason: str
+
+
+
+@router.post("/notes/{note_id}/close")
+def close_note(request, note_id: str, payload: ReasonIn):
+    note = get_object_or_404(Note, pk=note_id)
+    reason = (payload.reason or "").strip()
+    if not reason:
+        return _bad_request("닫는 사유를 적어 주세요.")
+    moderation.close_note(request.auth, note, reason[: moderation.REASON_MAX])
+    return {"id": note.id, "closed": moderation.closed(note)}
+
+
+@router.post("/notes/{note_id}/reopen")
+def reopen_note(request, note_id: str):
+    note = get_object_or_404(Note, pk=note_id)
+    moderation.reopen_note(request.auth, note)
+    return {"id": note.id, "closed": None}
+
+
+# ── 사용자 하나 보기·정지 ────────────────────────────────────────
+
+
+@router.get("/users/{user_id}")
+def user_detail(request, user_id: int):
+    user = get_object_or_404(User, pk=user_id)
+    memberships = NoteMember.objects.filter(user=user).select_related("note").order_by("-last_visited_at")
+    return {
+        "id": user.id,
+        "createdAt": user.created_at.isoformat(),
+        "isStaff": user.is_staff,
+        "suspension": moderation.suspension(user),
+        "notes": [
+            {
+                "id": m.note_id,
+                "name": m.note.name,
+                "nickname": m.nickname,
+                "isOwner": m.note.owner_id == user.id,
+                "lastVisitedAt": m.last_visited_at.isoformat(),
+                "closed": m.note.closed_at is not None,
+            }
+            for m in memberships
+        ],
+    }
+
+
+class SuspendIn(Schema):
+    # 정지 기간(일). null이면 영구.
+    days: Literal[1, 7, 30] | None
+    reason: str
+
+
+@router.post("/users/{user_id}/suspend")
+def suspend_user(request, user_id: int, payload: SuspendIn):
+    user = get_object_or_404(User, pk=user_id)
+    if user.is_staff:
+        return _bad_request("운영자는 정지할 수 없어요.")
+    reason = (payload.reason or "").strip()
+    if not reason:
+        return _bad_request("정지 사유를 적어 주세요.")
+    s = moderation.suspend(request.auth, user, payload.days, reason[: moderation.REASON_MAX])
+    return {"id": user.id, "suspension": s}
+
+
+@router.post("/users/{user_id}/unsuspend")
+def unsuspend_user(request, user_id: int):
+    user = get_object_or_404(User, pk=user_id)
+    moderation.unsuspend(request.auth, user)
+    return {"id": user.id, "suspension": None}
+
+
+# ── 운영자 기록 ──────────────────────────────────────────────────
+
+
+@router.get("/logs")
+def logs(request):
+    rows = AdminLog.objects.order_by("-created_at", "-id")[:LIST_LIMIT]
+    return [
+        {
+            "id": r.id,
+            "at": r.created_at.isoformat(),
+            "staffId": r.staff_id,
+            "action": r.action,
+            "noteId": r.note_id or None,
+            "noteName": r.note_name or None,
+            "targetUserId": r.target_user_id,
+            "detail": r.detail,
+        }
+        for r in rows
     ]

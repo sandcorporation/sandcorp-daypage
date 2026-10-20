@@ -41,6 +41,14 @@ export function NotePage({ initial }: Props) {
   const [note, setNote] = useState(initial)
   const [clockOffset] = useState(() => new Date(initial.serverNow).getTime() - Date.now())
   const [fatal, setFatal] = useState<FatalReason | null>(null)
+  // 운영 조치로 끊겼을 때 서버가 알려 주는 사유(닫힌 까닭·정지 기간)
+  const [blockedDetail, setBlockedDetail] = useState<string | null>(null)
+  useEffect(() => {
+    if (fatal !== 'closed' && fatal !== 'suspended' && fatal !== 'kicked') return
+    api(`/api/notes/${note.id}`).catch((e) => {
+      if (e instanceof ApiError && e.status === 403) setBlockedDetail(e.message)
+    })
+  }, [fatal, note.id])
   const { toast, show } = useToast()
   const navigate = useNavigate()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -327,6 +335,8 @@ export function NotePage({ initial }: Props) {
     }
   }, [note.url, show])
 
+  if (fatal === 'closed' || fatal === 'suspended' || fatal === 'kicked')
+    return <ErrorScreen kind={fatal} detail={blockedDetail ?? undefined} />
   if (fatal === 'crowded') return <ErrorScreen kind="crowded" />
   // 수용 인원이 가득 찼거나 자리 비움으로 나갔다: 사람이 누를 때만 새로 접속한다.
   if (fatal === 'full' || fatal === 'away') return <ErrorScreen kind={fatal} onAction={rejoin} />
@@ -358,6 +368,7 @@ export function NotePage({ initial }: Props) {
           <>
             <PaperButton paper={paper} onChange={(c) => void changePaper(c)} />
             <MemberLimitControl
+            noteId={note.id}
             memberCount={note.memberCount}
             memberLimit={note.memberLimit}
             editable={note.isOwner}

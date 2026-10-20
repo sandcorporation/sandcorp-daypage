@@ -1,0 +1,18 @@
+/* 운영자 보기: 일반 기록 화면과 헷갈리지 않게 머리글에 표시를 단다 */
+.staff-header {
+  border-bottom-color: #f3c4c4;
+}
+.staff-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fde8e8;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.staff-closed {
+  color: #b91c1c;
+}

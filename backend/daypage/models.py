@@ -22,6 +22,10 @@ class User(AbstractBaseUser):
     # 운영자: 운영자 페이지(/admin)와 /api/admin을 쓸 수 있다. manage.py grant_staff로 켠다.
     # db_default: 배포 중 잠깐 함께 도는 옛 코드가 이 열 없이 사용자를 만들어도 되게 DB가 기본값을 채운다
     is_staff = models.BooleanField(default=False, db_default=False)
+    # 운영자 정지(moderation.py): 이 시각까지, 또는 영구. 정지 중에는 노트에 들어가거나 만들 수 없다.
+    suspended_until = models.DateTimeField(null=True, blank=True)
+    suspension_permanent = models.BooleanField(default=False, db_default=False)
+    suspension_reason = models.CharField(max_length=200, blank=True, default="", db_default="")
 
     USERNAME_FIELD = "kakao_id"
 
@@ -50,6 +54,9 @@ class Note(models.Model):
     # 노트 종이(paper.py). 빈 값이면 기본 줄 노트. db_default: 배포 중 옛 코드가 이 열 없이 노트를 만들어도 되게.
     paper = models.JSONField(default=dict, blank=True, db_default=Value({}, output_field=models.JSONField()))
     created_at = models.DateTimeField(auto_now_add=True)
+    # 운영자가 닫은 노트(moderation.py). 지우지 않고, 다시 열 때까지 아무도 들어오지 못한다.
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_reason = models.CharField(max_length=200, blank=True, default="", db_default="")
 
     def __str__(self) -> str:
         return f"Note({self.id})"
@@ -120,3 +127,33 @@ class Suggestion(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["status", "created_at"])]
+
+
+class NoteBan(models.Model):
+    """노트를 만든 사람이 내보낸 사람. 다시 허용할 때까지 이 노트에 들어오지 못한다."""
+
+    note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="bans")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="note_bans")
+    # 내보낼 때의 노트 안 닉네임(다시 허용 목록에 보인다)
+    nickname = models.CharField(max_length=40)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["note", "user"], name="uniq_ban_note_user")]
+
+
+class AdminLog(models.Model):
+    """운영자가 노트를 열람하거나 조치한 기록. 노트·사용자가 지워져도 남도록 id와 이름을 따로 적는다."""
+
+    staff = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="admin_logs")
+    # view_note, view_page, close_note, reopen_note, suspend_user, unsuspend_user
+    action = models.CharField(max_length=32)
+    note_id = models.CharField(max_length=32, blank=True, default="")
+    note_name = models.CharField(max_length=60, blank=True, default="")
+    target_user_id = models.IntegerField(null=True, blank=True)
+    # 본 날짜, 조치 사유 등
+    detail = models.CharField(max_length=300, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["-created_at"])]

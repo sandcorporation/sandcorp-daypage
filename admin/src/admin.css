@@ -339,3 +339,98 @@ body {
   padding: 2px 6px;
   border-radius: 6px;
 }
+
+/* 노트·사용자 상세(운영 조치) */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 880px;
+}
+.detail h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.panel {
+  padding: 16px;
+  background: var(--card, #fff);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.panel h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.links {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  line-height: 2;
+}
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.badge.danger {
+  color: var(--danger, #b91c1c);
+  background: var(--danger-soft, #fde8e8);
+}
+.danger-zone {
+  border-color: var(--danger-line, #f3c4c4);
+}
+.alert {
+  margin: 0 0 8px;
+  font-weight: 700;
+  color: var(--danger, #b91c1c);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 12px;
+  font-size: 13px;
+}
+.field textarea {
+  font: inherit;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+}
+.periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+.periods legend {
+  margin-bottom: 4px;
+}
+.chip-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chip-radio:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.btn-danger {
+  border-color: var(--danger, #b91c1c);
+  background: var(--danger, #b91c1c);
+  color: #fff;
+}
+.btn-danger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

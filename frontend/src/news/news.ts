@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-20-kick',
+    date: '10월 20일 오후 -5',
+    items: [
+      {
+        kind: 'new',
+        title: '참여자 내보내기',
+        text: '노트를 만든 사람은 위쪽 참여 인원을 눌러 참여자를 내보낼 수 있어요. 내보낸 사람은 다시 허용할 때까지 들어오지 못해요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-20-erase-preview',
     date: '10월 20일 오후 -4',
     items: [

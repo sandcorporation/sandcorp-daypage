@@ -9,7 +9,7 @@ import { downloadBlob, exportFileName, renderPagePng } from '../page/exportPng'
 import { normalizePaper, type Paper } from '../page/paper'
 import { PageView } from '../page/PageView'
 import { TextLayer } from '../page/TextLayer'
-import { ErrorScreen } from '../pages/ErrorScreen'
+import { blockedKind, ErrorScreen, type BlockedKind } from '../pages/ErrorScreen'
 import '../note/note.css'
 import './history.css'
 
@@ -24,6 +24,7 @@ export function HistoryPage() {
   const [note, setNote] = useState<NoteDetail | null>(null)
   const [pages, setPages] = useState<SealedPage[] | null>(null)
   const [error, setError] = useState<'missing' | 'server' | null>(null)
+  const [blocked, setBlocked] = useState<{ kind: BlockedKind; detail: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -39,6 +40,8 @@ export function HistoryPage() {
           window.location.href = `/note/${noteId}`
           return
         }
+        const kind = e instanceof ApiError ? blockedKind(e.code) : null
+        if (kind) return setBlocked({ kind, detail: (e as ApiError).message })
         setError(e instanceof ApiError && (e.status === 404 || e.status === 403) ? 'missing' : 'server')
       })
     return () => {
@@ -48,6 +51,7 @@ export function HistoryPage() {
 
   const selected = date ?? pages?.[0]?.date ?? null
 
+  if (blocked) return <ErrorScreen kind={blocked.kind} detail={blocked.detail} />
   if (error) return <ErrorScreen kind={error} />
   if (!note || !pages) return <div className="grid-bg" />
 
@@ -115,7 +119,23 @@ export function HistoryPage() {
   )
 }
 
-function SealedPageView({ noteId, noteName, date, paper }: { noteId: string; noteName: string; date: string; paper: Paper }) {
+/** 장 하나를 읽기 전용으로 보인다. src를 주면 그 주소에서 문서를 받는다(운영자 보기). */
+export function SealedPageView({
+  noteId,
+  noteName,
+  date,
+  paper,
+  src,
+  label,
+}: {
+  noteId: string
+  noteName: string
+  date: string
+  paper: Paper
+  src?: string
+  /** 제목(없으면 날짜) */
+  label?: string
+}) {
   const doc = useMemo(() => new Y.Doc(), [])
   const [loaded, setLoaded] = useState<'loading' | 'ok' | 'missing'>('loading')
   const [scale, setScale] = useState(0.5)
@@ -123,13 +143,13 @@ function SealedPageView({ noteId, noteName, date, paper }: { noteId: string; not
   const { toast, show } = useToast()
 
   useEffect(() => {
-    api<ArrayBuffer>(`/api/notes/${noteId}/pages/${date}`)
+    api<ArrayBuffer>(src ?? `/api/notes/${noteId}/pages/${date}`)
       .then((buf) => {
         Y.applyUpdate(doc, new Uint8Array(buf))
         setLoaded('ok')
       })
       .catch(() => setLoaded('missing'))
-  }, [doc, noteId, date])
+  }, [doc, noteId, date, src])
 
   async function save() {
     setSaving(true)
@@ -145,7 +165,7 @@ function SealedPageView({ noteId, noteName, date, paper }: { noteId: string; not
   return (
     <section className="history-view" aria-label={`${formatShortDate(date)} 페이지`}>
       <div className="history-view-head">
-        <h2>{formatShortDate(date)}</h2>
+        <h2>{label ?? formatShortDate(date)}</h2>
         <div className="history-view-actions">
           <span className="readonly-badge">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">

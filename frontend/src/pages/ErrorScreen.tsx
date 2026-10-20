@@ -26,6 +26,21 @@ const COPY = {
     desc: '기다리는 사람이 있어서, 한동안 움직임이 없던 자리를 넘겨 드렸어요. 쓰던 노트는 그대로 있어요.',
     action: '다시 들어가기',
   },
+  closed: {
+    kicker: '잠시만요',
+    title: '닫힌 노트예요',
+    desc: '운영 정책에 따라 이 노트는 닫혔어요.',
+  },
+  suspended: {
+    kicker: '잠시만요',
+    title: '이용이 정지된 계정이에요',
+    desc: '정지가 끝나면 다시 노트를 쓸 수 있어요.',
+  },
+  kicked: {
+    kicker: '잠시만요',
+    title: '이 노트에 들어갈 수 없어요',
+    desc: '노트를 만든 사람이 이 노트에서 내보냈어요.',
+  },
   server: {
     kicker: '앗!',
     title: '문제가 생겼어요',
@@ -37,12 +52,22 @@ type Props = {
   kind: keyof typeof COPY
   /** 있으면 '첫 화면으로' 대신 이 동작(다시 시도·다시 들어가기)을 주 버튼으로 보인다 */
   onAction?: () => void
+  /** 있으면 설명 대신 보인다(서버가 알려 준 사유 등) */
+  detail?: string
 }
 
-export function ErrorScreen({ kind, onAction }: Props) {
+/** 운영 조치로 막힌 까닭(서버 code → 화면 종류) */
+export const BLOCKED_KINDS = { note_closed: 'closed', suspended: 'suspended', kicked: 'kicked' } as const
+export type BlockedKind = (typeof BLOCKED_KINDS)[keyof typeof BLOCKED_KINDS]
+
+export function blockedKind(code: string | undefined): BlockedKind | null {
+  return code && code in BLOCKED_KINDS ? BLOCKED_KINDS[code as keyof typeof BLOCKED_KINDS] : null
+}
+
+export function ErrorScreen({ kind, onAction, detail }: Props) {
   const copy: { kicker: string; title: string; desc: string; action?: string } = COPY[kind]
   return (
-    <MessageCard kicker={copy.kicker} title={copy.title} desc={copy.desc}>
+    <MessageCard kicker={copy.kicker} title={copy.title} desc={detail || copy.desc}>
       {onAction && copy.action ? (
         <button type="button" className="btn btn-primary btn-lg invite-cta" onClick={onAction}>
           {copy.action}
