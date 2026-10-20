@@ -101,9 +101,12 @@ function DockGrip({ dock, onDock }: { dock: ToolbarDock; onDock: (dock: ToolbarD
   )
 }
 
+const PEN_ICON = 'M4 18l1-4L15 4l3 3L8 17z'
+const HIGHLIGHTER_ICON = 'M6 14l7-9 4 3-7 9H6zM4 19h14'
+
+/** 형광펜은 따로 버튼을 두지 않고 펜 버튼 창 안에 둔다(펜 버튼이 지금 펜·형광펜을 보여 준다). */
 const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
-  { kind: 'pen', label: '펜', icon: 'M4 18l1-4L15 4l3 3L8 17z' },
-  { kind: 'highlighter', label: '형광펜', icon: 'M6 14l7-9 4 3-7 9H6zM4 19h14' },
+  { kind: 'pen', label: '펜', icon: PEN_ICON },
   { kind: 'shape', label: '도형', icon: '' },
   { kind: 'text', label: '글씨', icon: 'M5 5h12M11 5v13M8 18h6' },
   { kind: 'eraser', label: '지우개', icon: 'M8 18l-4-4 9-9 5 5-8 8zM8 18h10' },
@@ -115,20 +118,24 @@ export function Toolbar(props: Props) {
   const { brush, onBrush, pressure, onPressure, noteColors, onAddColor, onRemoveColor, layerPanel, shape, onShape } = props
   const [shapeOpen, setShapeOpen] = useState(false)
   const shapeRef = useRef<HTMLButtonElement>(null)
-  const [widthOpen, setWidthOpen] = useState<'inline' | 'fold' | null>(null)
+  const [widthOpen, setWidthOpen] = useState(false)
   const widthRef = useRef<HTMLButtonElement>(null)
-  const customWidthRef = useRef<HTMLButtonElement>(null)
   const customWidth = props.customWidth ?? null
   const onCustomWidth = props.onCustomWidth
   const widthName = customWidth === null ? WIDTH_NAMES[widthLevel] : `${customWidth}px`
-  // 접은 굵기 버튼의 점: 직접 정한 굵기는 버튼에 들어가게 줄여 보인다
-  const foldDot = customWidth === null ? 6 + widthLevel * 6 : Math.min(22, Math.max(4, customWidth))
+  // 굵기 버튼의 줄 두께: 지금 굵기를 버튼 안에 들어가게 줄여 보인다
+  const widthLine = customWidth === null ? 2 + widthLevel * 3 : Math.min(10, Math.max(1, Math.round(customWidth / 3)))
   const shapeInfo = SHAPES.find((s) => s.id === shape) ?? SHAPES[0]
   const [layersOpen, setLayersOpen] = useState(false)
   const layersRef = useRef<HTMLButtonElement>(null)
   const [brushOpen, setBrushOpen] = useState(false)
   const penRef = useRef<HTMLButtonElement>(null)
   const brushName = BRUSHES.find((b) => b.id === brush)?.name ?? BRUSHES[0].name
+  // 펜 버튼이 다시 고를 펜 쪽 도구: 마지막으로 쓴 펜이나 형광펜
+  const [lastPen, setLastPen] = useState<'pen' | 'highlighter'>(tool === 'highlighter' ? 'highlighter' : 'pen')
+  if ((tool === 'pen' || tool === 'highlighter') && tool !== lastPen) setLastPen(tool)
+  const penActive = tool === 'pen' || tool === 'highlighter'
+  const penName = lastPen === 'highlighter' ? '형광펜' : brushName
   const dock = props.dock ?? 'left'
   return (
     <PopoverSideContext.Provider value={POPOVER_SIDE[dock]}>
@@ -141,27 +148,53 @@ export function Toolbar(props: Props) {
               ref={penRef}
               type="button"
               className="tool-btn"
-              aria-label={`펜 (${brushName})`}
-              title={`펜 (${brushName}) · 다시 누르면 펜 종류 · Shift+드래그로 직선`}
-              aria-pressed={tool === 'pen'}
+              aria-label={`펜 (${penName})`}
+              title={`펜 (${penName}) · 다시 누르면 펜 종류·형광펜 · Shift+드래그로 직선`}
+              aria-pressed={penActive}
               aria-haspopup="dialog"
               aria-expanded={brushOpen}
-              onClick={() => (tool === 'pen' ? setBrushOpen((v) => !v) : onTool('pen'))}
+              onClick={() => (penActive ? setBrushOpen((v) => !v) : onTool(lastPen))}
             >
               <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                <path d={t.icon} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+                <path
+                  d={lastPen === 'highlighter' ? HIGHLIGHTER_ICON : t.icon}
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
               </svg>
               <span className="tool-corner" aria-hidden="true" />
             </button>
             {brushOpen && (
-              <ToolPopover title="펜 종류" anchor={penRef} onClose={() => setBrushOpen(false)}>
+              <ToolPopover title="펜" anchor={penRef} onClose={() => setBrushOpen(false)}>
                 <BrushPicker
-                  brush={brush}
+                  brush={tool === 'highlighter' ? null : brush}
                   onBrush={(b) => {
                     onBrush(b)
+                    if (tool !== 'pen') onTool('pen')
                     setBrushOpen(false)
                   }}
                 >
+                  <p className="tool-pop-caption brush-group">형광펜</p>
+                  <button
+                    type="button"
+                    className="brush-option"
+                    aria-pressed={tool === 'highlighter'}
+                    aria-label="형광펜: 글씨 위에 반투명하게 칠해요"
+                    onClick={() => {
+                      onTool('highlighter')
+                      setBrushOpen(false)
+                    }}
+                  >
+                    <svg width="156" height="44" viewBox="0 0 156 44" aria-hidden="true">
+                      <rect x="8" y="14" width="140" height="16" rx="3" fill="#F2C230" opacity="0.6" />
+                    </svg>
+                    <span className="brush-text">
+                      <span className="brush-name">형광펜</span>
+                      <span className="brush-desc">글씨 위에 반투명하게 칠해요</span>
+                    </span>
+                  </button>
                   <label className="pressure-toggle">
                     필압 따라 굵기 바꾸기
                     <input type="checkbox" checked={pressure} onChange={(e) => onPressure(e.target.checked)} />
@@ -219,67 +252,32 @@ export function Toolbar(props: Props) {
       )}
       {showFont && <FontPicker font={font} onFont={onFont} />}
       <div className="tool-sep" />
+      {/* | 색 · 굵기 |: 색 버튼과 굵기 버튼을 나란히 두고 앞뒤 구분선으로 한 묶음 */}
       <InkControl ink={ink} onInk={onInk} noteColors={noteColors} onAddColor={onAddColor} onRemoveColor={onRemoveColor} />
-      <div className="tool-sep" />
-      {/* 굵기: 넓은 화면에서는 셋과 직접 정하기를 늘어놓고, 휴대폰에서는 지금 굵기 버튼 하나로 접는다(CSS로 고른다) */}
-      <div className="width-inline">
-        {WIDTH_NAMES.map((name, i) => (
-          <button
-            key={name}
-            type="button"
-            className="swatch-btn"
-            aria-label={`굵기 ${name}`}
-            title={`굵기 ${name}`}
-            aria-pressed={customWidth === null && widthLevel === i}
-            style={{ color: 'var(--ink-soft)' }}
-            onClick={() => onWidth(i as WidthLevel)}
-          >
-            <span className="width-dot" style={{ width: 6 + i * 6, height: 6 + i * 6 }} />
-          </button>
-        ))}
-        {onCustomWidth && (
-          <div className="tool-anchor">
-            <button
-              ref={customWidthRef}
-              type="button"
-              className="swatch-btn width-custom-btn"
-              aria-label={customWidth === null ? '굵기 직접 정하기' : `굵기 직접 정하기: ${customWidth}px`}
-              title="굵기 직접 정하기(px)"
-              aria-haspopup="dialog"
-              aria-expanded={widthOpen === 'inline'}
-              aria-pressed={customWidth !== null}
-              onClick={() => setWidthOpen((v) => (v === 'inline' ? null : 'inline'))}
-            >
-              {customWidth ?? ''}
-              <small>px</small>
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="tool-anchor width-fold">
+      <div className="tool-anchor">
         <button
           ref={widthRef}
           type="button"
-          className="swatch-btn"
+          className="swatch-btn width-btn"
           aria-label={`굵기: ${widthName}`}
           title={`굵기: ${widthName}`}
           aria-haspopup="dialog"
-          aria-expanded={widthOpen === 'fold'}
-          style={{ color: 'var(--ink-soft)' }}
-          onClick={() => setWidthOpen((v) => (v === 'fold' ? null : 'fold'))}
+          aria-expanded={widthOpen}
+          onClick={() => setWidthOpen((v) => !v)}
         >
-          <span className="width-dot" style={{ width: foldDot, height: foldDot }} />
+          <span className="width-line" style={{ height: widthLine }} aria-hidden="true" />
+          <span className="width-name">{widthName}</span>
           <span className="tool-corner" aria-hidden="true" />
         </button>
       </div>
       {widthOpen && (
-        <ToolPopover title="굵기" anchor={widthOpen === 'fold' ? widthRef : customWidthRef} onClose={() => setWidthOpen(null)}>
+        <ToolPopover title="굵기" anchor={widthRef} onClose={() => setWidthOpen(false)}>
           <WidthPanel
             widthLevel={widthLevel}
             customWidth={customWidth}
             onWidth={onWidth}
             onCustomWidth={onCustomWidth}
-            onDone={() => setWidthOpen(null)}
+            onDone={() => setWidthOpen(false)}
           />
         </ToolPopover>
       )}

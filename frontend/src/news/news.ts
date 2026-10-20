@@ -24,13 +24,24 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-20-toolbar-tidy',
+    date: '10월 20일 오후 -3',
+    items: [
+      {
+        kind: 'new',
+        title: '도구 막대 정리',
+        text: '형광펜은 펜 버튼 안으로 옮겼어요. 펜을 한 번 더 누르면 펜 종류와 형광펜을 골라요. 굵기는 색 옆 버튼 하나로 모았어요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-20-sizes',
     date: '10월 20일 오후 -2',
     items: [
       {
         kind: 'new',
         title: '굵기를 px로',
-        text: '굵기 버튼 옆 px를 누르면 1~80px 사이에서 밀대나 숫자로 굵기를 정할 수 있어요. 펜·형광펜·도형에 그대로 쓰여요.',
+        text: '굵기 버튼을 누르면 1~80px 사이에서 밀대나 숫자로 굵기를 정할 수 있어요. 펜·형광펜·도형에 그대로 쓰여요.',
       },
       {
         kind: 'new',

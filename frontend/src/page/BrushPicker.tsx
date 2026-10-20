@@ -17,7 +17,8 @@ const PREVIEW: Record<Brush, ReactNode> = {
 }
 
 type Props = {
-  brush: Brush
+  /** 고른 펜 종류. 형광펜을 쓰는 중이면 null(펜 종류는 골라져 보이지 않는다) */
+  brush: Brush | null
   onBrush: (brush: Brush) => void
   /** 펜 종류 목록 아래에 붙는 설정(필압 등) */
   children?: ReactNode

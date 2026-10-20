@@ -38,12 +38,12 @@ describe('펜 종류', () => {
   test('펜이 골라진 채로 펜을 다시 누르면 펜 종류 창이 열린다', async () => {
     const props = setup({ tool: 'pen' })
     await userEvent.click(screen.getByRole('button', { name: /^펜/ }))
-    expect(screen.getByRole('dialog', { name: '펜 종류' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '펜' })).toBeInTheDocument()
     expect(props.onTool).not.toHaveBeenCalled()
   })
 
   test('다른 도구일 때 펜을 누르면 펜으로 바뀌기만 한다', async () => {
-    const props = setup({ tool: 'highlighter' })
+    const props = setup({ tool: 'eraser' })
     await userEvent.click(screen.getByRole('button', { name: /^펜/ }))
     expect(props.onTool).toHaveBeenCalledWith('pen')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -204,17 +204,51 @@ describe('도구 막대 옮기기', () => {
   })
 })
 
-describe('굵기', () => {
-  test('기본 굵기를 고르면 그 단계로 바꾼다', async () => {
+describe('형광펜(펜 버튼 안)', () => {
+  test('도구 막대에 형광펜 버튼은 따로 없다', () => {
+    setup()
+    expect(screen.queryByRole('button', { name: /^형광펜/ })).not.toBeInTheDocument()
+  })
+
+  test('펜 창에서 형광펜을 고르면 형광펜으로 바꾸고 창을 닫는다', async () => {
+    const props = setup({ tool: 'pen' })
+    await userEvent.click(screen.getByRole('button', { name: /^펜/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^형광펜/ }))
+    expect(props.onTool).toHaveBeenCalledWith('highlighter')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('형광펜일 때 펜 버튼은 형광펜으로 보이고, 다시 누르면 창이 열려 형광펜이 골라져 있다', async () => {
+    const props = setup({ tool: 'highlighter' })
+    const pen = screen.getByRole('button', { name: '펜 (형광펜)' })
+    expect(pen).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(pen)
+    expect(props.onTool).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /^형광펜/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^볼펜/ })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('펜 종류를 고르면 형광펜에서 펜으로 돌아간다', async () => {
+    const props = setup({ tool: 'highlighter' })
+    await userEvent.click(screen.getByRole('button', { name: /^펜/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^연필/ }))
+    expect(props.onBrush).toHaveBeenCalledWith('pencil')
+    expect(props.onTool).toHaveBeenCalledWith('pen')
+  })
+})
+
+describe('굵기(버튼 하나)', () => {
+  test('굵기 버튼을 열어 기본 굵기를 고른다', async () => {
     const props = setup({ widthLevel: 1 })
-    await userEvent.click(screen.getByRole('button', { name: '굵기 굵게' }))
+    await userEvent.click(screen.getByRole('button', { name: '굵기: 보통' }))
+    await userEvent.click(screen.getByRole('button', { name: /굵게/ }))
     expect(props.onWidth).toHaveBeenCalledWith(2)
   })
 
-  test('직접 정하기에서 px로 굵기를 넣는다(1~80으로 맞춘다)', async () => {
+  test('굵기 창에서 px로 굵기를 넣는다(1~80으로 맞춘다)', async () => {
     const onCustomWidth = vi.fn()
     setup({ customWidth: null, onCustomWidth })
-    await userEvent.click(screen.getByRole('button', { name: /굵기 직접 정하기/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^굵기:/ }))
     const input = screen.getByRole('spinbutton', { name: '굵기(px)' })
     await userEvent.clear(input)
     await userEvent.type(input, '18{Enter}')
@@ -224,9 +258,9 @@ describe('굵기', () => {
     expect(onCustomWidth).toHaveBeenLastCalledWith(80)
   })
 
-  test('직접 정한 굵기가 있으면 기본 굵기는 골라져 보이지 않고 버튼에 px가 보인다', () => {
+  test('직접 정한 굵기가 있으면 버튼에 px가 보이고 기본 굵기는 골라져 보이지 않는다', async () => {
     setup({ widthLevel: 1, customWidth: 18, onCustomWidth: vi.fn() })
-    expect(screen.getByRole('button', { name: '굵기 보통' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('button', { name: '굵기 직접 정하기: 18px' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: '굵기: 18px' }))
+    expect(screen.getByRole('button', { name: /보통/ })).toHaveAttribute('aria-pressed', 'false')
   })
 })
