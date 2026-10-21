@@ -234,6 +234,12 @@ export function PageView({
     const vp = viewportRef.current
     if (!pz || !frame || !vp) return
     pz.raf = 0
+    const ratio = touchPan.current.pinchRatio()
+    if (ratio !== null) {
+      pz.target = pinchZoom(pz.scale, 1, ratio)
+      const c = touchPan.current.centerPoint()
+      pz.anchor = { clientX: c.x, clientY: c.y }
+    }
     if (pz.target === null || !pz.anchor) return
     const left = pz.frameLeft - (vp.scrollLeft - pz.scrollLeft)
     const top = pz.frameTop - (vp.scrollTop - pz.scrollTop)
@@ -692,12 +698,9 @@ export function PageView({
       const d = touchPan.current.move(e.pointerId, e.clientX, e.clientY)
       if (touchPan.current.active) {
         if (d) panBy(-d.dx, -d.dy)
+        // 거리 판정은 프레임마다 한 번(previewPinch에서, 두 손가락이 모두 갱신된 뒤)
         const pz = pinch.current
-        if (d?.ratio != null && onZoom && pz) {
-          pz.target = pinchZoom(pz.scale, 1, d.ratio)
-          pz.anchor = { clientX: d.cx, clientY: d.cy }
-          if (!pz.raf) pz.raf = requestAnimationFrame(previewPinch)
-        }
+        if (d && onZoom && pz && !pz.raf) pz.raf = requestAnimationFrame(previewPinch)
         return
       }
     }
