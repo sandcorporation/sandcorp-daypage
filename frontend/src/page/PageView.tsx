@@ -8,7 +8,7 @@ import { canvasPixelRatio, paintLayers, paintStroke, paintStrokes } from './rend
 import { appendPlan, paintedAfter, type Painted } from './inkCache'
 import { matrixScale, transformPoints, type Matrix } from './transform'
 import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
-import { TouchPan, scrollNearest } from './touchPan'
+import { PAN_START_EVENT, TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
 import { DEFAULT_SHAPE, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
 import { DEFAULT_PAPER, paperStyle, type Paper } from './paper'
@@ -693,9 +693,13 @@ export function PageView({
     }
     if (e.pointerType === 'touch') {
       const pan = touchPan.current
-      if (pan.down(e.pointerId, e.clientX, e.clientY, fingerScrolls)) cancelGesture(e)
       const vp = viewportRef.current
       const frame = frameRef.current
+      if (pan.down(e.pointerId, e.clientX, e.clientY, fingerScrolls)) {
+        cancelGesture(e)
+        // 첫 손가락을 잡은 글 상자 등이 끌기를 거두게 한다(그 요소는 stopPropagation 없이 손가락을 우리에게도 알렸다)
+        frame?.dispatchEvent(new Event(PAN_START_EVENT))
+      }
       if (pan.active && vp && frame && !pinch.current) {
         const r = frame.getBoundingClientRect()
         pinch.current = {

@@ -19,6 +19,12 @@ export const PINCH_DOMINANCE = 0.6
 /** 핀치로 들어간 뒤 거리가 이만큼(비율) 안에서 흔들리면 배율을 바꾸지 않는다 */
 export const PINCH_DEADBAND = 0.025
 
+/**
+ * 손가락 스크롤·핀치가 시작될 때 지면(.page-frame)에 띄우는 DOM 이벤트. 첫 손가락을 잡고 있던 자식(글 상자 손잡이 등)은
+ * 이걸 듣고 끌기를 거둔다 — 안 그러면 두 손가락으로 화면을 움직이는 동안 그 상자가 따라 움직인다.
+ */
+export const PAN_START_EVENT = 'daypage:pan-start'
+
 type Sample = { t: number; d: number; cx: number; cy: number }
 
 export class TouchPan {

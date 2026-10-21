@@ -9,6 +9,7 @@ import { CharCounter } from './CharCounter'
 import { FormatBar } from './FormatBar'
 import { clampBoxWidth, fitBoxInPage, nudgeBox, removeIfEmpty, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
 import type { ToolKind } from './tools'
+import { PAN_START_EVENT } from './touchPan'
 
 /** 서식 막대의 화면 폭(px, 대략). 장 오른쪽 끝에서 잘리지 않게 자리를 정할 때 쓴다. */
 const FORMAT_BAR_WIDTH = 480
@@ -94,6 +95,9 @@ function TextBoxView({
     /** 마지막 포인터 위치(스크롤만 일어났을 때 다시 계산하려고) */
     last: { x: number; y: number }
     moved: number
+    /** 포인터를 잡은 요소와 그 포인터(거둘 때 놓아 주려고) */
+    target: HTMLElement
+    pointerId: number
   }
   const dragStart = useRef<DragStart | null>(null)
 
@@ -187,20 +191,40 @@ function TextBoxView({
   }
 
   // 끄는 동안 일어난 스크롤(창·장 가로 스크롤 모두)에도 위치를 다시 잡는다.
+  // 손가락 스크롤·핀치가 시작되면(지면이 PAN_START_EVENT를 띄운다) 끌기를 거둔다.
   useEffect(() => {
     if (!drag) return
     const onScroll = () => applyDrag()
+    const frame = rootRef.current?.closest('.page-frame')
     window.addEventListener('scroll', onScroll, { capture: true, passive: true })
-    return () => window.removeEventListener('scroll', onScroll, { capture: true })
+    frame?.addEventListener(PAN_START_EVENT, cancelDrag)
+    return () => {
+      window.removeEventListener('scroll', onScroll, { capture: true })
+      frame?.removeEventListener(PAN_START_EVENT, cancelDrag)
+    }
   })
 
   function startDrag(kind: 'move' | 'resize', e: ReactPointerEvent<HTMLElement>) {
     e.preventDefault()
-    e.stopPropagation()
+    // 손가락은 지면(PageView)에도 알린다: 두 번째 손가락이 닿으면 지면이 스크롤·핀치를 맡고 우리는 끌기를 거둔다.
+    if (e.pointerType !== 'touch') e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     const client = { x: e.clientX, y: e.clientY }
-    dragStart.current = { kind, client, rect: frameRect(), box, last: client, moved: 0 }
+    dragStart.current = { kind, client, rect: frameRect(), box, last: client, moved: 0, target: e.currentTarget, pointerId: e.pointerId }
     setDrag({ x: box.x, y: box.y, width: box.width })
+  }
+
+  /** 끌기를 결과 없이 거둔다(손가락 스크롤이 시작됐거나 브라우저가 포인터를 가져갔을 때). */
+  function cancelDrag() {
+    const s = dragStart.current
+    dragStart.current = null
+    setDrag(null)
+    if (!s) return
+    try {
+      s.target.releasePointerCapture(s.pointerId)
+    } catch {
+      // 이미 놓였으면 그만
+    }
   }
 
   function moveDrag(e: ReactPointerEvent<HTMLElement>) {
@@ -253,7 +277,7 @@ function TextBoxView({
       }}
       onPointerMove={moveDrag}
       onPointerUp={(e) => void endDrag(e)}
-      onPointerCancel={() => void endDrag()}
+      onPointerCancel={cancelDrag}
     >
       {others.length > 0 && (
         <span
@@ -284,7 +308,7 @@ function TextBoxView({
           onPointerUp={(e) => {
             if (endDrag(e)) toggleFormat()
           }}
-          onPointerCancel={() => void endDrag()}
+          onPointerCancel={cancelDrag}
           onClick={(e) => {
             // 키보드(Enter·Space)로 누른 경우. 마우스·터치는 pointerup에서 처리한다.
             if (e.detail === 0) toggleFormat()
@@ -313,7 +337,7 @@ function TextBoxView({
           onPointerDown={(e) => startDrag('resize', e)}
           onPointerMove={moveDrag}
           onPointerUp={(e) => void endDrag(e)}
-          onPointerCancel={() => void endDrag()}
+          onPointerCancel={cancelDrag}
         />
       )}
     </div>

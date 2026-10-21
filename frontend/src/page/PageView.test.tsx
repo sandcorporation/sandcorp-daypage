@@ -1,6 +1,7 @@
-import { fireEvent, render } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import * as Y from 'yjs'
 import { PageView } from './PageView'
+import { PAN_START_EVENT } from './touchPan'
 
 beforeEach(() => {
   // jsdom에는 ResizeObserver가 없다(지면이 크기를 잴 때 쓴다).
@@ -162,5 +163,28 @@ describe('끌던 중 Esc·Ctrl+Z는 하던 것을 거둔다', () => {
     fireEvent.pointerMove(el, { pointerId: 2, pointerType: 'mouse', clientX: 160, clientY: 220, buttons: 1 })
     fireEvent.pointerUp(el, { pointerId: 2, pointerType: 'mouse', clientX: 160, clientY: 220 })
     expect(doc.getMap('strokes').size).toBe(1)
+  })
+})
+
+describe('손가락 스크롤이 시작되면 지면이 알린다', () => {
+  test('글 상자(data-page-ui) 위에 첫 손가락, 다른 곳에 둘째 손가락 → PAN_START_EVENT 한 번', () => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    const { container } = render(
+      <PageView doc={new Y.Doc()} tool="select" ink="#000" widthLevel={1} author="나">
+        <button type="button" data-page-ui>
+          손잡이
+        </button>
+      </PageView>,
+    )
+    const frame = container.querySelector('.page-frame') as HTMLElement
+    const started = vi.fn()
+    frame.addEventListener(PAN_START_EVENT, started)
+    fireEvent.pointerDown(screen.getByRole('button', { name: '손잡이' }), { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100, buttons: 1 })
+    expect(started).not.toHaveBeenCalled()
+    fireEvent.pointerDown(frame, { pointerId: 2, pointerType: 'touch', clientX: 300, clientY: 100, buttons: 1 })
+    expect(started).toHaveBeenCalledTimes(1)
+    fireEvent.pointerUp(frame, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    fireEvent.pointerUp(frame, { pointerId: 2, pointerType: 'touch', clientX: 300, clientY: 100 })
   })
 })
