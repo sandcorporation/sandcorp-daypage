@@ -11,7 +11,7 @@ function memoryStorage(initial: Record<string, string> = {}) {
 
 test('저장한 도구 설정을 다시 읽는다', () => {
   const storage = memoryStorage()
-  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false, penOnly: 'on' } as const
+  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false, penOnly: 'on', eraserLevel: 0, eraserWidth: 30 } as const
   saveToolPrefs(prefs, storage)
   expect(loadToolPrefs(storage)).toEqual(prefs)
 })
@@ -49,4 +49,11 @@ test('노트 색(#rrggbb)도 고른 잉크로 기억한다', () => {
 test('직접 정한 굵기는 1~80으로 맞추고, 숫자가 아니면 쓰지 않는다', () => {
   expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ customWidth: 300 }) })).customWidth).toBe(80)
   expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ customWidth: 'big' }) })).customWidth).toBeNull()
+})
+
+test('지우개 크기도 단계와 px로 기억한다', () => {
+  const storage = memoryStorage()
+  saveToolPrefs({ ...DEFAULT_TOOL_PREFS, eraserLevel: 2, eraserWidth: 30 }, storage)
+  expect(loadToolPrefs(storage)).toMatchObject({ eraserLevel: 2, eraserWidth: 30 })
+  expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ eraserLevel: 9, eraserWidth: 'big' }) }))).toMatchObject({ eraserLevel: 1, eraserWidth: null })
 })

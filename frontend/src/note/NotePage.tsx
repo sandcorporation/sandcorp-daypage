@@ -13,12 +13,13 @@ import { loadHiddenLayers, saveHiddenLayers } from "./hiddenLayers";
 import { Toolbar } from "../page/Toolbar";
 import {
   INKS,
+  eraserRadius,
   type Brush,
   type ToolKind,
   type WidthLevel,
 } from "../page/tools";
 import type { ShapeKind } from "../page/shapes";
-import { ERASER_RADIUS, useEditTools } from "../page/useEditTools";
+import { useEditTools } from "../page/useEditTools";
 import { isTypingTarget, useUndo } from "../page/useUndo";
 import { useNavigate } from "react-router";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -86,6 +87,17 @@ export function NotePage({ initial }: Props) {
     setWidthLevel(level);
     setCustomWidth(null);
   }, []);
+  const [eraserLevel, setEraserLevel] = useState<WidthLevel>(
+    prefs.eraserLevel,
+  );
+  const [eraserWidth, setEraserWidth] = useState<number | null>(
+    prefs.eraserWidth,
+  );
+  const chooseEraserLevel = useCallback((level: WidthLevel) => {
+    setEraserLevel(level);
+    setEraserWidth(null);
+  }, []);
+  const eraserR = eraserRadius(eraserLevel, eraserWidth);
   const [font, setFont] = useState<string>(prefs.font);
   const [brush, setBrush] = useState<Brush>(prefs.brush);
   const [pressureOn, setPressureOn] = useState(prefs.pressure);
@@ -148,6 +160,8 @@ export function NotePage({ initial }: Props) {
         shape,
         pressure: pressureOn,
         penOnly,
+        eraserLevel,
+        eraserWidth,
       }),
     [
       tool,
@@ -159,6 +173,8 @@ export function NotePage({ initial }: Props) {
       shape,
       pressureOn,
       penOnly,
+      eraserLevel,
+      eraserWidth,
     ],
   );
   const [scale, setScale] = useState(0.5);
@@ -237,6 +253,7 @@ export function NotePage({ initial }: Props) {
     hiddenLayers,
     scale,
     currentLayer,
+    eraserR,
   );
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
@@ -557,6 +574,10 @@ export function NotePage({ initial }: Props) {
           onWidth={chooseWidth}
           customWidth={customWidth}
           onCustomWidth={setCustomWidth}
+          eraserLevel={eraserLevel}
+          eraserWidth={eraserWidth}
+          onEraserLevel={chooseEraserLevel}
+          onEraserWidth={setEraserWidth}
           onUndo={undo}
           onRedo={redo}
           font={font}
@@ -594,7 +615,7 @@ export function NotePage({ initial }: Props) {
           customWidth={customWidth}
           brush={brush}
           shape={shape}
-          eraserRadius={tool === "eraser" ? ERASER_RADIUS : undefined}
+          eraserRadius={tool === "eraser" ? eraserR : undefined}
           onCurveChange={setCurvePoints}
           curveControl={curveControl}
           pressureOn={pressureOn}

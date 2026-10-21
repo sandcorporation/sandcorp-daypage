@@ -67,6 +67,8 @@ export function useEditTools(
   scale = 1,
   /** 지금 그리는 레이어. 지우개는 이 레이어의 획만 지운다(없으면 잠기지 않은 모든 레이어) */
   currentLayer?: string,
+  /** 지우개 반지름(장 좌표 px) */
+  eraserRadius = ERASER_RADIUS,
 ) {
   const [selected, setSelected] = useState<string[]>([])
   const [version, setVersion] = useState(0)
@@ -118,13 +120,13 @@ export function useEditTools(
       return {
         // 올려 두면 누를 때 지워질 획을 미리 알린다(화면에만 표시, 문서는 그대로)
         hover(p) {
-          showEraseTargets(p ? strokesHitBy(erasable(), [p], ERASER_RADIUS) : [])
+          showEraseTargets(p ? strokesHitBy(erasable(), [p], eraserRadius) : [])
           return null
         },
         // 끄는 동안은 지나간 획을 흐리게만 보이고, 손을 뗄 때 한 번에 지운다. 손가락으로 두 손가락 스크롤·핀치를
         // 시작할 때 첫 손가락이 닿은 자리의 획이 지워지지 않도록(그때는 cancel이 와서 아무것도 지우지 않는다).
         down(p) {
-          const ids = new Set(strokesHitBy(erasable(), [p], ERASER_RADIUS))
+          const ids = new Set(strokesHitBy(erasable(), [p], eraserRadius))
           drag.current = { kind: 'erase', last: p, ids }
           showEraseTargets([...ids])
           return true
@@ -133,7 +135,7 @@ export function useEditTools(
           const d = drag.current
           if (d?.kind !== 'erase') return
           const before = d.ids.size
-          for (const id of strokesHitBy(erasable(), [d.last, p], ERASER_RADIUS)) d.ids.add(id)
+          for (const id of strokesHitBy(erasable(), [d.last, p], eraserRadius)) d.ids.add(id)
           d.last = p
           if (d.ids.size !== before) showEraseTargets([...d.ids])
         },
@@ -223,7 +225,7 @@ export function useEditTools(
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, showEraseTargets])
+  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)

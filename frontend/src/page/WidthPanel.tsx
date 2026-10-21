@@ -10,10 +10,14 @@ type Props = {
   onCustomWidth?: (px: number) => void
   /** 기본 단계를 고르면 창을 닫는다 */
   onDone: () => void
+  /** 단계 이름(기본은 가늘게·보통·굵게). 지우개는 작게·보통·크게 */
+  names?: readonly [string, string, string]
+  /** 단계를 동그라미로 보인다(지우개) */
+  round?: boolean
 }
 
-/** 굵기 창: 기본 세 단계와, px로 직접 정하기(밀대·숫자). */
-export function WidthPanel({ widthLevel, customWidth, onWidth, onCustomWidth, onDone }: Props) {
+/** 굵기 창: 기본 세 단계와, px로 직접 정하기(밀대·숫자). 지우개 크기에도 같은 창을 쓴다. */
+export function WidthPanel({ widthLevel, customWidth, onWidth, onCustomWidth, onDone, names = WIDTH_NAMES, round }: Props) {
   const [text, setText] = useState(String(customWidth ?? 10))
   const apply = (raw: string) => {
     const px = clampCustomWidth(Number(raw))
@@ -25,7 +29,7 @@ export function WidthPanel({ widthLevel, customWidth, onWidth, onCustomWidth, on
   return (
     <div className="width-panel">
       <div className="width-options">
-        {WIDTH_NAMES.map((name, i) => (
+        {names.map((name, i) => (
           <button
             key={name}
             type="button"
@@ -70,7 +74,11 @@ export function WidthPanel({ widthLevel, customWidth, onWidth, onCustomWidth, on
             </label>
           </div>
           <span className="width-preview" aria-hidden="true">
-            <span style={{ height: Math.min(sliderValue, 24) }} />
+            {round ? (
+              <span className="width-dot" style={{ width: Math.min(sliderValue, 24), height: Math.min(sliderValue, 24) }} />
+            ) : (
+              <span style={{ height: Math.min(sliderValue, 24) }} />
+            )}
           </span>
         </div>
       )}

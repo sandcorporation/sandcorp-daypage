@@ -281,3 +281,29 @@ describe('펜 전용 모드(손가락 설정)', () => {
     expect(screen.queryByRole('radiogroup', { name: '손가락' })).not.toBeInTheDocument()
   })
 })
+
+describe('지우개 크기', () => {
+  test('지우개를 들면 굵기 버튼이 지우개 크기가 되고, 단계를 고르면 알린다', async () => {
+    const onEraserLevel = vi.fn()
+    setup({ tool: 'eraser', eraserLevel: 1, eraserWidth: null, onEraserLevel, onEraserWidth: vi.fn() })
+    expect(screen.queryByRole('button', { name: /^굵기:/ })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '지우개 크기: 보통' }))
+    await userEvent.click(screen.getByRole('button', { name: /크게/ }))
+    expect(onEraserLevel).toHaveBeenCalledWith(2)
+  })
+
+  test('지우개 크기를 px로 넣는다', async () => {
+    const onEraserWidth = vi.fn()
+    setup({ tool: 'eraser', eraserLevel: 1, eraserWidth: 30, onEraserLevel: vi.fn(), onEraserWidth })
+    await userEvent.click(screen.getByRole('button', { name: '지우개 크기: 30px' }))
+    const input = screen.getByRole('spinbutton', { name: '굵기(px)' })
+    await userEvent.clear(input)
+    await userEvent.type(input, '12{Enter}')
+    expect(onEraserWidth).toHaveBeenLastCalledWith(12)
+  })
+
+  test('펜으로 돌아오면 굵기 버튼은 획 굵기다', () => {
+    setup({ tool: 'pen', widthLevel: 0, eraserLevel: 2, onEraserLevel: vi.fn() })
+    expect(screen.getByRole('button', { name: '굵기: 가늘게' })).toBeInTheDocument()
+  })
+})

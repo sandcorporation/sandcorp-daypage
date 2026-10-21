@@ -18,6 +18,9 @@ export type ToolPrefs = {
   pressure: boolean
   /** 펜 전용 모드(penOnly.ts): 펜을 쓰면 손가락은 스크롤만 */
   penOnly: PenOnlyMode
+  /** 지우개 크기 단계와 직접 정한 지름(px). 있으면 단계 대신 쓴다 */
+  eraserLevel: WidthLevel
+  eraserWidth: number | null
 }
 
 export const DEFAULT_TOOL_PREFS: ToolPrefs = {
@@ -30,6 +33,8 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   shape: DEFAULT_SHAPE,
   pressure: true,
   penOnly: DEFAULT_PEN_ONLY,
+  eraserLevel: 1,
+  eraserWidth: null,
 }
 
 const KEY = 'daypage:tool-prefs'
@@ -70,6 +75,8 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     shape: isShape(raw.shape) ? raw.shape : d.shape,
     pressure: typeof raw.pressure === 'boolean' ? raw.pressure : d.pressure,
     penOnly: isPenOnlyMode(raw.penOnly) ? raw.penOnly : d.penOnly,
+    eraserLevel: [0, 1, 2].includes(raw.eraserLevel as number) ? (raw.eraserLevel as WidthLevel) : d.eraserLevel,
+    eraserWidth: typeof raw.eraserWidth === 'number' ? clampCustomWidth(raw.eraserWidth) : null,
   }
 }
 

@@ -73,3 +73,14 @@ describe('지우개 미리보기', () => {
     expect(hook.result.current.eraseTargets).toEqual([])
   })
 })
+
+test('지우개 반지름을 넓히면 멀리 있는 선도 지운다', () => {
+  const doc = new Y.Doc()
+  addStroke(doc, line('a', 100, 100, 300, 100))
+  const small = renderHook(() => useEditTools(doc, 'eraser', 'me', undefined, 1, undefined, 5))
+  act(() => void small.result.current.pointerTool?.hover?.({ x: 200, y: 120 }))
+  expect(small.result.current.eraseTargets).toEqual([])
+  const big = renderHook(() => useEditTools(doc, 'eraser', 'me', undefined, 1, undefined, 25))
+  act(() => void big.result.current.pointerTool?.hover?.({ x: 200, y: 120 }))
+  expect(big.result.current.eraseTargets).toEqual(['a'])
+})

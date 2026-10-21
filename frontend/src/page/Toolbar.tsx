@@ -9,7 +9,7 @@ import { ShapePicker } from './ShapePicker'
 import { SHAPES, type ShapeKind } from './shapes'
 import { InkControl } from './InkControl'
 import { FontPicker } from './FontPicker'
-import { BRUSHES, WIDTH_NAMES, type Brush, type ToolKind, type WidthLevel } from './tools'
+import { BRUSHES, ERASER_SIZE_NAMES, WIDTH_NAMES, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { PEN_ONLY_MODES, type PenOnlyMode } from './penOnly'
 
 type Props = {
@@ -46,6 +46,11 @@ type Props = {
   customWidth?: number | null
   /** 굵기를 px로 정했을 때. 없으면 직접 정하기를 보이지 않는다 */
   onCustomWidth?: (px: number) => void
+  /** 지우개 크기. 지우개 도구일 때 굵기 버튼이 이 값을 보인다. 없으면 굵기 버튼은 늘 획 굵기다 */
+  eraserLevel?: WidthLevel
+  eraserWidth?: number | null
+  onEraserLevel?: (level: WidthLevel) => void
+  onEraserWidth?: (px: number) => void
   /** 집중 모드(머리글·칩을 숨기고 종이만). 없으면 버튼을 보이지 않는다 */
   focus?: boolean
   onFocus?: (on: boolean) => void
@@ -129,9 +134,22 @@ export function Toolbar(props: Props) {
   const widthRef = useRef<HTMLButtonElement>(null)
   const customWidth = props.customWidth ?? null
   const onCustomWidth = props.onCustomWidth
-  const widthName = customWidth === null ? WIDTH_NAMES[widthLevel] : `${customWidth}px`
+  // 지우개를 들면 굵기 버튼 자리에 지우개 크기(작게·보통·크게·px)가 들어간다
+  const eraserMode = tool === 'eraser' && props.onEraserLevel !== undefined
+  const eraserLevel = props.eraserLevel ?? 1
+  const eraserWidth = props.eraserWidth ?? null
+  const widthName = eraserMode
+    ? eraserWidth === null
+      ? ERASER_SIZE_NAMES[eraserLevel]
+      : `${eraserWidth}px`
+    : customWidth === null
+      ? WIDTH_NAMES[widthLevel]
+      : `${customWidth}px`
+  const widthLabel = eraserMode ? '지우개 크기' : '굵기'
   // 굵기 버튼의 줄 두께: 지금 굵기를 버튼 안에 들어가게 줄여 보인다
   const widthLine = customWidth === null ? 2 + widthLevel * 3 : Math.min(10, Math.max(1, Math.round(customWidth / 3)))
+  // 지우개 버튼의 동그라미 크기: 단계는 8·12·16, 직접 정한 지름은 줄여서
+  const eraserDot = eraserWidth === null ? 8 + eraserLevel * 4 : Math.min(16, Math.max(4, Math.round(eraserWidth / 3)))
   const shapeInfo = SHAPES.find((s) => s.id === shape) ?? SHAPES[0]
   const [layersOpen, setLayersOpen] = useState(false)
   const layersRef = useRef<HTMLButtonElement>(null)
@@ -290,26 +308,42 @@ export function Toolbar(props: Props) {
           ref={widthRef}
           type="button"
           className="swatch-btn width-btn"
-          aria-label={`굵기: ${widthName}`}
-          title={`굵기: ${widthName}`}
+          aria-label={`${widthLabel}: ${widthName}`}
+          title={`${widthLabel}: ${widthName}`}
           aria-haspopup="dialog"
           aria-expanded={widthOpen}
           onClick={() => setWidthOpen((v) => !v)}
         >
-          <span className="width-line" style={{ height: widthLine }} aria-hidden="true" />
+          {eraserMode ? (
+            <span className="width-dot" style={{ width: eraserDot, height: eraserDot }} aria-hidden="true" />
+          ) : (
+            <span className="width-line" style={{ height: widthLine }} aria-hidden="true" />
+          )}
           <span className="width-name">{widthName}</span>
           <span className="tool-corner" aria-hidden="true" />
         </button>
       </div>
       {widthOpen && (
-        <ToolPopover title="굵기" anchor={widthRef} onClose={() => setWidthOpen(false)}>
-          <WidthPanel
-            widthLevel={widthLevel}
-            customWidth={customWidth}
-            onWidth={onWidth}
-            onCustomWidth={onCustomWidth}
-            onDone={() => setWidthOpen(false)}
-          />
+        <ToolPopover title={widthLabel} anchor={widthRef} onClose={() => setWidthOpen(false)}>
+          {eraserMode ? (
+            <WidthPanel
+              widthLevel={eraserLevel}
+              customWidth={eraserWidth}
+              onWidth={(level) => props.onEraserLevel?.(level)}
+              onCustomWidth={props.onEraserWidth}
+              onDone={() => setWidthOpen(false)}
+              names={ERASER_SIZE_NAMES}
+              round
+            />
+          ) : (
+            <WidthPanel
+              widthLevel={widthLevel}
+              customWidth={customWidth}
+              onWidth={onWidth}
+              onCustomWidth={onCustomWidth}
+              onDone={() => setWidthOpen(false)}
+            />
+          )}
         </ToolPopover>
       )}
       <div className="tool-sep" />

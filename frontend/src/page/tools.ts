@@ -40,6 +40,15 @@ export function strokeWidth(tool: 'pen' | 'highlighter', level: WidthLevel, cust
   return customWidth ?? (tool === 'pen' ? PEN_WIDTHS : HIGHLIGHTER_WIDTHS)[level]
 }
 
+/** 지우개 크기 단계의 이름과 지름(px). 직접 정한 크기(px)도 지름이다. */
+export const ERASER_SIZE_NAMES = ['작게', '보통', '크게'] as const
+const ERASER_DIAMETERS = [10, 20, 40]
+
+/** 지우개 반지름(장 좌표 px). 직접 정한 지름이 있으면 단계 대신 쓴다. */
+export function eraserRadius(level: WidthLevel, customDiameter: number | null = null): number {
+  return (customDiameter ?? ERASER_DIAMETERS[level]) / 2
+}
+
 /** 입력한 굵기를 범위 안의 정수로 맞춘다. 숫자가 아니면 null. */
 export function clampCustomWidth(value: number): number | null {
   if (!Number.isFinite(value)) return null
