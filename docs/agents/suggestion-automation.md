@@ -15,6 +15,15 @@ push(=운영 배포)된다.
 
 흐름: 10분마다 precheck가 돈다 → 새 건의(status=new, 아직 배정 안 됨)가 없으면 0이 아닌 코드로 끝나 **아무것도 안 한다**(에이전트도 안 뜬다) → 있으면 main에서 worktree를 만들고 워커가 `take`로 건의를 받아 작업한다.
 
+## sub2 쪽 준비물(한 번만)
+
+- Claude Code는 처음 보는 폴더마다 "이 폴더를 신뢰합니까?"를 묻고 멈춘다. 실행마다 새 worktree가
+  `~/orca/workspaces/daypage/auto-run-N-…`에 생기므로 **부모 폴더를 미리 신뢰**해 둔다:
+  `~/.claude.json`의 `projects["/home/sandring/orca/workspaces/daypage"].hasTrustDialogAccepted = true`.
+  (2026-10-21에 해 두었다. 신뢰 대화가 다시 뜨면 이것부터 확인한다.)
+- 개발용 DB: `docker compose up -d postgres redis` (백엔드 테스트용).
+- sub2 → oracle ssh(Tailscale)와 `gh`·GitHub ssh 키가 있어야 한다.
+
 ## 승인·반려
 
 Orca 사이드바에서 **검토 중** 카드(읽지 않음 표시)를 열어 워커의 요약을 읽는다.
