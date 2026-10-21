@@ -633,8 +633,28 @@ export function PageView({
     if (curve.current) curveActions.current.finishCurve(false)
   }, [tool, shape])
 
-  /** 두 번째 손가락이 닿으면 막 시작한 획은 버리고, 다른 도구 동작은 그 자리에서 끝낸다. */
-  function cancelGesture(e: PointerEvent<HTMLDivElement>) {
+  // 끌던 중 Esc·Ctrl+Z: 되돌리기나 집중 모드 나가기 대신 지금 하던 것(지우개·옮기기·긋던 획)을 거둔다.
+  // 캡처 단계에서 잡아 전파를 끊으므로 NotePage의 되돌리기·Esc 처리는 끌던 중에는 돌지 않는다. 곡선은 제 처리(Enter·Esc)가 있다.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (activePointer.current === null || curve.current) return
+      const el = e.target instanceof Element ? e.target : null
+      if (el?.closest('input, textarea, [contenteditable="true"]')) return
+      const undoKey = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z'
+      if (e.key !== 'Escape' && !undoKey) return
+      e.preventDefault()
+      e.stopPropagation()
+      gestureActions.current.cancelGesture()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
+
+  /**
+   * 하던 동작을 거둔다(두 번째 손가락이 닿았거나 Esc·Ctrl+Z). 막 시작한 획은 버리고, 거두기(cancel)를 아는 도구는
+   * 그것으로, 모르는 도구는 그 자리에서 끝낸다(포인터 이벤트가 있을 때만).
+   */
+  function cancelGesture(e?: PointerEvent<HTMLDivElement>) {
     if (activePointer.current === null) return
     activePointer.current = null
     if (curve.current) {
@@ -653,8 +673,11 @@ export function PageView({
     }
     const c = lastClient.current
     const frame = frameRef.current
-    if (c && frame) pointerTool?.up?.(clampToPage(toPagePoint(c.x, c.y, frame.getBoundingClientRect(), scale)), e)
+    if (e && c && frame) pointerTool?.up?.(clampToPage(toPagePoint(c.x, c.y, frame.getBoundingClientRect(), scale)), e)
   }
+  // 최신 함수를 키 효과에서 부르기 위해 둔다
+  const gestureActions = useRef({ cancelGesture })
+  gestureActions.current = { cancelGesture }
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     if (e.pointerType === 'mouse' && isPanButton(e.button, spaceHeld)) {

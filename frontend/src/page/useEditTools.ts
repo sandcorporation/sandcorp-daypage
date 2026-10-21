@@ -236,6 +236,12 @@ export function useEditTools(
             bump()
           }
         },
+        // 끌던 것을 결과 없이 거둔다: 옮기던 묶음은 원래 자리로, 그리던 선택 상자는 사라진다
+        cancel() {
+          drag.current = null
+          setPreview(null)
+          bump()
+        },
       }
     }
     return undefined

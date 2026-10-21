@@ -84,3 +84,21 @@ test('지우개 반지름을 넓히면 멀리 있는 선도 지운다', () => {
   act(() => void big.result.current.pointerTool?.hover?.({ x: 200, y: 120 }))
   expect(big.result.current.eraseTargets).toEqual(['a'])
 })
+
+describe('선택 도구 끌기 취소', () => {
+  test('옮기던 중 cancel하면 획은 원래 자리이고 미리보기도 없다', () => {
+    const doc = new Y.Doc()
+    addStroke(doc, line('a', 100, 100, 300, 100))
+    const hook = renderHook(() => useEditTools(doc, 'select', 'me'))
+    const t = () => hook.result.current.pointerTool
+    act(() => void t()?.down?.({ x: 200, y: 102 }, {} as never))
+    act(() => void t()?.move?.({ x: 260, y: 182 }))
+    expect(hook.result.current.preview?.ids).toEqual(['a'])
+    act(() => void t()?.cancel?.())
+    expect(hook.result.current.preview).toBeNull()
+    expect(readStrokes(doc)[0].points).toEqual([100, 100, 0.5, 300, 100, 0.5])
+    // 취소된 뒤의 up은 아무것도 바꾸지 않는다
+    act(() => void t()?.up?.({ x: 260, y: 182 }, {} as never))
+    expect(readStrokes(doc)[0].points).toEqual([100, 100, 0.5, 300, 100, 0.5])
+  })
+})

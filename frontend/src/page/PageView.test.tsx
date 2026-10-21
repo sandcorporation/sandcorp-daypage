@@ -100,3 +100,67 @@ describe('두 번째 손가락이 닿으면 도구 동작을 거둔다', () => {
     expect(calls).toEqual(['down', 'cancel'])
   })
 })
+
+describe('끌던 중 Esc·Ctrl+Z는 하던 것을 거둔다', () => {
+  beforeEach(() => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+  })
+
+  function eraserFrame() {
+    const calls: string[] = []
+    const pointerTool = {
+      down: () => (calls.push('down'), true),
+      move: () => void calls.push('move'),
+      up: () => void calls.push('up'),
+      cancel: () => void calls.push('cancel'),
+    }
+    const { container } = render(
+      <PageView doc={new Y.Doc()} tool="eraser" ink="#000" widthLevel={1} author="나" pointerTool={pointerTool} eraserRadius={10} />,
+    )
+    return { el: container.querySelector('.page-frame') as HTMLElement, calls }
+  }
+
+  test('지우개를 끌던 중 Esc: cancel이 불리고, 바깥(집중 모드 등)의 Esc 처리는 돌지 않는다', () => {
+    const { el, calls } = eraserFrame()
+    const outer = vi.fn()
+    window.addEventListener('keydown', outer)
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100, button: 0, buttons: 1 })
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(calls).toEqual(['down', 'cancel'])
+    expect(outer).not.toHaveBeenCalled()
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100 })
+    expect(calls).toEqual(['down', 'cancel'])
+    // 끌지 않을 때의 Esc는 바깥으로 간다
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(outer).toHaveBeenCalledTimes(1)
+    window.removeEventListener('keydown', outer)
+  })
+
+  test('끌던 중 Ctrl+Z는 되돌리기가 아니라 취소다', () => {
+    const { el, calls } = eraserFrame()
+    const outer = vi.fn()
+    window.addEventListener('keydown', outer)
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100, button: 0, buttons: 1 })
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+    expect(calls).toEqual(['down', 'cancel'])
+    expect(outer).not.toHaveBeenCalled()
+    window.removeEventListener('keydown', outer)
+  })
+
+  test('펜으로 긋던 중 Esc를 누르면 그 획은 저장되지 않는다', () => {
+    const doc = new Y.Doc()
+    const { container } = render(<PageView doc={doc} tool="pen" ink="#000" widthLevel={1} author="나" />)
+    const el = container.querySelector('.page-frame') as HTMLElement
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100, button: 0, buttons: 1 })
+    fireEvent.pointerMove(el, { pointerId: 1, pointerType: 'mouse', clientX: 160, clientY: 120, buttons: 1 })
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'mouse', clientX: 160, clientY: 120 })
+    expect(doc.getMap('strokes').size).toBe(0)
+    // 다음 획은 정상으로 저장된다
+    fireEvent.pointerDown(el, { pointerId: 2, pointerType: 'mouse', clientX: 100, clientY: 200, button: 0, buttons: 1 })
+    fireEvent.pointerMove(el, { pointerId: 2, pointerType: 'mouse', clientX: 160, clientY: 220, buttons: 1 })
+    fireEvent.pointerUp(el, { pointerId: 2, pointerType: 'mouse', clientX: 160, clientY: 220 })
+    expect(doc.getMap('strokes').size).toBe(1)
+  })
+})
