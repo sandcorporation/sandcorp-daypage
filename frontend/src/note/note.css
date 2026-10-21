@@ -1896,6 +1896,7 @@
   }
   .toolbar[data-dock='bottom'] {
     order: 2;
+    top: auto;
   }
   /* 아래 툴바는 아래 칩(연결·새 소식·건의·배율) 위에 둔다 */
   .note-body[data-dock='bottom'] {
@@ -2182,9 +2183,13 @@
   transform: translateX(-50%);
 }
 .note-screen[data-focus] .toolbar[data-dock='bottom'] {
+  top: auto;
   bottom: 72px;
   left: 50%;
   transform: translateX(-50%);
+}
+.note-screen[data-focus] .toolbar[data-dock='top'] {
+  bottom: auto;
 }
 @media (max-width: 720px) {
   .note-screen[data-focus] .toolbar {
