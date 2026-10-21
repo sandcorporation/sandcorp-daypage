@@ -74,3 +74,29 @@ describe('그리는 도구일 때 지면의 touchstart를 막는다', () => {
     expect(touch(container.querySelector('.page-frame')!)).toBe(false)
   })
 })
+
+describe('두 번째 손가락이 닿으면 도구 동작을 거둔다', () => {
+  test('지우개: 첫 손가락이 닿은 자리의 획을 지우지 않고 cancel로 거둔다', () => {
+    // jsdom에는 포인터 캡처가 없다
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    const calls: string[] = []
+    const pointerTool = {
+      down: () => (calls.push('down'), true),
+      move: () => void calls.push('move'),
+      up: () => void calls.push('up'),
+      cancel: () => void calls.push('cancel'),
+    }
+    const { container } = render(
+      <PageView doc={new Y.Doc()} tool="eraser" ink="#000" widthLevel={1} author="나" pointerTool={pointerTool} eraserRadius={10} />,
+    )
+    const el = container.querySelector('.page-frame') as HTMLElement
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100, button: 0, buttons: 1 })
+    expect(calls).toEqual(['down'])
+    fireEvent.pointerDown(el, { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100, button: 0, buttons: 1 })
+    expect(calls).toEqual(['down', 'cancel'])
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    fireEvent.pointerUp(el, { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100 })
+    expect(calls).toEqual(['down', 'cancel'])
+  })
+})

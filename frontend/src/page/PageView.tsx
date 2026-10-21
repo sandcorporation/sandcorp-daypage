@@ -24,6 +24,8 @@ export type PointerTool = {
   /** e는 스크롤로 다시 계산할 때 없다 */
   move?: (p: Point, e?: PointerEvent<HTMLDivElement>) => void
   up?: (p: Point, e: PointerEvent<HTMLDivElement>) => void
+  /** 동작을 결과 없이 거둔다(두 번째 손가락이 닿아 스크롤로 바뀔 때). 없으면 그 자리에서 up으로 끝낸다. */
+  cancel?: () => void
   /** 누르지 않고 올려만 둔 위치에서 보일 커서(손잡이 등). null이면 도구 기본 커서. p가 null이면 지면을 벗어났다. */
   hover?: (p: Point | null) => string | null
 }
@@ -588,6 +590,10 @@ export function PageView({
     if (drawing.current) {
       drawing.current = null
       paintLive()
+      return
+    }
+    if (pointerTool?.cancel) {
+      pointerTool.cancel()
       return
     }
     const c = lastClient.current

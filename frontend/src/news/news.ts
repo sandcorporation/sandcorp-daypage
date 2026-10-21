@@ -24,8 +24,23 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-21-two-finger-drag',
+    date: '10월 21일 오후 -2',
+    items: [
+      {
+        kind: 'fix',
+        text: '두 손가락으로 종이를 끌 때(위아래·사선 모두) 화면이 커졌다 작아졌다 울렁이던 문제를 고쳤어요. 이제 손가락을 분명히 벌리거나 오므릴 때만 확대·축소돼요.',
+      },
+      {
+        kind: 'fix',
+        title: '지우개',
+        text: '지우개를 든 채 두 손가락으로 스크롤·핀치하면 첫 손가락이 닿은 자리의 선이 지워지던 문제를 고쳤어요. 지우개는 끄는 동안 지워질 선을 흐리게 보여 주고, 손을 뗄 때 한 번에 지워요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-21-tablet',
-    date: '10월 21일 오후',
+    date: '10월 21일 오후 -1',
     items: [
       {
         kind: 'new',

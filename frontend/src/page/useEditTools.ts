@@ -39,7 +39,7 @@ type Drag =
   | { kind: 'scale'; ids: string[]; bounds: Rect; anchor: Point; corner: Point; m: Matrix }
   | { kind: 'rotate'; ids: string[]; bounds: Rect; center: Point; start: Point; m: Matrix }
   | { kind: 'band'; start: Point; end: Point }
-  | { kind: 'erase'; last: Point }
+  | { kind: 'erase'; last: Point; ids: Set<string> }
 
 /** 끄는 모서리가 어느 손잡이인지 */
 function cornerOf(r: Rect, p: Point): Handle {
@@ -121,20 +121,32 @@ export function useEditTools(
           showEraseTargets(p ? strokesHitBy(erasable(), [p], ERASER_RADIUS) : [])
           return null
         },
+        // 끄는 동안은 지나간 획을 흐리게만 보이고, 손을 뗄 때 한 번에 지운다. 손가락으로 두 손가락 스크롤·핀치를
+        // 시작할 때 첫 손가락이 닿은 자리의 획이 지워지지 않도록(그때는 cancel이 와서 아무것도 지우지 않는다).
         down(p) {
-          drag.current = { kind: 'erase', last: p }
-          deleteStrokes(doc, strokesHitBy(erasable(), [p], ERASER_RADIUS), origin)
-          showEraseTargets([])
+          const ids = new Set(strokesHitBy(erasable(), [p], ERASER_RADIUS))
+          drag.current = { kind: 'erase', last: p, ids }
+          showEraseTargets([...ids])
           return true
         },
         move(p) {
           const d = drag.current
           if (d?.kind !== 'erase') return
-          deleteStrokes(doc, strokesHitBy(erasable(), [d.last, p], ERASER_RADIUS), origin)
+          const before = d.ids.size
+          for (const id of strokesHitBy(erasable(), [d.last, p], ERASER_RADIUS)) d.ids.add(id)
           d.last = p
+          if (d.ids.size !== before) showEraseTargets([...d.ids])
         },
         up() {
+          const d = drag.current
           drag.current = null
+          if (d?.kind !== 'erase') return
+          deleteStrokes(doc, [...d.ids], origin)
+          showEraseTargets([])
+        },
+        cancel() {
+          drag.current = null
+          showEraseTargets([])
         },
       }
     }
