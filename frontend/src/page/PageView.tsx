@@ -591,6 +591,26 @@ export function PageView({
     hoverCursor ??
     (readOnly ? 'default' : tool === 'text' ? 'text' : tool === 'select' ? 'default' : eraserRadius ? 'none' : 'crosshair')
 
+  // 지면에서 시작한 글자 선택·길게 누르기 메뉴를 막는다(글 상자 안은 그대로).
+  // iPad 펜슬로 천천히 긋거나 잠깐 멈추면 Safari가 길게 누르기로 보고 '복사하기' 메뉴를 띄워 그리기를 가로챘다.
+  useEffect(() => {
+    const el = frameRef.current
+    if (!el) return
+    const block = (e: Event) => {
+      const target = e.target instanceof Element ? e.target : (e.target as Node | null)?.parentElement
+      // 글씨·선택 도구로 쓰는 글 상자(data-page-ui) 안의 편집기는 평소처럼 고르고 메뉴를 연다
+      if (target?.closest('[data-page-ui]') && target.closest('[contenteditable="true"], [contenteditable=""], input, textarea'))
+        return
+      e.preventDefault()
+    }
+    el.addEventListener('selectstart', block)
+    el.addEventListener('contextmenu', block)
+    return () => {
+      el.removeEventListener('selectstart', block)
+      el.removeEventListener('contextmenu', block)
+    }
+  }, [])
+
   return (
     <div ref={viewportRef} className="page-viewport">
       <div

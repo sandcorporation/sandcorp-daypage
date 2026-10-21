@@ -24,6 +24,16 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-21-pencil-copy',
+    date: '10월 21일 오전',
+    items: [
+      {
+        kind: 'fix',
+        text: '아이패드 펜슬로 그릴 때 ‘복사하기’ 메뉴가 떠서 선이 그어지지 않던 문제 (건의해 주셔서 고마워요!)',
+      },
+    ],
+  },
+  {
     id: '2026-10-20-kick',
     date: '10월 20일 오후 -5',
     items: [
