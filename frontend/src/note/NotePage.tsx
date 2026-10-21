@@ -615,7 +615,6 @@ export function NotePage({ initial }: Props) {
           pointerTool={tool === "text" ? textTool : edit.pointerTool}
           onScale={setScale}
           zoom={zoom}
-          fitHeight={focus}
           onZoom={setZoom}
           onPointerMove={presence.setCursor}
           overlay={edit.overlay}
