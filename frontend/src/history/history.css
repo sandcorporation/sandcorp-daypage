@@ -1,15 +1,23 @@
 .history-screen {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
   background: var(--paper);
 }
 .history-main {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 24px 20px 48px;
+  padding: 24px 20px 0;
+  box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
   gap: 28px;
   align-items: flex-start;
+  overflow: auto;
 }
 .history-list {
   flex: 1 1 280px;
@@ -63,6 +71,14 @@
 .history-view {
   flex: 999 1 560px;
   min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.history-view .page-viewport {
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 72px;
 }
 .history-view-head {
   display: flex;

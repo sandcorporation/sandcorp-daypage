@@ -11,7 +11,7 @@ function memoryStorage(initial: Record<string, string> = {}) {
 
 test('저장한 도구 설정을 다시 읽는다', () => {
   const storage = memoryStorage()
-  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false } as const
+  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false, penOnly: 'on' } as const
   saveToolPrefs(prefs, storage)
   expect(loadToolPrefs(storage)).toEqual(prefs)
 })

@@ -11,6 +11,7 @@ import { TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
 import { DEFAULT_SHAPE, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
 import { DEFAULT_PAPER, paperStyle, type Paper } from './paper'
+import { anchorAt, fitScaleIn, isPanButton, pinchZoom, scrollAfterZoom, wheelZoom, type ClientPoint, type ZoomAnchor } from './viewport'
 
 /** 곡선: 첫 점·직전 점에서 이만큼(화면 px) 안을 누르면 닫기·끝내기로 본다 */
 const CURVE_SNAP_PX = 22
@@ -40,6 +41,10 @@ type Props = {
   shape?: ShapeKind
   /** 노트 종이(모양·여백 선·색). 없으면 기본 줄 노트 */
   paper?: Paper
+  /** 펜 전용 모드(penOnly.ts): 손가락은 그리지 않고 한 손가락으로도 스크롤한다 */
+  fingerScrolls?: boolean
+  /** 펜(스타일러스) 입력을 처음 봤을 때 */
+  onPenSeen?: () => void
   /** 지우개 반지름(장 좌표). 주면 포인터 자리에 그 크기의 동그라미를 보인다(판타블렛처럼 커서가 없어도 지울 자리가 보이게) */
   eraserRadius?: number
   /** 곡선을 찍는 동안 찍은 점 수가 바뀔 때(0이면 곡선이 끝났다). 되돌리기 버튼을 켜고 끄는 데 쓴다 */
@@ -66,6 +71,10 @@ type Props = {
   onScale?: (scale: number) => void
   /** 'fit'이면 화면 폭에 맞추고, 숫자면 그 배율로 보인다(넘치면 가로 스크롤) */
   zoom?: 'fit' | number
+  /** 맞춤 배율을 폭뿐 아니라 높이에도 맞춘다(집중 모드: 종이 전체가 보이게) */
+  fitHeight?: boolean
+  /** Ctrl+휠·핀치로 배율을 바꾸고 싶을 때. anchor 아래의 종이 자리는 바뀐 뒤에도 그대로다. */
+  onZoom?: (zoom: number, anchor: ClientPoint) => void
   /** 포인터를 누를 때마다 불린다(되돌리기 단위 나누기) */
   onGestureStart?: () => void
   /** 장 좌표계(1600×2400) 위에 올라가는 DOM 레이어(글 상자, 커서 등) */
@@ -89,6 +98,8 @@ export function PageView({
   shape = DEFAULT_SHAPE,
   eraserRadius,
   paper = DEFAULT_PAPER,
+  fingerScrolls = false,
+  onPenSeen,
   onCurveChange,
   curveControl,
   pressureOn = true,
@@ -104,6 +115,8 @@ export function PageView({
   onScale,
   onGestureStart,
   zoom = 'fit',
+  fitHeight = false,
+  onZoom,
   children,
   overlay,
   overlayVersion,
@@ -137,16 +150,36 @@ export function PageView({
   const activePointer = useRef<number | null>(null)
   // 마지막 포인터 화면 위치. 누른 채 스크롤하면 이 위치로 장 좌표를 다시 계산한다.
   const lastClient = useRef<{ x: number; y: number } | null>(null)
-  // 터치: 한 손가락은 그리기(도구 동작), 두 손가락은 스크롤
+  // 터치: 한 손가락은 그리기(도구 동작), 두 손가락은 스크롤·핀치
   const touchPan = useRef(new TouchPan())
+  // 이번 방문에서 펜 입력을 봤는지(펜 전용 모드 '자동'의 근거)
+  const penSeen = useRef(false)
+  // 핀치: 두 손가락이 닿은 순간의 배율. 한 프레임에 한 번만 배율을 바꾼다.
+  const pinchStart = useRef<number | null>(null)
+  const pinchFrame = useRef<{ zoom: number; anchor: ClientPoint; frame: number } | null>(null)
   const dpr = canvasPixelRatio(PAGE_WIDTH * scale, PAGE_HEIGHT * scale, window.devicePixelRatio || 1)
   const pixelScale = scale * dpr
+
+  // 배율을 바꾸기 전에 적어 두는 기준점. 없으면 상자 가운데. 바뀐 뒤 그 아래의 종이 자리로 스크롤을 맞춘다.
+  const requested = useRef<{ zoom: number; anchor: ClientPoint } | null>(null)
+  const restore = useRef<ZoomAnchor | null>(null)
+  const scaleRef = useRef(scale)
+  scaleRef.current = scale
 
   useLayoutEffect(() => {
     const el = viewportRef.current
     if (!el) return
     const update = () => {
-      const s = zoom === 'fit' ? fitScale(el.clientWidth) : zoom
+      const s = zoom === 'fit' ? (fitHeight ? fitScaleIn(el.clientWidth, el.clientHeight) : fitScale(el.clientWidth)) : zoom
+      const frame = frameRef.current
+      if (frame && s !== scaleRef.current) {
+        const req = requested.current
+        requested.current = null
+        const box = el.getBoundingClientRect()
+        const point =
+          req && req.zoom === zoom ? req.anchor : { clientX: box.left + el.clientWidth / 2, clientY: box.top + el.clientHeight / 2 }
+        restore.current = anchorAt(point, frame.getBoundingClientRect(), scaleRef.current)
+      }
       setScale(s)
       onScale?.(s)
     }
@@ -154,7 +187,79 @@ export function PageView({
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [onScale, zoom])
+  }, [onScale, zoom, fitHeight])
+
+  useLayoutEffect(() => {
+    const el = viewportRef.current
+    const frame = frameRef.current
+    const anchor = restore.current
+    if (!el || !frame || !anchor) return
+    restore.current = null
+    const next = scrollAfterZoom(anchor, frame.getBoundingClientRect(), scale, { left: el.scrollLeft, top: el.scrollTop })
+    el.scrollLeft = next.left
+    el.scrollTop = next.top
+  }, [scale])
+
+  // Ctrl(⌘)+휠·트랙패드 핀치: 마우스 위치를 기준으로 연속 확대·축소. 브라우저 확대를 막아야 하므로 passive가 아니어야 한다.
+  const wheelAcc = useRef<{ delta: number; point: ClientPoint; frame: number } | null>(null)
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el || !onZoom) return
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+      const acc = wheelAcc.current
+      if (acc) {
+        acc.delta += e.deltaY
+        acc.point = { clientX: e.clientX, clientY: e.clientY }
+        return
+      }
+      wheelAcc.current = {
+        delta: e.deltaY,
+        point: { clientX: e.clientX, clientY: e.clientY },
+        frame: requestAnimationFrame(() => {
+          const a = wheelAcc.current
+          wheelAcc.current = null
+          if (!a) return
+          const next = wheelZoom(scaleRef.current, a.delta)
+          if (Math.abs(next - scaleRef.current) < 0.0005) return
+          requested.current = { zoom: next, anchor: a.point }
+          onZoom(next, a.point)
+        }),
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      if (wheelAcc.current) cancelAnimationFrame(wheelAcc.current.frame)
+    }
+  }, [onZoom])
+
+  // 끌어 옮기기: Space를 누른 채 왼쪽 버튼, 또는 가운데 버튼. 글을 쓰는 중의 Space는 가로채지 않는다.
+  const [spaceHeld, setSpaceHeld] = useState(false)
+  const pan = useRef<{ id: number; x: number; y: number } | null>(null)
+  useEffect(() => {
+    if (readOnly && !onZoom) return
+    const typing = (t: EventTarget | null) =>
+      t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
+    const down = (e: KeyboardEvent) => {
+      if (e.key !== ' ' || e.repeat || typing(e.target)) return
+      e.preventDefault()
+      setSpaceHeld(true)
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.key === ' ') setSpaceHeld(false)
+    }
+    const blur = () => setSpaceHeld(false)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', blur)
+    }
+  }, [readOnly, onZoom])
 
   const repaint = useCallback(() => {
     const canvas = inkCanvasRef.current
@@ -422,10 +527,23 @@ export function PageView({
   }
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
+    if (e.pointerType === 'mouse' && isPanButton(e.button, spaceHeld)) {
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      pan.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
+      return
+    }
     if (readOnly || e.button > 0) return
+    if (e.pointerType === 'pen' && !penSeen.current) {
+      penSeen.current = true
+      onPenSeen?.()
+    }
     if (e.pointerType === 'touch') {
       const pan = touchPan.current
-      if (pan.down(e.pointerId, e.clientX, e.clientY)) cancelGesture(e)
+      if (pan.down(e.pointerId, e.clientX, e.clientY, fingerScrolls)) {
+        cancelGesture(e)
+        pinchStart.current = scaleRef.current
+      }
       if (pan.active) {
         e.currentTarget.setPointerCapture(e.pointerId)
         e.preventDefault()
@@ -484,10 +602,42 @@ export function PageView({
   }
 
   function onMove(e: PointerEvent<HTMLDivElement>) {
+    const dragging = pan.current
+    if (dragging && e.pointerId === dragging.id) {
+      const el = viewportRef.current
+      if (el) {
+        el.scrollLeft -= e.clientX - dragging.x
+        el.scrollTop -= e.clientY - dragging.y
+      }
+      dragging.x = e.clientX
+      dragging.y = e.clientY
+      return
+    }
     if (e.pointerType === 'touch') {
       const d = touchPan.current.move(e.pointerId, e.clientX, e.clientY)
       if (touchPan.current.active) {
         if (d && frameRef.current) scrollNearest(frameRef.current, -d.dx, -d.dy)
+        if (d?.ratio != null && onZoom && pinchStart.current !== null) {
+          const next = pinchZoom(pinchStart.current, 1, d.ratio)
+          const anchor = { clientX: d.cx, clientY: d.cy }
+          const pending = pinchFrame.current
+          if (pending) {
+            pending.zoom = next
+            pending.anchor = anchor
+          } else {
+            pinchFrame.current = {
+              zoom: next,
+              anchor,
+              frame: requestAnimationFrame(() => {
+                const p = pinchFrame.current
+                pinchFrame.current = null
+                if (!p || Math.abs(p.zoom - scaleRef.current) < 0.002) return
+                requested.current = { zoom: p.zoom, anchor: p.anchor }
+                onZoom(p.zoom, p.anchor)
+              }),
+            }
+          }
+        }
         return
       }
     }
@@ -543,6 +693,10 @@ export function PageView({
   }
 
   function onUp(e: PointerEvent<HTMLDivElement>) {
+    if (pan.current?.id === e.pointerId) {
+      pan.current = null
+      return
+    }
     if (e.pointerType === 'touch') touchPan.current.up(e.pointerId)
     if (e.pointerId !== activePointer.current) return
     activePointer.current = null
@@ -588,6 +742,7 @@ export function PageView({
   const hoverCursor = hover.tool === pointerTool ? hover.cursor : null
   const height = PAGE_HEIGHT * scale
   const cursor =
+    (spaceHeld ? 'grab' : null) ??
     hoverCursor ??
     (readOnly ? 'default' : tool === 'text' ? 'text' : tool === 'select' ? 'default' : eraserRadius ? 'none' : 'crosshair')
 

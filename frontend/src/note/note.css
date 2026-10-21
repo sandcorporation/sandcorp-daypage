@@ -18,7 +18,10 @@
   -webkit-touch-callout: default;
 }
 .note-screen {
-  min-height: 100vh;
+  /* 창은 스크롤되지 않는다. 종이만 자기 상자(page-viewport) 안에서 움직인다 */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--paper-dark);
@@ -132,10 +135,10 @@
 
 .note-body {
   flex: 1;
+  min-height: 0;
   display: flex;
   gap: 16px;
-  /* 아래 왼쪽·오른쪽 칩(연결·새 소식·건의·배율)이 노트 끝을 가리지 않게 */
-  padding: 16px 20px 72px;
+  padding: 16px 20px 0;
   align-items: flex-start;
 }
 
@@ -212,6 +215,12 @@
 .page-viewport {
   flex: 999 1 560px;
   min-width: 0;
+  align-self: stretch;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* 아래 왼쪽·오른쪽 칩(연결·새 소식·건의·배율)이 노트 끝을 가리지 않게 */
+  padding-bottom: 72px;
 }
 .page-frame {
   position: relative;
@@ -300,7 +309,7 @@
   }
   .note-body {
     flex-direction: column;
-    padding: 12px 12px 60px;
+    padding: 12px 12px 0;
   }
   .toolbar {
     position: sticky;
@@ -323,6 +332,8 @@
   }
   .page-viewport {
     width: 100%;
+    flex: 1 1 auto;
+    padding-bottom: 60px;
   }
 }
 
@@ -691,9 +702,6 @@
 .zoom-control button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
-}
-.page-viewport {
-  overflow-x: auto;
 }
 
 @media (max-width: 720px) {
@@ -1888,9 +1896,10 @@
   }
   .toolbar[data-dock='bottom'] {
     order: 2;
-    top: auto;
-    /* 아래 칩(연결·새 소식·건의·배율) 위에 뜬다 */
-    bottom: 68px;
+  }
+  /* 아래 툴바는 아래 칩(연결·새 소식·건의·배율) 위에 둔다 */
+  .note-body[data-dock='bottom'] {
+    padding-bottom: 72px;
   }
   .toolbar[data-dock='top'] .tool-sep,
   .toolbar[data-dock='bottom'] .tool-sep {
@@ -2108,4 +2117,84 @@
 }
 .member-kick.danger:hover {
   background: #fde8e8;
+}
+
+/* 펜 창의 손가락 설정(펜 전용 모드) */
+.pen-only {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.pen-only-title {
+  margin-bottom: 6px;
+}
+.pen-only-options {
+  display: flex;
+  gap: 6px;
+}
+.pen-only-option {
+  flex: 1;
+  min-height: 40px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pen-only-option[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* 집중 모드: 머리글·아래 칩을 숨기고 툴바만 종이 위에 띄운다. 배율 칩은 남긴다. */
+.note-screen[data-focus] .toolbar-grip {
+  display: none;
+}
+.note-screen[data-focus] .note-body {
+  padding: 0;
+  gap: 0;
+}
+.note-screen[data-focus] .page-viewport {
+  padding: 12px 12px 72px;
+}
+.note-screen[data-focus] .toolbar {
+  position: fixed;
+  z-index: 25;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 24px rgba(31, 33, 40, 0.12);
+}
+.note-screen[data-focus] .toolbar[data-dock='left'] {
+  left: 12px;
+  top: 12px;
+}
+.note-screen[data-focus] .toolbar[data-dock='right'] {
+  right: 12px;
+  top: 12px;
+}
+.note-screen[data-focus] .toolbar[data-dock='top'] {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.note-screen[data-focus] .toolbar[data-dock='bottom'] {
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+@media (max-width: 720px) {
+  .note-screen[data-focus] .toolbar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    transform: none;
+  }
+  .note-screen[data-focus] .page-viewport {
+    padding: 70px 8px 60px;
+  }
 }

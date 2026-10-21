@@ -122,3 +122,17 @@ test('내보내지거나 정지되면 다시 붙지 않고 그 안내를 보인�
   act(() => latest().emit('connection-close', [{ code: 4411 }]))
   expect(screen.getByRole('heading', { name: '이 노트에 들어갈 수 없어요' })).toBeInTheDocument()
 })
+
+test('집중 모드를 켜면 머리글·아래 칩이 숨고 전체 화면을 시도하며, Esc로 나온다', async () => {
+  const request = vi.fn(async () => {})
+  Object.defineProperty(document.documentElement, 'requestFullscreen', { value: request, configurable: true })
+  renderNote()
+  expect(screen.getByRole('button', { name: '링크 공유' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: '집중 모드' }))
+  expect(request).toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: '링크 공유' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '새 소식' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '확대' })).toBeInTheDocument()
+  await userEvent.keyboard('{Escape}')
+  expect(screen.getByRole('button', { name: '링크 공유' })).toBeInTheDocument()
+})

@@ -24,6 +24,33 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-21-tablet',
+    date: '10월 21일 오후',
+    items: [
+      {
+        kind: 'new',
+        title: '두 손가락 핀치 확대',
+        text: '두 손가락을 벌리고 오므려 그리는 자리를 키우고 줄여요. 확대·축소할 때 보던 자리가 그대로 있고, 종이만 움직여요.',
+      },
+      {
+        kind: 'new',
+        title: '펜 전용 모드',
+        text: '펜슬·S펜을 쓰면 손가락은 스크롤만 해요. 손바닥이 닿아도 선이 생기지 않아요. 펜 창의 ‘손가락’에서 바꿀 수 있어요.',
+      },
+      {
+        kind: 'new',
+        title: '집중 모드',
+        text: '도구 막대 맨 끝 버튼으로 머리글을 숨기고 종이만 크게 봐요. 되는 기기에서는 전체 화면까지. Esc로 나와요.',
+      },
+      {
+        kind: 'new',
+        title: '홈 화면에 추가',
+        text: '아이패드·안드로이드에서 브라우저의 ‘홈 화면에 추가’를 누르면 주소창 없이 앱처럼 열려요.',
+      },
+      { kind: 'new', text: 'PC에서는 Ctrl+휠로 확대하고, Space를 누른 채 끌거나 가운데 버튼으로 종이를 옮겨요.' },
+    ],
+  },
+  {
     id: '2026-10-21-pencil-copy',
     date: '10월 21일 오전',
     items: [

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import * as Y from 'yjs'
 import { api, ApiError } from '../api/client'
 import { useToast } from '../components/Toast'
 import { formatShortDate } from '../note/time'
+import { ZoomControl, type Zoom } from '../note/ZoomControl'
 import type { NoteDetail } from '../note/types'
 import { downloadBlob, exportFileName, renderPagePng } from '../page/exportPng'
 import { normalizePaper, type Paper } from '../page/paper'
@@ -139,6 +140,8 @@ export function SealedPageView({
   const doc = useMemo(() => new Y.Doc(), [])
   const [loaded, setLoaded] = useState<'loading' | 'ok' | 'missing'>('loading')
   const [scale, setScale] = useState(0.5)
+  const [zoom, setZoom] = useState<Zoom>('fit')
+  const onZoom = useCallback((z: number) => setZoom(z), [])
   const [saving, setSaving] = useState(false)
   const { toast, show } = useToast()
 
@@ -182,7 +185,18 @@ export function SealedPageView({
       {loaded === 'missing' ? (
         <p className="empty">이 페이지를 불러오지 못했어요.</p>
       ) : (
-        <PageView doc={doc} paper={paper} tool="select" ink="#000" widthLevel={1} author="" readOnly onScale={setScale}>
+        <PageView
+          doc={doc}
+          paper={paper}
+          tool="select"
+          ink="#000"
+          widthLevel={1}
+          author=""
+          readOnly
+          onScale={setScale}
+          zoom={zoom}
+          onZoom={onZoom}
+        >
           <TextLayer
             doc={doc}
             tool="select"
@@ -197,6 +211,7 @@ export function SealedPageView({
           />
         </PageView>
       )}
+      <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
       {toast}
     </section>
   )

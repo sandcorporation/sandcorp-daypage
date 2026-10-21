@@ -264,3 +264,20 @@ describe('굵기(버튼 하나)', () => {
     expect(screen.getByRole('button', { name: /보통/ })).toHaveAttribute('aria-pressed', 'false')
   })
 })
+
+describe('펜 전용 모드(손가락 설정)', () => {
+  test('펜 창에서 자동·켬·끔을 고르면 알린다', async () => {
+    const onPenOnly = vi.fn()
+    setup({ tool: 'pen', penOnly: 'auto', onPenOnly })
+    await userEvent.click(screen.getByRole('button', { name: /^펜/ }))
+    expect(screen.getByRole('radio', { name: /^손가락 자동/ })).toBeChecked()
+    await userEvent.click(screen.getByRole('radio', { name: /^손가락 켬/ }))
+    expect(onPenOnly).toHaveBeenCalledWith('on')
+  })
+
+  test('설정을 받지 않으면 보이지 않는다', async () => {
+    setup({ tool: 'pen' })
+    await userEvent.click(screen.getByRole('button', { name: /^펜/ }))
+    expect(screen.queryByRole('radiogroup', { name: '손가락' })).not.toBeInTheDocument()
+  })
+})

@@ -1,29 +1,46 @@
 /**
- * 터치 두 손가락 스크롤. 한 손가락은 그리기(도구 동작), 두 손가락이 닿으면 그때부터 스크롤로 본다.
+ * 터치 두 손가락 스크롤·핀치. 한 손가락은 그리기(도구 동작), 두 손가락이 닿으면 그때부터 스크롤로 본다.
  * 손가락이 모두 떨어질 때까지는 스크롤로 남아, 한 손가락을 먼저 떼도 선이 그어지지 않는다.
+ * 두 손가락이 모두 닿아 있는 동안은 사이 거리가 처음의 몇 배인지(ratio)도 알려 준다(핀치 확대).
  */
 export class TouchPan {
   private touches = new Map<number, { x: number; y: number }>()
   /** 지금 두 손가락 스크롤 중인지 */
   active = false
+  /** 두 손가락이 닿은 순간의 거리(핀치 기준) */
+  private startDistance = 0
 
-  /** 손가락이 닿았다. 이 손가락으로 스크롤이 시작되면 true(진행 중인 그리기는 취소해야 한다). */
-  down(id: number, x: number, y: number): boolean {
+  /**
+   * 손가락이 닿았다. 이 손가락으로 스크롤이 시작되면 true(진행 중인 그리기는 취소해야 한다).
+   * solo면 한 손가락만으로도 스크롤이다(펜 전용 모드: 손가락은 그리지 않는다).
+   */
+  down(id: number, x: number, y: number, solo = false): boolean {
     this.touches.set(id, { x, y })
-    if (this.active || this.touches.size < 2) return false
+    if (this.touches.size === 2) this.startDistance = this.distance()
+    if (this.active || (this.touches.size < 2 && !solo)) return false
     this.active = true
     return true
   }
 
-  /** 손가락이 움직였다. 스크롤 중이면 손가락들의 가운데 점이 움직인 거리를 돌려준다. */
-  move(id: number, x: number, y: number): { dx: number; dy: number } | null {
+  /**
+   * 손가락이 움직였다. 스크롤 중이면 손가락들의 가운데 점이 움직인 거리와 지금 가운데 점을 돌려준다.
+   * 두 손가락이 모두 닿아 있으면 ratio(거리 ÷ 처음 거리), 아니면 null.
+   */
+  move(id: number, x: number, y: number): { dx: number; dy: number; cx: number; cy: number; ratio: number | null } | null {
     const prev = this.touches.get(id)
     if (!prev) return null
     const before = this.center()
     this.touches.set(id, { x, y })
     if (!this.active) return null
     const after = this.center()
-    return { dx: after.x - before.x, dy: after.y - before.y }
+    const ratio = this.touches.size >= 2 && this.startDistance > 0 ? this.distance() / this.startDistance : null
+    return { dx: after.x - before.x, dy: after.y - before.y, cx: after.x, cy: after.y, ratio }
+  }
+
+  /** 처음 두 손가락 사이 거리 */
+  private distance(): number {
+    const [a, b] = [...this.touches.values()]
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0
   }
 
   up(id: number): void {

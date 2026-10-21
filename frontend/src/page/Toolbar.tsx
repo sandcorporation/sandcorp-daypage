@@ -10,6 +10,7 @@ import { SHAPES, type ShapeKind } from './shapes'
 import { InkControl } from './InkControl'
 import { FontPicker } from './FontPicker'
 import { BRUSHES, WIDTH_NAMES, type Brush, type ToolKind, type WidthLevel } from './tools'
+import { PEN_ONLY_MODES, type PenOnlyMode } from './penOnly'
 
 type Props = {
   tool: ToolKind
@@ -32,6 +33,9 @@ type Props = {
   onShape: (shape: ShapeKind) => void
   pressure: boolean
   onPressure: (on: boolean) => void
+  /** 펜 전용 모드. 없으면 설정을 보이지 않는다 */
+  penOnly?: PenOnlyMode
+  onPenOnly?: (mode: PenOnlyMode) => void
   /** 노트 색(#rrggbb). 기본 잉크 아래에 보인다 */
   noteColors: string[]
   onAddColor: (color: string) => Promise<void>
@@ -42,6 +46,9 @@ type Props = {
   customWidth?: number | null
   /** 굵기를 px로 정했을 때. 없으면 직접 정하기를 보이지 않는다 */
   onCustomWidth?: (px: number) => void
+  /** 집중 모드(머리글·칩을 숨기고 종이만). 없으면 버튼을 보이지 않는다 */
+  focus?: boolean
+  onFocus?: (on: boolean) => void
   /** 넓은 화면에서 도구 막대를 붙인 가장자리(휴대폰은 늘 위) */
   dock?: ToolbarDock
   /** 손잡이로 옮겼을 때. 없으면 손잡이를 보이지 않는다 */
@@ -200,6 +207,30 @@ export function Toolbar(props: Props) {
                     <input type="checkbox" checked={pressure} onChange={(e) => onPressure(e.target.checked)} />
                   </label>
                   <p className="tool-pop-caption">펜슬·태블릿은 누르는 세기로, 마우스·손가락은 쓰는 속도로 굵기가 바뀌어요.</p>
+                  {props.onPenOnly && (
+                    <div className="pen-only" role="radiogroup" aria-label="손가락">
+                      <p className="tool-pop-caption pen-only-title">손가락</p>
+                      <div className="pen-only-options">
+                        {PEN_ONLY_MODES.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={(props.penOnly ?? 'auto') === m.id}
+                            aria-label={`손가락 ${m.name}: ${m.desc}`}
+                            className="pen-only-option"
+                            onClick={() => props.onPenOnly?.(m.id)}
+                          >
+                            {m.name}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="tool-pop-caption">
+                        {PEN_ONLY_MODES.find((m) => m.id === (props.penOnly ?? 'auto'))?.desc}. 펜을 쥔 손바닥이 닿아도 선이 생기지
+                        않아요.
+                      </p>
+                    </div>
+                  )}
                 </BrushPicker>
               </ToolPopover>
             )}
@@ -316,6 +347,24 @@ export function Toolbar(props: Props) {
           <path d="M13 5l4 4-4 4M17 9H8a5 5 0 000 10h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
+      {props.onFocus && (
+        <button
+          type="button"
+          className="tool-btn"
+          aria-label={props.focus ? '집중 모드 끝내기' : '집중 모드'}
+          title={props.focus ? '집중 모드 끝내기 (Esc)' : '집중 모드: 머리글을 숨기고 종이만 크게'}
+          aria-pressed={!!props.focus}
+          onClick={() => props.onFocus?.(!props.focus)}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            {props.focus ? (
+              <path d="M8 3v5H3M12 3v5h5M8 17v-5H3M12 17v-5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            ) : (
+              <path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            )}
+          </svg>
+        </button>
+      )}
     </nav>
     </PopoverSideContext.Provider>
   )

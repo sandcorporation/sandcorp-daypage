@@ -1,4 +1,5 @@
 import { DEFAULT_FONT, FONTS } from '../page/fonts'
+import { DEFAULT_PEN_ONLY, isPenOnlyMode, type PenOnlyMode } from '../page/penOnly'
 import { DEFAULT_SHAPE, isShape, type ShapeKind } from '../page/shapes'
 import { clampCustomWidth, DEFAULT_BRUSH, INKS, isBrush, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
 
@@ -15,6 +16,8 @@ export type ToolPrefs = {
   shape: ShapeKind
   /** 필압 따라 굵기 바꾸기 */
   pressure: boolean
+  /** 펜 전용 모드(penOnly.ts): 펜을 쓰면 손가락은 스크롤만 */
+  penOnly: PenOnlyMode
 }
 
 export const DEFAULT_TOOL_PREFS: ToolPrefs = {
@@ -26,6 +29,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   brush: DEFAULT_BRUSH,
   shape: DEFAULT_SHAPE,
   pressure: true,
+  penOnly: DEFAULT_PEN_ONLY,
 }
 
 const KEY = 'daypage:tool-prefs'
@@ -65,6 +69,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     brush: isBrush(raw.brush) ? raw.brush : d.brush,
     shape: isShape(raw.shape) ? raw.shape : d.shape,
     pressure: typeof raw.pressure === 'boolean' ? raw.pressure : d.pressure,
+    penOnly: isPenOnlyMode(raw.penOnly) ? raw.penOnly : d.penOnly,
   }
 }
 
