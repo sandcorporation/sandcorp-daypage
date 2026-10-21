@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { clampCustomWidth, strokeWidth } from './tools'
 
 test('기본 굵기 단계는 펜·형광펜마다 정한 값', () => {

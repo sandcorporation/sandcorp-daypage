@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { fingerScrollsOnly, isPenOnlyMode } from './penOnly'
 
 test('자동: 펜을 본 뒤에만 손가락이 스크롤만 한다', () => {

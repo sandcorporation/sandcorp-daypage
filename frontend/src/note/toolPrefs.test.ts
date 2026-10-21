@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { DEFAULT_TOOL_PREFS, loadToolPrefs, saveToolPrefs } from './toolPrefs'
 
 function memoryStorage(initial: Record<string, string> = {}) {

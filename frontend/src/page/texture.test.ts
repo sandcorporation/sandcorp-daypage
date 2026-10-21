@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { brushOf } from './doc'
 import { GRAIN_SIZE, grainAlpha, grainSeed } from './texture'
 import { BRUSHES } from './tools'

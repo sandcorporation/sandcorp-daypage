@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { addStroke, createPageDoc, readStrokes, type Stroke } from './doc'
 import { BRUSHES, fountainPressure } from './tools'
 

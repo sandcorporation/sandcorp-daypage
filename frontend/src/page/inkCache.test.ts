@@ -1,3 +1,4 @@
+// @vitest-environment node
 import type { Stroke } from './doc'
 import { BASE_LAYER_ID, layerPlan, type Layer } from './layers'
 import { appendPlan, NOTHING_PAINTED, paintedAfter } from './inkCache'

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { stepZoom } from './ZoomControl'
 
 test('맞춤 배율에서 한 단계씩 확대·축소한다', () => {

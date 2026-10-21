@@ -1,3 +1,4 @@
+// @vitest-environment node
 import * as Y from 'yjs'
 import { describe, expect, test } from 'vitest'
 import { addStroke, createPageDoc, moveStrokes, readStrokes, strokesMap, transformStrokes, type Stroke } from './doc'

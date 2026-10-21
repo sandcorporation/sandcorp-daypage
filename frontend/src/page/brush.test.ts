@@ -1,3 +1,4 @@
+// @vitest-environment node
 import * as Y from 'yjs'
 import { addStroke, brushOf, createPageDoc, readStrokes, type Stroke } from './doc'
 import { BRUSHES } from './tools'

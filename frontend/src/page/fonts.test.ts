@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { createPageDoc, readTextBoxes, updateTextBox } from './doc'
 import { DEFAULT_FONT, FONTS, fontOf } from './fonts'
 import { createTextBoxAt } from './textbox'

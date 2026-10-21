@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, test } from 'vitest'
 import { curvePoints, densify, shapePoints, SHAPE_STEP } from './shapes'
 import type { Point } from './geometry'

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { dockAt, loadToolbarDock, saveToolbarDock } from './toolbarDock'
 
 function memoryStorage(initial: Record<string, string> = {}) {

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { formatCountdown, formatPageDate, millisUntil } from './time'
 
 test('KST 23:59:50이면 새 장까지 00:00:10이 남는다', () => {

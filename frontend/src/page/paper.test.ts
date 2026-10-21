@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, test } from 'vitest'
 import { DEFAULT_PAPER, normalizePaper, paperPalette, paperStyle, PAPER_COLORS } from './paper'
 

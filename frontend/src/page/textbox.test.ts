@@ -1,3 +1,4 @@
+// @vitest-environment node
 import * as Y from 'yjs'
 import { createPageDoc, readTextBoxes, textBoxContent } from './doc'
 import { createTextBoxAt, removeIfEmpty, removeLeftoverEmptyBoxes, MIN_BOX_WIDTH, clampBoxWidth, nudgeBox, fitBoxInPage } from './textbox'

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { hexToHsv, hsvToHex, normalizeHex } from './color'
 
 test('색 코드를 #rrggbb 소문자로 맞추고, 틀린 형식은 null', () => {

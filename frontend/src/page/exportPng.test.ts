@@ -1,3 +1,4 @@
+// @vitest-environment node
 import * as Y from 'yjs'
 import { createPageDoc, textBoxContent } from './doc'
 import { createTextBoxAt } from './textbox'

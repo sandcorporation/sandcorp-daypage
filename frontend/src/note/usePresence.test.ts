@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { uniquePeople } from './usePresence'
 import type { Peer } from './types'
 

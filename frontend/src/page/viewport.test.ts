@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { anchorAt, clampZoom, fitScaleIn, isPanButton, pinchZoom, scrollAfterZoom, wheelZoom } from './viewport'
 
 test('배율은 35%~200% 사이로 맞춘다', () => {

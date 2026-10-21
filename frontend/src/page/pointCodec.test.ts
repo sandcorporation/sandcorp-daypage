@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, test } from 'vitest'
 import { decodePoints, encodePoints, POINT_FORMAT } from './pointCodec'
 

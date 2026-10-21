@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { loadHiddenLayers, saveHiddenLayers } from './hiddenLayers'
 
 function memoryStorage(initial: Record<string, string> = {}) {

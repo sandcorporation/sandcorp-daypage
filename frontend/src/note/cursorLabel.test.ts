@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { placeCursorLabel } from './cursorLabel'
 
 const box = { x: 200, y: 100, width: 300, height: 96 }

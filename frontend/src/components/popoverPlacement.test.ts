@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { placePopover } from './popoverPlacement'
 
 const view = { width: 1280, height: 800 }

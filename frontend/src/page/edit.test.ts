@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { addStroke, createPageDoc, moveStrokes, readStrokes, type Stroke } from './doc'
 import { strokeBounds, strokesHitBy, strokesInRect, topStrokeAt } from './hit'
 import { createUndoManager } from './undo'

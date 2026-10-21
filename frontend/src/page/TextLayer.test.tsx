@@ -33,7 +33,7 @@ function setup() {
   )
   const pos = () => {
     const m = textboxesMap(doc).get(id)!
-    return { x: m.get('x'), y: m.get('y') }
+    return { x: m.get('x') as number, y: m.get('y') as number }
   }
   const grip = screen.getByRole('button', { name: /글 상자 옮기기/ })
   const frame = container.querySelector('.page-frame') as HTMLElement
