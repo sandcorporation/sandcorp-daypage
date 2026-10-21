@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Y from 'yjs'
-import { deleteStrokes, readStrokes, transformStrokes } from './doc'
+import { deleteStrokes, readStroke, readStrokes, strokesMap, transformStrokes, type Stroke } from './doc'
 import type { Point } from './geometry'
 import { editableStrokes, erasableStrokes, grabIds, readLayers } from './layers'
-import { normalizeRect, strokeBounds, strokesHitBy, strokesInRect, topStrokeAt, unionRect, type Rect } from './hit'
+import { normalizeRect, pathBounds, strokeBounds, strokesHitBy, strokesInRect, topStrokeAt, unionRect, type Rect } from './hit'
+import { useStrokeIndex } from './strokeIndex'
 import type { PointerTool } from './PageView'
 import type { ToolKind } from './tools'
 import {
@@ -112,21 +113,34 @@ export function useEditTools(
     [doc, scale],
   )
 
+  // 획 공간 색인: 지우개·선택 판정은 포인터 근처의 획만 본다(획 수에 비례해 느려지지 않게)
+  const strokeIndex = useStrokeIndex(doc)
+
   const pointerTool = useMemo<PointerTool | undefined>(() => {
     const editable = () => editableStrokes(readStrokes(doc), readLayers(doc), hiddenLayers)
-    const erasable = () =>
-      currentLayer ? erasableStrokes(readStrokes(doc), readLayers(doc), currentLayer, hiddenLayers) : editable()
+    const near = (rect: Rect): Stroke[] => {
+      const map = strokesMap(doc)
+      return strokeIndex()
+        .near(rect)
+        .flatMap((id) => {
+          const m = map.get(id)
+          return m ? [readStroke(id, m)] : []
+        })
+    }
+    const editableNear = (rect: Rect) => editableStrokes(near(rect), readLayers(doc), hiddenLayers)
+    const erasableNear = (rect: Rect) =>
+      currentLayer ? erasableStrokes(near(rect), readLayers(doc), currentLayer, hiddenLayers) : editableNear(rect)
     if (tool === 'eraser') {
       return {
         // 올려 두면 누를 때 지워질 획을 미리 알린다(화면에만 표시, 문서는 그대로)
         hover(p) {
-          showEraseTargets(p ? strokesHitBy(erasable(), [p], eraserRadius) : [])
+          showEraseTargets(p ? strokesHitBy(erasableNear(pathBounds([p], eraserRadius)), [p], eraserRadius) : [])
           return null
         },
         // 끄는 동안은 지나간 획을 흐리게만 보이고, 손을 뗄 때 한 번에 지운다. 손가락으로 두 손가락 스크롤·핀치를
         // 시작할 때 첫 손가락이 닿은 자리의 획이 지워지지 않도록(그때는 cancel이 와서 아무것도 지우지 않는다).
         down(p) {
-          const ids = new Set(strokesHitBy(erasable(), [p], eraserRadius))
+          const ids = new Set(strokesHitBy(erasableNear(pathBounds([p], eraserRadius)), [p], eraserRadius))
           drag.current = { kind: 'erase', last: p, ids }
           showEraseTargets([...ids])
           return true
@@ -135,7 +149,8 @@ export function useEditTools(
           const d = drag.current
           if (d?.kind !== 'erase') return
           const before = d.ids.size
-          for (const id of strokesHitBy(erasable(), [d.last, p], eraserRadius)) d.ids.add(id)
+          const path = [d.last, p]
+          for (const id of strokesHitBy(erasableNear(pathBounds(path, eraserRadius)), path, eraserRadius)) d.ids.add(id)
           d.last = p
           if (d.ids.size !== before) showEraseTargets([...d.ids])
         },
@@ -165,7 +180,7 @@ export function useEditTools(
           if (!p) return null
           if (h) return cursorForHandle(h)
           const inBox = box && p.x >= box.x && p.x <= box.x + box.width && p.y >= box.y && p.y <= box.y + box.height
-          if (inBox || topStrokeAt(editable(), p, PICK_TOLERANCE)) return 'move'
+          if (inBox || topStrokeAt(editableNear(pathBounds([p], PICK_TOLERANCE)), p, PICK_TOLERANCE)) return 'move'
           return null
         },
         down(p) {
@@ -181,11 +196,10 @@ export function useEditTools(
             drag.current = { kind: 'scale', ids: selected, bounds: box, anchor: anchorOf(box, h), corner: handlePoints(box, 0)[h], m: IDENTITY }
             return true
           }
-          const strokes = editable()
-          const hit = topStrokeAt(strokes, p, PICK_TOLERANCE)
+          const hit = topStrokeAt(editableNear(pathBounds([p], PICK_TOLERANCE)), p, PICK_TOLERANCE)
           if (hit) {
             // 기본 레이어가 아닌 레이어는 스티커처럼 통째로 잡는다
-            const ids = selected.includes(hit.id) ? selected : grabIds([hit.id], strokes, readLayers(doc))
+            const ids = selected.includes(hit.id) ? selected : grabIds([hit.id], editable(), readLayers(doc))
             setSelected(ids)
             const bounds = selectionBox(ids) ?? { x: p.x, y: p.y, width: 0, height: 0 }
             drag.current = { kind: 'move', ids, start: p, bounds, m: IDENTITY }
@@ -217,15 +231,15 @@ export function useEditTools(
             setPreview(null)
           }
           if (d?.kind === 'band') {
-            const strokes = editable()
-            setSelected(grabIds(strokesInRect(strokes, normalizeRect(d.start, d.end)), strokes, readLayers(doc)))
+            const rect = normalizeRect(d.start, d.end)
+            setSelected(grabIds(strokesInRect(editableNear(rect), rect), editable(), readLayers(doc)))
             bump()
           }
         },
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets])
+  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets, strokeIndex])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)

@@ -15,10 +15,14 @@ export function canvasPixelRatio(cssWidth: number, cssHeight: number, dpr: numbe
   return Math.min(dpr, fit)
 }
 
-/** 형광펜이 항상 펜 아래에 오도록, 같은 도구 안에서는 그린 순서대로. */
-export function orderStrokes(strokes: Stroke[]): Stroke[] {
+/** 그리는 순서: 형광펜이 항상 펜 아래에 오도록, 같은 도구 안에서는 그린 시각 순(같으면 id). */
+export function compareStrokes(a: Stroke, b: Stroke): number {
   const rank = (s: Stroke) => (s.tool === 'highlighter' ? 0 : 1)
-  return [...strokes].sort((a, b) => rank(a) - rank(b) || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+  return rank(a) - rank(b) || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+}
+
+export function orderStrokes(strokes: Stroke[]): Stroke[] {
+  return [...strokes].sort(compareStrokes)
 }
 
 function toTriples(points: number[]): [number, number, number][] {

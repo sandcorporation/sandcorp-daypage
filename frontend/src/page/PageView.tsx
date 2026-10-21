@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type PointerEvent, type ReactNode } from 'react'
 import * as Y from 'yjs'
-import { addStroke, newId, readStrokes, round, type Stroke } from './doc'
+import { addStroke, newId, readStroke, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
-import { canDrawOn, highlightPlan, layerOf, layerPlan, observeLayers, readLayers } from './layers'
+import { canDrawOn, highlightPlan, layerOf, layerPlan, layersMap, readLayers } from './layers'
 import { strokeBounds, unionRect } from './hit'
-import { canvasPixelRatio, paintLayers, paintStroke } from './render'
+import { canvasPixelRatio, paintLayers, paintStroke, paintStrokes } from './render'
+import { appendPlan, paintedAfter, type Painted } from './inkCache'
 import { matrixScale, transformPoints, type Matrix } from './transform'
 import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { TouchPan, scrollNearest } from './touchPan'
@@ -332,7 +333,11 @@ export function PageView({
     }
   }, [readOnly, onZoom])
 
+  // 잉크 캔버스에 무엇까지 그려져 있는지(inkCache.ts). null이면 덧그릴 수 없어 다음 변화 때 전체를 다시 그린다.
+  const painted = useRef<Painted | null>(null)
+
   const repaint = useCallback(() => {
+    painted.current = null
     const canvas = inkCanvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
@@ -350,7 +355,8 @@ export function PageView({
     // 지우개를 올려 둔 자리에서 지워질 획은 따로 흐리게 그리고 점선 상자로 감싼다
     const doomedIds = eraseTargets?.length ? new Set(eraseTargets) : null
     const kept = doomedIds ? strokes.filter((s) => !doomedIds.has(s.id)) : strokes
-    paintLayers(ctx, highlightPlan(layerPlan(kept, layers, hiddenLayers), highlightLayer), pixelScale)
+    const plan = layerPlan(kept, layers, hiddenLayers)
+    paintLayers(ctx, highlightPlan(plan, highlightLayer), pixelScale)
     if (doomedIds) {
       const doomed = strokes.filter((s) => doomedIds.has(s.id))
       const faded = layerPlan(doomed, layers, hiddenLayers).map((item) => ({
@@ -371,22 +377,71 @@ export function PageView({
       ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
       overlay(ctx)
     }
+    // 획 위에 다른 것(미리보기·지우개 표시·강조·선택 상자)이 없을 때만 새 획을 덧그릴 수 있다
+    painted.current = preview || doomedIds || highlightLayer || overlay ? null : paintedAfter(plan, layers)
   }, [doc, pixelScale, overlay, preview, hiddenLayers, highlightLayer, scale, eraseTargets, eraserRadius])
 
-  // 문서가 바뀌면 다음 프레임에 한 번만 다시 그린다.
+  // 문서가 바뀌면 다음 프레임에 한 번만 그린다. 획이 더해지기만 했으면 그 획만 덧그리고(1만 획이어도 1ms),
+  // 지우거나 옮기거나 레이어가 바뀌면 전체를 다시 그린다.
   useEffect(() => {
     let frame = 0
+    let added: string[] = []
+    let dirty = true
+    const run = () => {
+      frame = 0
+      const ids = added
+      const full = dirty || painted.current === null || ids.length === 0
+      added = []
+      dirty = false
+      if (full) {
+        repaint()
+        return
+      }
+      const map = strokesMap(doc)
+      const strokes = ids.flatMap((id) => {
+        const m = map.get(id)
+        return m ? [readStroke(id, m)] : []
+      })
+      const plan = appendPlan(painted.current!, strokes, readLayers(doc), hiddenLayers)
+      const ctx = inkCanvasRef.current?.getContext('2d')
+      if (!plan || !ctx) {
+        repaint()
+        return
+      }
+      paintStrokes(ctx, plan.strokes, pixelScale)
+      painted.current = plan.painted
+    }
     const schedule = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(repaint)
+      if (!frame) frame = requestAnimationFrame(run)
     }
     schedule()
-    const unobserve = observeLayers(doc, schedule)
+    const strokes = strokesMap(doc)
+    const layers = layersMap(doc)
+    const onStrokes = (events: Y.YEvent<Y.Map<unknown>>[]) => {
+      for (const ev of events) {
+        if (ev.target !== strokes) {
+          dirty = true
+          continue
+        }
+        for (const [id, change] of ev.changes.keys) {
+          if (change.action === 'add') added.push(id)
+          else dirty = true
+        }
+      }
+      schedule()
+    }
+    const onLayers = () => {
+      dirty = true
+      schedule()
+    }
+    strokes.observeDeep(onStrokes)
+    layers.observe(onLayers)
     return () => {
-      unobserve()
+      strokes.unobserveDeep(onStrokes)
+      layers.unobserve(onLayers)
       cancelAnimationFrame(frame)
     }
-  }, [doc, repaint, overlayVersion])
+  }, [doc, repaint, overlayVersion, hiddenLayers, pixelScale])
 
   const paintLive = useCallback(() => {
     const canvas = liveCanvasRef.current

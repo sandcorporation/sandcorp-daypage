@@ -68,6 +68,15 @@ export function strokeBounds(stroke: Stroke): Rect {
   return { x: minX - pad, y: minY - pad, width: maxX - minX + 2 * pad, height: maxY - minY + 2 * pad }
 }
 
+/** 경로(점들)를 radius만큼 사방으로 넓힌 경계 상자. 색인에서 근처 획을 찾을 때 쓴다. */
+export function pathBounds(path: Point[], radius: number): Rect {
+  const xs = path.map((p) => p.x)
+  const ys = path.map((p) => p.y)
+  const x = Math.min(...xs) - radius
+  const y = Math.min(...ys) - radius
+  return { x, y, width: Math.max(...xs) + radius - x, height: Math.max(...ys) + radius - y }
+}
+
 export function unionRect(rects: Rect[]): Rect | null {
   if (rects.length === 0) return null
   const x = Math.min(...rects.map((r) => r.x))
