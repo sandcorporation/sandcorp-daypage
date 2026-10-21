@@ -154,9 +154,18 @@ export function PageView({
   const touchPan = useRef(new TouchPan())
   // 이번 방문에서 펜 입력을 봤는지(펜 전용 모드 '자동'의 근거)
   const penSeen = useRef(false)
-  // 핀치: 두 손가락이 닿은 순간의 배율. 한 프레임에 한 번만 배율을 바꾼다.
-  const pinchStart = useRef<number | null>(null)
-  const pinchFrame = useRef<{ zoom: number; anchor: ClientPoint; frame: number } | null>(null)
+  // 핀치: 두 손가락이 닿은 순간의 배율·종이 위치·스크롤. 끄는 동안은 종이에 transform으로만 미리 보이고(캔버스를 다시
+  // 그리지 않는다), 손을 떼면 한 번에 배율을 확정한다. 매 프레임 배율을 바꾸면 다시 그리기와 스크롤 보정이 겹쳐 출렁였다.
+  const pinch = useRef<{
+    scale: number
+    frameLeft: number
+    frameTop: number
+    scrollLeft: number
+    scrollTop: number
+    target: number | null
+    anchor: ClientPoint | null
+    raf: number
+  } | null>(null)
   const dpr = canvasPixelRatio(PAGE_WIDTH * scale, PAGE_HEIGHT * scale, window.devicePixelRatio || 1)
   const pixelScale = scale * dpr
 
@@ -172,7 +181,7 @@ export function PageView({
     const update = () => {
       const s = zoom === 'fit' ? (fitHeight ? fitScaleIn(el.clientWidth, el.clientHeight) : fitScale(el.clientWidth)) : zoom
       const frame = frameRef.current
-      if (frame && s !== scaleRef.current) {
+      if (frame && s !== scaleRef.current && !restore.current) {
         const req = requested.current
         requested.current = null
         const box = el.getBoundingClientRect()
@@ -195,10 +204,64 @@ export function PageView({
     const anchor = restore.current
     if (!el || !frame || !anchor) return
     restore.current = null
+    frame.style.transform = ''
+    frame.style.transformOrigin = ''
     const next = scrollAfterZoom(anchor, frame.getBoundingClientRect(), scale, { left: el.scrollLeft, top: el.scrollTop })
     el.scrollLeft = next.left
     el.scrollTop = next.top
   }, [scale])
+
+  // 두 손가락 스크롤: 손가락 이벤트가 번갈아 오면 가운데 점이 ±소수점으로 흔들리는데, 스크롤 값이 정수로 반올림되며
+  // 한쪽으로 조금씩 쌓였다. 소수점은 모아 두었다가 1px이 될 때 반영한다.
+  const panCarry = useRef({ x: 0, y: 0 })
+  const panBy = useCallback((dx: number, dy: number) => {
+    const frame = frameRef.current
+    if (!frame) return
+    const c = panCarry.current
+    c.x += dx
+    c.y += dy
+    const ix = Math.trunc(c.x)
+    const iy = Math.trunc(c.y)
+    c.x -= ix
+    c.y -= iy
+    if (ix || iy) scrollNearest(frame, ix, iy)
+  }, [])
+
+  /** 핀치 미리보기: 종이를 기준점(손가락 가운데)을 중심으로 transform으로 키워 보인다. 스크롤로 움직인 만큼은 빼고 계산한다. */
+  const previewPinch = useCallback(() => {
+    const pz = pinch.current
+    const frame = frameRef.current
+    const vp = viewportRef.current
+    if (!pz || !frame || !vp) return
+    pz.raf = 0
+    if (pz.target === null || !pz.anchor) return
+    const left = pz.frameLeft - (vp.scrollLeft - pz.scrollLeft)
+    const top = pz.frameTop - (vp.scrollTop - pz.scrollTop)
+    const k = pz.target / pz.scale
+    frame.style.transformOrigin = `${pz.anchor.clientX - left}px ${pz.anchor.clientY - top}px`
+    frame.style.transform = `scale(${k})`
+  }, [])
+
+  /** 핀치 끝: 미리 보인 배율을 한 번에 확정한다. 기준점 아래의 종이 자리는 그대로다. */
+  const commitPinch = useCallback(() => {
+    const pz = pinch.current
+    const frame = frameRef.current
+    const vp = viewportRef.current
+    pinch.current = null
+    if (!pz || !frame || !vp) return
+    if (pz.raf) cancelAnimationFrame(pz.raf)
+    if (pz.target === null || !pz.anchor || !onZoom || Math.abs(pz.target - scaleRef.current) < 0.002) {
+      frame.style.transform = ''
+      frame.style.transformOrigin = ''
+      return
+    }
+    const left = pz.frameLeft - (vp.scrollLeft - pz.scrollLeft)
+    const top = pz.frameTop - (vp.scrollTop - pz.scrollTop)
+    // transform이 걸린 채라 getBoundingClientRect를 쓸 수 없다. 스크롤을 뺀 원래 자리로 기준점의 종이 좌표를 적는다.
+    restore.current = anchorAt(pz.anchor, { left, top }, scaleRef.current)
+    requested.current = { zoom: pz.target, anchor: pz.anchor }
+    onZoom(pz.target, pz.anchor)
+  }, [onZoom])
 
   // Ctrl(⌘)+휠·트랙패드 핀치: 마우스 위치를 기준으로 연속 확대·축소. 브라우저 확대를 막아야 하므로 passive가 아니어야 한다.
   const wheelAcc = useRef<{ delta: number; point: ClientPoint; frame: number } | null>(null)
@@ -540,9 +603,21 @@ export function PageView({
     }
     if (e.pointerType === 'touch') {
       const pan = touchPan.current
-      if (pan.down(e.pointerId, e.clientX, e.clientY, fingerScrolls)) {
-        cancelGesture(e)
-        pinchStart.current = scaleRef.current
+      if (pan.down(e.pointerId, e.clientX, e.clientY, fingerScrolls)) cancelGesture(e)
+      const vp = viewportRef.current
+      const frame = frameRef.current
+      if (pan.active && vp && frame && !pinch.current) {
+        const r = frame.getBoundingClientRect()
+        pinch.current = {
+          scale: scaleRef.current,
+          frameLeft: r.left,
+          frameTop: r.top,
+          scrollLeft: vp.scrollLeft,
+          scrollTop: vp.scrollTop,
+          target: null,
+          anchor: null,
+          raf: 0,
+        }
       }
       if (pan.active) {
         e.currentTarget.setPointerCapture(e.pointerId)
@@ -616,27 +691,12 @@ export function PageView({
     if (e.pointerType === 'touch') {
       const d = touchPan.current.move(e.pointerId, e.clientX, e.clientY)
       if (touchPan.current.active) {
-        if (d && frameRef.current) scrollNearest(frameRef.current, -d.dx, -d.dy)
-        if (d?.ratio != null && onZoom && pinchStart.current !== null) {
-          const next = pinchZoom(pinchStart.current, 1, d.ratio)
-          const anchor = { clientX: d.cx, clientY: d.cy }
-          const pending = pinchFrame.current
-          if (pending) {
-            pending.zoom = next
-            pending.anchor = anchor
-          } else {
-            pinchFrame.current = {
-              zoom: next,
-              anchor,
-              frame: requestAnimationFrame(() => {
-                const p = pinchFrame.current
-                pinchFrame.current = null
-                if (!p || Math.abs(p.zoom - scaleRef.current) < 0.002) return
-                requested.current = { zoom: p.zoom, anchor: p.anchor }
-                onZoom(p.zoom, p.anchor)
-              }),
-            }
-          }
+        if (d) panBy(-d.dx, -d.dy)
+        const pz = pinch.current
+        if (d?.ratio != null && onZoom && pz) {
+          pz.target = pinchZoom(pz.scale, 1, d.ratio)
+          pz.anchor = { clientX: d.cx, clientY: d.cy }
+          if (!pz.raf) pz.raf = requestAnimationFrame(previewPinch)
         }
         return
       }
@@ -697,7 +757,10 @@ export function PageView({
       pan.current = null
       return
     }
-    if (e.pointerType === 'touch') touchPan.current.up(e.pointerId)
+    if (e.pointerType === 'touch') {
+      touchPan.current.up(e.pointerId)
+      if (pinch.current) commitPinch()
+    }
     if (e.pointerId !== activePointer.current) return
     activePointer.current = null
     if (tool === 'shape') {

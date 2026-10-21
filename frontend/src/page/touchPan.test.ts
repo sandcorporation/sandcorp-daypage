@@ -43,10 +43,14 @@ describe('두 손가락 핀치', () => {
     const pan = new TouchPan()
     pan.down(1, 100, 100)
     pan.down(2, 200, 100)
-    // 오른손가락을 멀리: 거리 100 → 200
-    expect(pan.move(2, 300, 100)).toMatchObject({ ratio: 2, cx: 200, cy: 100 })
+    // 오른손가락을 멀리: 거리 100 → 200. 문턱(8%)을 뺀 비율
+    const far = pan.move(2, 300, 100)!
+    expect(far).toMatchObject({ cx: 200, cy: 100 })
+    expect(far.ratio).toBeCloseTo(2 / 1.08, 3)
     // 다시 가까이: 거리 50
-    expect(pan.move(2, 150, 100)).toMatchObject({ ratio: 0.5, cx: 125, cy: 100 })
+    const near = pan.move(2, 150, 100)!
+    expect(near).toMatchObject({ cx: 125, cy: 100 })
+    expect(near.ratio).toBeCloseTo(0.5 / 0.92, 3)
   })
 
   it('한 손가락을 떼면 거리 비율은 더 바뀌지 않는다', () => {
@@ -64,6 +68,30 @@ describe('펜 전용 모드(solo): 한 손가락도 스크롤', () => {
     expect(pan.down(1, 100, 100, true)).toBe(true)
     expect(pan.move(1, 100, 130)).toMatchObject({ dx: 0, dy: 30, ratio: null })
     expect(pan.down(2, 300, 130, true)).toBe(false)
-    expect(pan.move(2, 500, 130)).toMatchObject({ ratio: 2 })
+    expect(pan.move(2, 500, 130)!.ratio).toBeCloseTo(2 / 1.08, 3)
+  })
+})
+
+describe('두 손가락 스크롤 중 거리 흔들림', () => {
+  it('거리가 8% 안에서 흔들리는 동안은 핀치가 아니라 스크롤만이다', () => {
+    const pan = new TouchPan()
+    pan.down(1, 100, 100)
+    pan.down(2, 200, 100)
+    // 두 손가락이 함께 내려가며 거리가 100 → 104 → 97로 흔들린다
+    expect(pan.move(1, 100, 140)).toMatchObject({ dy: 20, ratio: null })
+    expect(pan.move(2, 204, 140)).toMatchObject({ dy: 20, ratio: null })
+    expect(pan.move(1, 107, 180)).toMatchObject({ ratio: null })
+    expect(pan.move(2, 204, 180)).toMatchObject({ ratio: null })
+  })
+
+  it('문턱을 넘는 순간 비율이 1에서 이어져 배율이 튀지 않는다', () => {
+    const pan = new TouchPan()
+    pan.down(1, 100, 100)
+    pan.down(2, 200, 100)
+    expect(pan.move(2, 207, 100)!.ratio).toBeNull()
+    expect(pan.move(2, 209, 100)!.ratio).toBeCloseTo(1.09 / 1.08, 3)
+    // 한 손가락을 떼면 핀치가 풀린다
+    pan.up(2)
+    expect(pan.move(1, 100, 150)!.ratio).toBeNull()
   })
 })
