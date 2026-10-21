@@ -603,13 +603,24 @@ export function PageView({
         return
       e.preventDefault()
     }
+    // iOS Safari는 선택·돋보기·'복사하기'를 touchstart가 막혀야만 포기한다(포인터 이벤트를 막아도 소용없다).
+    // 그리는 도구일 때만: 선택 도구는 손가락 스크롤(touch-action)을 써야 하고, 글씨 도구는 탭으로 상자를 만들어
+    // 화면 키보드를 띄워야 한다. 글 상자 위는 글 편집을 위해 둔다.
+    const blockTouch = (e: TouchEvent) => {
+      if (readOnly || tool === 'select' || tool === 'text') return
+      const target = e.target instanceof Element ? e.target : null
+      if (target?.closest('[data-page-ui]')) return
+      e.preventDefault()
+    }
     el.addEventListener('selectstart', block)
     el.addEventListener('contextmenu', block)
+    el.addEventListener('touchstart', blockTouch, { passive: false })
     return () => {
       el.removeEventListener('selectstart', block)
       el.removeEventListener('contextmenu', block)
+      el.removeEventListener('touchstart', blockTouch)
     }
-  }, [])
+  }, [readOnly, tool])
 
   return (
     <div ref={viewportRef} className="page-viewport">

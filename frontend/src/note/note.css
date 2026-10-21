@@ -1,3 +1,22 @@
+/* iPad에서 펜슬·손가락으로 천천히 긋거나 멈추면 Safari가 길게 누르기로 보고 글자 선택·'복사하기' 메뉴를 띄워
+   그리기를 가로챘다. 지면만 막았더니 가장 가까운 글자(툴바·아래 칩)를 골랐다. 노트 화면 전체에서 선택을 막고,
+   글 상자 안의 편집기와 입력칸에서만 고를 수 있게 둔다. */
+.note-screen,
+.history-screen {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.note-screen [contenteditable='true'],
+.note-screen input,
+.note-screen textarea,
+.history-screen [contenteditable='true'],
+.history-screen input,
+.history-screen textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 .note-screen {
   min-height: 100vh;
   display: flex;
@@ -207,11 +226,6 @@
      쓰는 사람에게만 보이는 글이 생긴다. */
   overflow: clip;
   touch-action: none;
-  /* iPad 펜슬로 천천히 긋거나 멈추면 Safari가 글자 선택·'복사하기' 메뉴를 띄워 그리기를 가로챘다.
-     지면에서는 막고, 글씨·선택 도구로 쓰는 글 상자 안에서만 고를 수 있게 둔다. */
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
 }
 .page-frame [data-page-ui] [contenteditable='true'] {
   -webkit-user-select: text;

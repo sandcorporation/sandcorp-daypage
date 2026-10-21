@@ -48,3 +48,29 @@ describe('그리는 도구일 때 지면은 글자 선택·길게 누르기 메�
     expect(fireEvent(el, new Event('selectstart', { bubbles: true, cancelable: true }))).toBe(false)
   })
 })
+
+// iOS Safari는 포인터 이벤트를 막아도 길게 누르기(선택·돋보기·'복사하기')를 touchstart가 막혀야만 포기한다.
+describe('그리는 도구일 때 지면의 touchstart를 막는다', () => {
+  const touch = (el: Element) => {
+    const e = new Event('touchstart', { bubbles: true, cancelable: true })
+    el.dispatchEvent(e)
+    return e.defaultPrevented
+  }
+
+  test('펜 도구: 지면에 닿은 터치는 기본 동작을 막는다', () => {
+    const el = frame('pen')
+    expect(touch(el)).toBe(true)
+  })
+
+  test('글 상자(data-page-ui) 위의 터치는 그대로 둔다(글 편집·키보드)', () => {
+    const el = frame('pen')
+    expect(touch(el.querySelector('[contenteditable]')!)).toBe(false)
+  })
+
+  test('선택 도구는 손가락 스크롤을 써야 하니 막지 않는다', () => {
+    const { container } = render(
+      <PageView doc={new Y.Doc()} tool="select" ink="#000" widthLevel={1} author="나" />,
+    )
+    expect(touch(container.querySelector('.page-frame')!)).toBe(false)
+  })
+})
