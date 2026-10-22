@@ -87,7 +87,7 @@ export function HistoryPage() {
       {pages.length === 0 ? (
         <main className="history-empty">
           <p className="hand">아직 지난 페이지가 없어요</p>
-          <p>봉인 시각(기본 밤 12시)이 지나면 쓰던 페이지가 이곳에 기록돼요.</p>
+          <p>새 페이지가 열리는 시각(기본 밤 12시)이 지나면 쓰던 페이지가 이곳에 보관돼요.</p>
         </main>
       ) : (
         <main className="history-main">

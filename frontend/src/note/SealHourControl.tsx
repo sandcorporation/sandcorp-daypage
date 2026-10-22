@@ -10,12 +10,12 @@ type Props = {
 }
 
 export function sealHourLabel(hour: number): string {
-  return `봉인 ${String(hour).padStart(2, '0')}:00`
+  return `새 페이지 ${String(hour).padStart(2, '0')}:00`
 }
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h)
 
-/** 머리글의 봉인 시각. 노트의 하루는 이 시각에 끝난다. 만든 사람이 눌러서 바꾼다. */
+/** 머리글의 봉인 시각(화면에는 '새 페이지 HH:00'). 노트의 하루는 이 시각에 끝난다. 만든 사람이 눌러서 바꾼다. */
 export function SealHourControl({ sealHour, editable, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -37,11 +37,11 @@ export function SealHourControl({ sealHour, editable, onChange }: Props) {
         {sealHourLabel(sealHour)}
       </button>
       {open && (
-        <div className="member-popover" role="dialog" aria-label="봉인 시각">
+        <div className="member-popover" role="dialog" aria-label="새 페이지 시각">
           <label className="member-limit-row">
-            봉인 시각
+            새 페이지가 열리는 시각
             <select
-              aria-label="봉인 시각"
+              aria-label="새 페이지 시각"
               value={sealHour}
               onChange={async (e) => {
                 await onChange(Number(e.target.value))
@@ -56,8 +56,8 @@ export function SealHourControl({ sealHour, editable, onChange }: Props) {
             </select>
           </label>
           <p className="member-help">
-            이 노트의 하루는 이 시각에 끝나요. 바꾸면 지금 페이지는 다음에 오는 그 시각에 봉인되고, 그 시각이 이미
-            지났으면 바로 봉인돼요.
+            매일 이 시각에 새 페이지가 열리고, 쓰던 페이지는 기록에 보관돼요. 바꾸면 지금 페이지는 다음에 오는 그
+            시각에 보관되고, 그 시각이 이미 지났으면 바로 보관돼요.
           </p>
         </div>
       )}

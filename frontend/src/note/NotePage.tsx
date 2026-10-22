@@ -446,9 +446,9 @@ export function NotePage({ initial }: Props) {
           { method: "PATCH", body: JSON.stringify({ sealHour }) },
         );
         setNote((n) => ({ ...n, sealHour: res.sealHour, page: res.page }));
-        show(`봉인 시각을 ${String(res.sealHour).padStart(2, "0")}:00로 바꿨어요`);
+        show(`새 페이지가 열리는 시각을 ${String(res.sealHour).padStart(2, "0")}:00로 바꿨어요`);
       } catch {
-        show("봉인 시각을 바꾸지 못했어요. 잠시 뒤 다시 해 주세요.");
+        show("시각을 바꾸지 못했어요. 잠시 뒤 다시 해 주세요.");
       }
     },
     [note.id, show],

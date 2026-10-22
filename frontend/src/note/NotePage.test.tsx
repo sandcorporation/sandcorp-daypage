@@ -137,23 +137,23 @@ test('집중 모드를 켜면 머리글·아래 칩이 숨고 전체 화면을 �
   expect(screen.getByRole('button', { name: '링크 공유' })).toBeInTheDocument()
 })
 
-test('만든 사람에게만 봉인 시각 버튼이 보이고, 봉인 예정이 바뀌었다는 알림에 카운트다운이 바뀐다', () => {
+test('만든 사람에게만 새 페이지 시각 버튼이 보이고, 봉인 예정이 바뀌었다는 알림에 카운트다운이 바뀐다', () => {
   render(
     <MemoryRouter>
       <NotePage initial={{ ...NOTE, isOwner: true }} />
     </MemoryRouter>,
   )
   act(() => latest().emit('sync', [true]))
-  expect(screen.getByRole('button', { name: '봉인 00:00' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '새 페이지 00:00' })).toBeInTheDocument()
   // 서버 시각 15:00, 봉인 예정 다음 날 00:00 → 약 9시간
   expect(screen.getByText(/새 페이지까지 0[89]:/)).toBeInTheDocument()
   act(() => latest().receive(104, { type: 'note_page', key: '2026-10-15', dueAt: '2026-10-15T18:00:00+09:00', sealHour: 18 }))
   expect(screen.getByText(/새 페이지까지 0[23]:/)).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '봉인 18:00' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '새 페이지 18:00' })).toBeInTheDocument()
 })
 
-test('참여자에게는 봉인 시각 버튼이 없다', () => {
+test('참여자에게는 새 페이지 시각 버튼이 없다', () => {
   renderNote()
   act(() => latest().emit('sync', [true]))
-  expect(screen.queryByRole('button', { name: /^봉인 / })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /^새 페이지 d/ })).not.toBeInTheDocument()
 })
