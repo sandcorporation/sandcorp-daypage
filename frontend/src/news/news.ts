@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-22-seal-hour',
+    date: '10월 22일 오전',
+    items: [
+      {
+        kind: 'new',
+        title: '노트마다 봉인 시각',
+        text: '노트를 만든 사람이 머리글의 ‘봉인 00:00’ 버튼으로 하루가 끝나는 시각을 정해요. 밤샘 모임은 새벽 4시로! 바꾸면 지금 페이지는 다음에 오는 그 시각에 봉인되고, 같은 날 다시 열리는 페이지는 ‘10월 21일 (2)’처럼 보여요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-21-two-finger-drag',
     date: '10월 21일 오후 -2',
     items: [

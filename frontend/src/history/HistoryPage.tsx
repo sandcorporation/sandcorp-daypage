@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import * as Y from 'yjs'
 import { api, ApiError } from '../api/client'
 import { useToast } from '../components/Toast'
-import { formatPageKey, formatShortDate, seqSuffix } from '../note/time'
+import { formatHourRange, formatPageKey, formatShortDate, seqSuffix } from '../note/time'
 import { ZoomControl, type Zoom } from '../note/ZoomControl'
 import type { NoteDetail } from '../note/types'
 import { downloadBlob, exportFileName, renderPagePng } from '../page/exportPng'
@@ -87,7 +87,7 @@ export function HistoryPage() {
       {pages.length === 0 ? (
         <main className="history-empty">
           <p className="hand">아직 지난 페이지가 없어요</p>
-          <p>밤 12시가 지나면 오늘 페이지가 이곳에 기록돼요.</p>
+          <p>봉인 시각(기본 밤 12시)이 지나면 쓰던 페이지가 이곳에 기록돼요.</p>
         </main>
       ) : (
         <main className="history-main">
@@ -109,6 +109,7 @@ export function HistoryPage() {
                         {seqSuffix(p.seq)}
                       </span>
                       <span className="history-meta">
+                        {formatHourRange(p.openedAt, p.closedAt) && `${formatHourRange(p.openedAt, p.closedAt)} · `}
                         참여 {p.participantCount}명 · 획 {p.strokeCount}개
                       </span>
                     </span>

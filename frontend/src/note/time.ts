@@ -29,6 +29,20 @@ export function parsePageKey(key: string): { date: string; seq: number } {
   return { date: key.slice(0, 10), seq: key.length > 10 ? Number(key.slice(11)) || 1 : 1 }
 }
 
+/** `04:00` 형식(KST). */
+function formatClock(iso: string): string {
+  const d = new Date(iso)
+  const kst = new Date(d.getTime() + 9 * 3600 * 1000)
+  return `${String(kst.getUTCHours()).padStart(2, '0')}:${String(kst.getUTCMinutes()).padStart(2, '0')}`
+}
+
+/** 하루를 다 채우지 않은 페이지의 시간 범위 `00:00–11:00`. 꼬박 하루면 null. */
+export function formatHourRange(openedAt: string, closedAt: string): string | null {
+  const ms = new Date(closedAt).getTime() - new Date(openedAt).getTime()
+  if (ms === 24 * 3600 * 1000) return null
+  return `${formatClock(openedAt)}–${formatClock(closedAt)}`
+}
+
 /** 페이지 키를 `10월 21일 (수) (2)` 형식으로 */
 export function formatPageKey(key: string): string {
   const { date, seq } = parsePageKey(key)
