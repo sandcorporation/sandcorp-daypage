@@ -425,7 +425,24 @@ export function PageView({
         const m = map.get(id)
         return m ? [readStroke(id, m)] : []
       })
-      const plan = appendPlan(painted.current!, strokes, readLayers(doc), hiddenLayers)
+      const layers = readLayers(doc)
+      // 채색 획은 색 캔버스에 덧그리기만 하면 된다(multiply는 순서와 무관). painted가 있다는 건 미리보기·지우개
+      // 표시·강조가 없다는 뜻이라 덧그린 결과가 전체 다시 그리기와 같다.
+      const color = colorCanvasRef.current?.getContext('2d')
+      const paints = strokes.filter((s) => s.tool === 'paint')
+      if (paints.length && !color) {
+        repaint()
+        return
+      }
+      if (color) {
+        paintColorStrokes(color, paints, pixelScale, (s) => {
+          const id = layerOf(s, layers)
+          return hiddenLayers?.has(id) ? 0 : (layers.find((l) => l.id === id)?.opacity ?? 1)
+        })
+      }
+      const pens = strokes.filter((s) => s.tool !== 'paint')
+      if (pens.length === 0) return
+      const plan = appendPlan(painted.current!, pens, layers, hiddenLayers)
       const ctx = inkCanvasRef.current?.getContext('2d')
       if (!plan || !ctx) {
         repaint()

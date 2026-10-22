@@ -14,7 +14,8 @@ test('시드가 다르면 무늬가 다르다', () => {
   expect(grainAlpha('pencil', 1)).not.toEqual(grainAlpha('pencil', 2))
 })
 
-test('시드는 획 id로 정해지고 언제나 같다', () => {
+test('시드는 펜 종류·색 문자열로 정해지고 언제나 같다(겹쳐 칠해도 결이 이어진다)', () => {
+  expect(grainSeed('crayon#1F2128')).toBe(grainSeed('crayon#1F2128'))
   expect(grainSeed('abc123')).toBe(grainSeed('abc123'))
   expect(grainSeed('abc123')).toBeGreaterThanOrEqual(0)
 })

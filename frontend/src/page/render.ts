@@ -102,7 +102,8 @@ export function paintStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void
     return
   }
   const brush = brushOf(stroke)
-  const grain = brush === 'pencil' || brush === 'crayon' ? grainPattern(ctx, brush, stroke.color, grainSeed(stroke.id)) : null
+  // 결 무늬는 획이 아니라 펜 종류·색으로 정한다(무늬 좌표는 종이 원점 기준이라 겹쳐 칠해도 결이 이어진다)
+  const grain = brush === 'pencil' || brush === 'crayon' ? grainPattern(ctx, brush, stroke.color, grainSeed(brush + stroke.color)) : null
   ctx.fillStyle = grain ?? stroke.color
   ctx.fill(path)
 }
