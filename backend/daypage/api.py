@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
-from . import clock, membership, moderation, pages, paper, rooms
+from . import clock, membership, moderation, pages, paper, rooms, sealing
 from .models import Note, NoteBan, NoteMember, Page, Suggestion
 
 
@@ -214,6 +214,8 @@ def update_paper(request, note_id: str, body: PaperIn):
 class UpdateNoteIn(Schema):
     name: str | None = None
     memberLimit: int | None = None
+    # 봉인 시각(KST 0~23시)
+    sealHour: int | None = None
 
 
 def owned_note(request, note_id: str) -> Note:
@@ -237,8 +239,35 @@ def update_note(request, note_id: str, body: UpdateNoteIn):
             if limit is not None and limit < note.members.count():
                 raise ApiError(400, "limit_below_members", "지금 참여자 수보다 적게 줄일 수 없어요.")
             note.member_limit = limit
+        rescheduled = None
+        if body.sealHour is not None:
+            if not 0 <= body.sealHour <= 23:
+                raise ApiError(400, "bad_seal_hour", "봉인 시각은 0시부터 23시 사이예요.")
+            note.seal_hour = body.sealHour
+            rescheduled = pages.reschedule_open_page(note)
         note.save()
-    return {"id": note.id, "name": note.name, "memberLimit": note.member_limit}
+    if rescheduled is not None:
+        now = clock.now()
+        if rescheduled.due_at <= now:
+            # 새 봉인 시각이 이미 지났다: 바로 봉인하고 접속자를 새 장으로 옮긴다
+            sealing.seal_and_announce(now)
+        else:
+            announce_note_event(
+                note.id,
+                {
+                    "type": "note.page",
+                    "key": pages.page_key(rescheduled.date, rescheduled.seq),
+                    "dueAt": rescheduled.due_at.astimezone(clock.KST).isoformat(),
+                    "sealHour": note.seal_hour,
+                },
+            )
+    return {
+        "id": note.id,
+        "name": note.name,
+        "memberLimit": note.member_limit,
+        "sealHour": note.seal_hour,
+        "page": page_info(pages.open_page(note)),
+    }
 
 
 def member_note(request, note_id: str) -> Note:

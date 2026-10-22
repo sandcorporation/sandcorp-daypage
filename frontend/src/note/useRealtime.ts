@@ -31,6 +31,10 @@ export const MESSAGE_QUEUED = 101
 export const MESSAGE_NOTE_COLORS = 102
 /** 노트 종이가 바뀜: {type: 'note_paper', paper} (consumers.py의 MESSAGE_NOTE_PAPER) */
 export const MESSAGE_NOTE_PAPER = 103
+/** 장의 봉인 예정이 바뀜(주인이 봉인 시각을 바꿈): {type: 'note_page', key, dueAt, sealHour} (MESSAGE_NOTE_PAGE) */
+export const MESSAGE_NOTE_PAGE = 104
+
+export type NotePageChange = { key: string; dueAt: string; sealHour: number }
 
 /** 다시 연결해도 소용없는 이유. full·away는 사람이 다시 시도할 때까지 접속하지 않는다. */
 export type FatalReason = 'unauthorized' | 'notFound' | 'crowded' | 'full' | 'away' | 'closed' | 'suspended' | 'kicked'
@@ -59,6 +63,8 @@ type Options = {
   onNoteColors?: (colors: string[]) => void
   /** 노트 종이가 바뀜(누가 바꿨든) */
   onNotePaper?: (paper: unknown) => void
+  /** 장의 봉인 예정 시각이 바뀜(주인이 봉인 시각을 바꿈) */
+  onNotePage?: (change: NotePageChange) => void
 }
 
 export function wsBaseUrl(noteId: string): string {
@@ -66,7 +72,7 @@ export function wsBaseUrl(noteId: string): string {
   return `${proto}//${window.location.host}/ws/notes/${noteId}/pages`
 }
 
-export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteColors, onNotePaper }: Options) {
+export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteColors, onNotePaper, onNotePage }: Options) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [synced, setSynced] = useState(false)
@@ -100,6 +106,10 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
     p.messageHandlers[MESSAGE_NOTE_PAPER] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; paper: unknown }
       if (msg.type === 'note_paper') onNotePaper?.(msg.paper)
+    }
+    p.messageHandlers[MESSAGE_NOTE_PAGE] = (_encoder, decoder) => {
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string } & NotePageChange
+      if (msg.type === 'note_page') onNotePage?.({ key: msg.key, dueAt: msg.dueAt, sealHour: msg.sealHour })
     }
     setProvider(p)
     setSynced(false)

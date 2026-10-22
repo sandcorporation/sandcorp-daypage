@@ -33,6 +33,7 @@ import { SuggestButton } from "../suggest/SuggestButton";
 import { NoteHeader } from "./NoteHeader";
 import { Cursors } from "./Cursors";
 import { MemberLimitControl } from "./MemberLimitControl";
+import { SealHourControl } from "./SealHourControl";
 import { loadToolPrefs, saveToolPrefs } from "./toolPrefs";
 import {
   loadToolbarDock,
@@ -309,6 +310,16 @@ export function NotePage({ initial }: Props) {
     },
     [note.id, note.paper, setNotePaper, show],
   );
+  // 주인이 봉인 시각을 바꿨다: 지금 장이면 봉인 예정 시각을 바꿔 카운트다운을 맞춘다(장이 바뀌면 page_rolled가 온다)
+  const onNotePageChange = useCallback(
+    (change: { key: string; dueAt: string; sealHour: number }) =>
+      setNote((n) =>
+        n.page.key === change.key
+          ? { ...n, sealHour: change.sealHour, page: { ...n.page, dueAt: change.dueAt } }
+          : { ...n, sealHour: change.sealHour },
+      ),
+    [],
+  );
   const { provider, status, synced, queuePosition, reconnect } = useRealtime({
     noteId: note.id,
     pageKey: note.page.key,
@@ -317,6 +328,7 @@ export function NotePage({ initial }: Props) {
     onFatal: setFatal,
     onNoteColors: setNoteColors,
     onNotePaper: setNotePaper,
+    onNotePage: onNotePageChange,
   });
   reconnectRef.current = reconnect;
   const rejoin = useCallback(() => {
@@ -426,6 +438,21 @@ export function NotePage({ initial }: Props) {
     [note.id],
   );
 
+  const changeSealHour = useCallback(
+    async (sealHour: number) => {
+      try {
+        const res = await api<{ sealHour: number; page: NoteDetail["page"] }>(
+          `/api/notes/${note.id}`,
+          { method: "PATCH", body: JSON.stringify({ sealHour }) },
+        );
+        setNote((n) => ({ ...n, sealHour: res.sealHour, page: res.page }));
+        show(`봉인 시각을 ${String(res.sealHour).padStart(2, "0")}:00로 바꿨어요`);
+      } catch {
+        show("봉인 시각을 바꾸지 못했어요. 잠시 뒤 다시 해 주세요.");
+      }
+    },
+    [note.id, show],
+  );
   const changeLimit = useCallback(
     async (memberLimit: number | null) => {
       try {
@@ -553,6 +580,11 @@ export function NotePage({ initial }: Props) {
                 onDelete={
                   note.isOwner ? () => setConfirmDelete(true) : undefined
                 }
+              />
+              <SealHourControl
+                sealHour={note.sealHour}
+                editable={note.isOwner}
+                onChange={changeSealHour}
               />
             </>
           }

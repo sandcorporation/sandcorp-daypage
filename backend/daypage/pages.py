@@ -72,6 +72,20 @@ def open_page(note: Note, now: dt.datetime | None = None) -> Page:
         return _new_page(note, date, seq, start, start + dt.timedelta(days=1))
 
 
+def reschedule_open_page(note: Note) -> Page | None:
+    """봉인 시각이 바뀐 뒤: 열린 장의 봉인 예정을 '열린 뒤 처음 오는 새 봉인 시각'으로 고친다.
+
+    10:49에 11시로 바꾸면 11:00, 새벽 1시에 4시로 바꾸면 04:00. 그 순간이 이미 지났으면(23:30에 23시) due가
+    과거가 되어 바로 봉인 대상이 된다. 열린 장이 없으면 None.
+    """
+    page = _latest(note)
+    if page is None or page.sealed_at is not None:
+        return None
+    page.due_at = clock.boundary_after(page.opened_at, note.seal_hour)
+    page.save(update_fields=["due_at"])
+    return page
+
+
 def current_key(note: Note, now: dt.datetime | None = None) -> str:
     """지금 쓰는 장의 키. 장을 만들지는 않는다(미리보기·접속자 수 세기용)."""
     now = now or clock.now()
