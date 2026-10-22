@@ -12,7 +12,7 @@ function memoryStorage(initial: Record<string, string> = {}) {
 
 test('저장한 도구 설정을 다시 읽는다', () => {
   const storage = memoryStorage()
-  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false, penOnly: 'on', eraserLevel: 0, eraserWidth: 30 } as const
+  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', pressure: false, penOnly: 'on', eraserLevel: 0, eraserWidth: 30, paintLevel: 1, paintWidth: null, paintOpacity: 0.6, paintSoft: false } as const
   saveToolPrefs(prefs, storage)
   expect(loadToolPrefs(storage)).toEqual(prefs)
 })
@@ -57,4 +57,12 @@ test('지우개 크기도 단계와 px로 기억한다', () => {
   saveToolPrefs({ ...DEFAULT_TOOL_PREFS, eraserLevel: 2, eraserWidth: 30 }, storage)
   expect(loadToolPrefs(storage)).toMatchObject({ eraserLevel: 2, eraserWidth: 30 })
   expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ eraserLevel: 9, eraserWidth: 'big' }) }))).toMatchObject({ eraserLevel: 1, eraserWidth: null })
+})
+
+test('채색 붓 설정(굵기 단계·px·불투명도·부드러움)을 기억하고 범위를 맞춘다', () => {
+  const storage = memoryStorage()
+  saveToolPrefs({ ...DEFAULT_TOOL_PREFS, tool: 'paint', paintLevel: 2, paintWidth: 180, paintOpacity: 0.3, paintSoft: true }, storage)
+  expect(loadToolPrefs(storage)).toMatchObject({ tool: 'paint', paintLevel: 2, paintWidth: 180, paintOpacity: 0.3, paintSoft: true })
+  const bad = loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ paintWidth: 999, paintOpacity: 7, paintSoft: 'yes' }) }))
+  expect(bad).toMatchObject({ paintWidth: 200, paintOpacity: 1, paintSoft: false })
 })

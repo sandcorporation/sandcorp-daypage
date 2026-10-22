@@ -1,7 +1,18 @@
 import { DEFAULT_FONT, FONTS } from '../page/fonts'
 import { DEFAULT_PEN_ONLY, isPenOnlyMode, type PenOnlyMode } from '../page/penOnly'
 import { DEFAULT_SHAPE, isShape, type ShapeKind } from '../page/shapes'
-import { clampCustomWidth, DEFAULT_BRUSH, INKS, isBrush, type Brush, type ToolKind, type WidthLevel } from '../page/tools'
+import {
+  clampCustomWidth,
+  clampOpacity,
+  DEFAULT_BRUSH,
+  DEFAULT_PAINT_OPACITY,
+  INKS,
+  isBrush,
+  PAINT_WIDTH_MAX,
+  type Brush,
+  type ToolKind,
+  type WidthLevel,
+} from '../page/tools'
 
 /** 이 브라우저에서 마지막으로 고른 도구 설정. 사람마다·기기마다 다른 편의 설정이라 브라우저에만 둔다. */
 export type ToolPrefs = {
@@ -21,6 +32,11 @@ export type ToolPrefs = {
   /** 지우개 크기 단계와 직접 정한 지름(px). 있으면 단계 대신 쓴다 */
   eraserLevel: WidthLevel
   eraserWidth: number | null
+  /** 채색 붓: 굵기 단계·직접 정한 굵기(px, 최대 200)·불투명도(0.1~1)·부드러운 가장자리 */
+  paintLevel: WidthLevel
+  paintWidth: number | null
+  paintOpacity: number
+  paintSoft: boolean
 }
 
 export const DEFAULT_TOOL_PREFS: ToolPrefs = {
@@ -35,6 +51,10 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   penOnly: DEFAULT_PEN_ONLY,
   eraserLevel: 1,
   eraserWidth: null,
+  paintLevel: 1,
+  paintWidth: null,
+  paintOpacity: DEFAULT_PAINT_OPACITY,
+  paintSoft: false,
 }
 
 const KEY = 'daypage:tool-prefs'
@@ -42,7 +62,7 @@ const KEY = 'daypage:tool-prefs'
 function isHexColor(v: unknown): boolean {
   return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)
 }
-const TOOLS: ToolKind[] = ['pen', 'highlighter', 'shape', 'text', 'eraser', 'select']
+const TOOLS: ToolKind[] = ['pen', 'highlighter', 'paint', 'shape', 'text', 'eraser', 'select']
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -77,6 +97,10 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     penOnly: isPenOnlyMode(raw.penOnly) ? raw.penOnly : d.penOnly,
     eraserLevel: [0, 1, 2].includes(raw.eraserLevel as number) ? (raw.eraserLevel as WidthLevel) : d.eraserLevel,
     eraserWidth: typeof raw.eraserWidth === 'number' ? clampCustomWidth(raw.eraserWidth) : null,
+    paintLevel: [0, 1, 2].includes(raw.paintLevel as number) ? (raw.paintLevel as WidthLevel) : d.paintLevel,
+    paintWidth: typeof raw.paintWidth === 'number' ? clampCustomWidth(raw.paintWidth, PAINT_WIDTH_MAX) : null,
+    paintOpacity: (typeof raw.paintOpacity === 'number' && clampOpacity(raw.paintOpacity)) || d.paintOpacity,
+    paintSoft: typeof raw.paintSoft === 'boolean' ? raw.paintSoft : d.paintSoft,
   }
 }
 

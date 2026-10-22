@@ -14,6 +14,7 @@ import { Toolbar } from "../page/Toolbar";
 import {
   INKS,
   eraserRadius,
+  strokeWidth,
   type Brush,
   type ToolKind,
   type WidthLevel,
@@ -99,6 +100,18 @@ export function NotePage({ initial }: Props) {
     setEraserWidth(null);
   }, []);
   const eraserR = eraserRadius(eraserLevel, eraserWidth);
+  // 채색 붓 설정(브라우저에 기억)
+  const [paintLevel, setPaintLevel] = useState<WidthLevel>(prefs.paintLevel);
+  const [paintWidth, setPaintWidth] = useState<number | null>(
+    prefs.paintWidth,
+  );
+  const choosePaintLevel = useCallback((level: WidthLevel) => {
+    setPaintLevel(level);
+    setPaintWidth(null);
+  }, []);
+  const [paintOpacity, setPaintOpacity] = useState(prefs.paintOpacity);
+  const [paintSoft, setPaintSoft] = useState(prefs.paintSoft);
+  const paintPx = strokeWidth("paint", paintLevel, paintWidth);
   const [font, setFont] = useState<string>(prefs.font);
   const [brush, setBrush] = useState<Brush>(prefs.brush);
   const [pressureOn, setPressureOn] = useState(prefs.pressure);
@@ -163,6 +176,10 @@ export function NotePage({ initial }: Props) {
         penOnly,
         eraserLevel,
         eraserWidth,
+        paintLevel,
+        paintWidth,
+        paintOpacity,
+        paintSoft,
       }),
     [
       tool,
@@ -176,6 +193,10 @@ export function NotePage({ initial }: Props) {
       penOnly,
       eraserLevel,
       eraserWidth,
+      paintLevel,
+      paintWidth,
+      paintOpacity,
+      paintSoft,
     ],
   );
   const [scale, setScale] = useState(0.5);
@@ -610,6 +631,14 @@ export function NotePage({ initial }: Props) {
           eraserWidth={eraserWidth}
           onEraserLevel={chooseEraserLevel}
           onEraserWidth={setEraserWidth}
+          paintLevel={paintLevel}
+          paintWidth={paintWidth}
+          onPaintLevel={choosePaintLevel}
+          onPaintWidth={setPaintWidth}
+          paintOpacity={paintOpacity}
+          onPaintOpacity={setPaintOpacity}
+          paintSoft={paintSoft}
+          onPaintSoft={setPaintSoft}
           onUndo={undo}
           onRedo={redo}
           font={font}
@@ -648,6 +677,9 @@ export function NotePage({ initial }: Props) {
           brush={brush}
           shape={shape}
           eraserRadius={tool === "eraser" ? eraserR : undefined}
+          paintWidth={paintPx}
+          paintOpacity={paintOpacity}
+          paintSoft={paintSoft}
           onCurveChange={setCurvePoints}
           curveControl={curveControl}
           pressureOn={pressureOn}

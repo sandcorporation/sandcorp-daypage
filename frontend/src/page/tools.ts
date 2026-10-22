@@ -1,4 +1,4 @@
-export type ToolKind = 'pen' | 'highlighter' | 'shape' | 'text' | 'eraser' | 'select'
+export type ToolKind = 'pen' | 'highlighter' | 'paint' | 'shape' | 'text' | 'eraser' | 'select'
 
 /** 펜 종류(펜 획의 질감). 형광펜에는 없다. 볼펜이 기본이자 펜 종류가 없는 옛 획의 모양이다. */
 export type Brush = 'ballpoint' | 'fountain' | 'pencil' | 'brushpen' | 'crayon'
@@ -30,14 +30,30 @@ export const WIDTH_NAMES = ['가늘게', '보통', '굵게'] as const
 
 const PEN_WIDTHS = [3, 6, 12]
 const HIGHLIGHTER_WIDTHS = [14, 24, 36]
+/** 채색 붓의 굵기 단계(px). 면을 칠하므로 펜보다 훨씬 넓다 */
+const PAINT_WIDTHS = [24, 48, 96]
 
-/** 직접 정하는 굵기(px)의 범위 */
+/** 직접 정하는 굵기(px)의 범위. 채색 붓은 더 넓게 */
 export const CUSTOM_WIDTH_MIN = 1
 export const CUSTOM_WIDTH_MAX = 80
+export const PAINT_WIDTH_MAX = 200
 
-/** 획 굵기(px). 직접 정한 굵기가 있으면 단계 대신 그 값을 펜·형광펜·도형에 그대로 쓴다. */
-export function strokeWidth(tool: 'pen' | 'highlighter', level: WidthLevel, customWidth: number | null = null): number {
-  return customWidth ?? (tool === 'pen' ? PEN_WIDTHS : HIGHLIGHTER_WIDTHS)[level]
+const WIDTHS: Record<'pen' | 'highlighter' | 'paint', number[]> = { pen: PEN_WIDTHS, highlighter: HIGHLIGHTER_WIDTHS, paint: PAINT_WIDTHS }
+
+/** 획 굵기(px). 직접 정한 굵기가 있으면 단계 대신 그 값을 펜·형광펜·채색·도형에 그대로 쓴다. */
+export function strokeWidth(tool: 'pen' | 'highlighter' | 'paint', level: WidthLevel, customWidth: number | null = null): number {
+  return customWidth ?? WIDTHS[tool][level]
+}
+
+/** 채색 불투명도 단계의 이름과 값. 색 캔버스에 multiply로 겹치므로 100%도 종이·선이 비친다 */
+export const PAINT_OPACITY_NAMES = ['연하게', '보통', '진하게'] as const
+export const PAINT_OPACITIES = [0.3, 0.6, 1] as const
+export const DEFAULT_PAINT_OPACITY = 0.6
+
+/** 불투명도를 0.1~1 사이, 소수 둘째 자리로 맞춘다. 숫자가 아니면 null. */
+export function clampOpacity(value: number): number | null {
+  if (!Number.isFinite(value)) return null
+  return Math.round(Math.min(1, Math.max(0.1, value)) * 100) / 100
 }
 
 /** 지우개 크기 단계의 이름과 지름(px). 직접 정한 크기(px)도 지름이다. */
@@ -50,9 +66,9 @@ export function eraserRadius(level: WidthLevel, customDiameter: number | null = 
 }
 
 /** 입력한 굵기를 범위 안의 정수로 맞춘다. 숫자가 아니면 null. */
-export function clampCustomWidth(value: number): number | null {
+export function clampCustomWidth(value: number, max = CUSTOM_WIDTH_MAX): number | null {
   if (!Number.isFinite(value)) return null
-  return Math.min(CUSTOM_WIDTH_MAX, Math.max(CUSTOM_WIDTH_MIN, Math.round(value)))
+  return Math.min(max, Math.max(CUSTOM_WIDTH_MIN, Math.round(value)))
 }
 
 /**

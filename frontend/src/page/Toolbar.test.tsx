@@ -307,3 +307,41 @@ describe('지우개 크기', () => {
     expect(screen.getByRole('button', { name: '굵기: 가늘게' })).toBeInTheDocument()
   })
 })
+
+describe('채색 붓', () => {
+  const paintProps = { paintLevel: 1 as const, paintWidth: null, onPaintLevel: vi.fn(), onPaintWidth: vi.fn(), paintOpacity: 0.6, onPaintOpacity: vi.fn(), paintSoft: false, onPaintSoft: vi.fn() }
+
+  test('채색 버튼을 누르면 채색 도구가 되고, 다시 누르면 불투명도·부드러움 창이 열린다', async () => {
+    const props = setup({ tool: 'pen', ...paintProps })
+    await userEvent.click(screen.getByRole('button', { name: '채색' }))
+    expect(props.onTool).toHaveBeenCalledWith('paint')
+  })
+
+  test('채색 창에서 불투명도 단계·밀대·부드러운 가장자리를 바꾼다', async () => {
+    const onPaintOpacity = vi.fn()
+    const onPaintSoft = vi.fn()
+    setup({ tool: 'paint', ...paintProps, onPaintOpacity, onPaintSoft })
+    await userEvent.click(screen.getByRole('button', { name: '채색' }))
+    expect(screen.getByRole('dialog', { name: '채색' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '보통' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: '진하게' }))
+    expect(onPaintOpacity).toHaveBeenCalledWith(1)
+    await userEvent.click(screen.getByRole('checkbox', { name: '부드러운 가장자리' }))
+    expect(onPaintSoft).toHaveBeenCalledWith(true)
+  })
+
+  test('채색일 때 굵기 버튼은 채색 굵기(최대 200px)를 다룬다', async () => {
+    const onPaintWidth = vi.fn()
+    setup({ tool: 'paint', ...paintProps, paintWidth: 120, onPaintWidth })
+    await userEvent.click(screen.getByRole('button', { name: '굵기: 120px' }))
+    const input = screen.getByRole('spinbutton', { name: '굵기(px)' })
+    await userEvent.clear(input)
+    await userEvent.type(input, '500{Enter}')
+    expect(onPaintWidth).toHaveBeenLastCalledWith(200)
+  })
+
+  test('채색 설정이 없으면 채색 버튼을 보이지 않는다', () => {
+    setup({ tool: 'pen' })
+    expect(screen.queryByRole('button', { name: '채색' })).not.toBeInTheDocument()
+  })
+})

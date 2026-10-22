@@ -9,7 +9,7 @@ import { compareStrokes } from './render'
  * 덧그린 결과가 전체를 다시 그린 것과 같으려면 새 획이
  * (1) 지금까지 그린 가장 위 레이어이거나 그보다 위 레이어에 있고,
  * (2) 같은 레이어라면 그 레이어에서 마지막으로 그린 획보다 뒤 순서(compareStrokes)이며,
- * (3) 펜이어야 한다(형광펜은 겹침이 진해지지 않게 한 덩어리로 합쳐 그리므로 따로 덧그릴 수 없다). 레이어도 불투명해야 한다.
+ * (3) 펜이어야 한다(형광펜은 한 덩어리로 합쳐 그리고, 채색은 다른 캔버스에 그린다). 레이어도 불투명해야 한다.
  */
 export type Painted = {
   /** layers 배열에서 지금까지 그린 가장 위 레이어의 자리. 아무것도 안 그렸으면 -1 */
@@ -49,7 +49,7 @@ export function appendPlan(
     const li = at(s)
     const layer = layers[li]
     if (hidden?.has(layer.id)) continue
-    if (s.tool === 'highlighter' || layer.opacity < 1 || li < state.layerIndex) return null
+    if (s.tool !== 'pen' || layer.opacity < 1 || li < state.layerIndex) return null
     if (li === state.layerIndex && state.last && compareStrokes(s, state.last) <= 0) return null
     strokes.push(s)
     state = { layerIndex: li, last: s }

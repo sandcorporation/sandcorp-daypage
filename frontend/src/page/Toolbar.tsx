@@ -9,7 +9,18 @@ import { ShapePicker } from './ShapePicker'
 import { SHAPES, type ShapeKind } from './shapes'
 import { InkControl } from './InkControl'
 import { FontPicker } from './FontPicker'
-import { BRUSHES, ERASER_SIZE_NAMES, WIDTH_NAMES, type Brush, type ToolKind, type WidthLevel } from './tools'
+import {
+  BRUSHES,
+  clampOpacity,
+  ERASER_SIZE_NAMES,
+  PAINT_OPACITIES,
+  PAINT_OPACITY_NAMES,
+  PAINT_WIDTH_MAX,
+  WIDTH_NAMES,
+  type Brush,
+  type ToolKind,
+  type WidthLevel,
+} from './tools'
 import { PEN_ONLY_MODES, type PenOnlyMode } from './penOnly'
 
 type Props = {
@@ -46,6 +57,15 @@ type Props = {
   customWidth?: number | null
   /** 굵기를 px로 정했을 때. 없으면 직접 정하기를 보이지 않는다 */
   onCustomWidth?: (px: number) => void
+  /** 채색 붓: 굵기 단계·직접 정한 굵기(px)·불투명도·부드러운 가장자리. onPaintLevel이 없으면 채색 버튼을 보이지 않는다 */
+  paintLevel?: WidthLevel
+  paintWidth?: number | null
+  onPaintLevel?: (level: WidthLevel) => void
+  onPaintWidth?: (px: number) => void
+  paintOpacity?: number
+  onPaintOpacity?: (opacity: number) => void
+  paintSoft?: boolean
+  onPaintSoft?: (soft: boolean) => void
   /** 지우개 크기. 지우개 도구일 때 굵기 버튼이 이 값을 보인다. 없으면 굵기 버튼은 늘 획 굵기다 */
   eraserLevel?: WidthLevel
   eraserWidth?: number | null
@@ -114,11 +134,14 @@ function DockGrip({ dock, onDock }: { dock: ToolbarDock; onDock: (dock: ToolbarD
 }
 
 const PEN_ICON = 'M4 18l1-4L15 4l3 3L8 17z'
+/** 붓: 자루와 넓은 붓끝 */
+const PAINT_ICON = 'M14 3l5 5-7 7-5-5zM7 10l-2.5 2.5a3 3 0 004 4L11 14M4 19c1.5 0 2.5-1 2.5-2.5'
 const HIGHLIGHTER_ICON = 'M6 14l7-9 4 3-7 9H6zM4 19h14'
 
 /** 형광펜은 따로 버튼을 두지 않고 펜 버튼 창 안에 둔다(펜 버튼이 지금 펜·형광펜을 보여 준다). */
 const TOOLS: { kind: ToolKind; label: string; icon: string }[] = [
   { kind: 'pen', label: '펜', icon: PEN_ICON },
+  { kind: 'paint', label: '채색', icon: PAINT_ICON },
   { kind: 'shape', label: '도형', icon: '' },
   { kind: 'text', label: '글씨', icon: 'M5 5h12M11 5v13M8 18h6' },
   { kind: 'eraser', label: '지우개', icon: 'M8 18l-4-4 9-9 5 5-8 8zM8 18h10' },
@@ -134,6 +157,13 @@ export function Toolbar(props: Props) {
   const widthRef = useRef<HTMLButtonElement>(null)
   const customWidth = props.customWidth ?? null
   const onCustomWidth = props.onCustomWidth
+  // 채색 붓을 들면 굵기 버튼이 채색 굵기(24·48·96·px≤200)를 보인다
+  const paintMode = tool === 'paint' && props.onPaintLevel !== undefined
+  const paintLevel = props.paintLevel ?? 1
+  const paintWidthPx = props.paintWidth ?? null
+  const [paintOpen, setPaintOpen] = useState(false)
+  const paintRef = useRef<HTMLButtonElement>(null)
+  const paintOpacity = props.paintOpacity ?? 0.6
   // 지우개를 들면 굵기 버튼 자리에 지우개 크기(작게·보통·크게·px)가 들어간다
   const eraserMode = tool === 'eraser' && props.onEraserLevel !== undefined
   const eraserLevel = props.eraserLevel ?? 1
@@ -142,12 +172,22 @@ export function Toolbar(props: Props) {
     ? eraserWidth === null
       ? ERASER_SIZE_NAMES[eraserLevel]
       : `${eraserWidth}px`
-    : customWidth === null
-      ? WIDTH_NAMES[widthLevel]
-      : `${customWidth}px`
+    : paintMode
+      ? paintWidthPx === null
+        ? WIDTH_NAMES[paintLevel]
+        : `${paintWidthPx}px`
+      : customWidth === null
+        ? WIDTH_NAMES[widthLevel]
+        : `${customWidth}px`
   const widthLabel = eraserMode ? '지우개 크기' : '굵기'
   // 굵기 버튼의 줄 두께: 지금 굵기를 버튼 안에 들어가게 줄여 보인다
-  const widthLine = customWidth === null ? 2 + widthLevel * 3 : Math.min(10, Math.max(1, Math.round(customWidth / 3)))
+  const widthLine = paintMode
+    ? paintWidthPx === null
+      ? 4 + paintLevel * 3
+      : Math.min(10, Math.max(2, Math.round(paintWidthPx / 12)))
+    : customWidth === null
+      ? 2 + widthLevel * 3
+      : Math.min(10, Math.max(1, Math.round(customWidth / 3)))
   // 지우개 버튼의 동그라미 크기: 단계는 8·12·16, 직접 정한 지름은 줄여서
   const eraserDot = eraserWidth === null ? 8 + eraserLevel * 4 : Math.min(16, Math.max(4, Math.round(eraserWidth / 3)))
   const shapeInfo = SHAPES.find((s) => s.id === shape) ?? SHAPES[0]
@@ -253,6 +293,64 @@ export function Toolbar(props: Props) {
               </ToolPopover>
             )}
           </div>
+        ) : t.kind === 'paint' ? (
+          props.onPaintLevel && (
+            <div key={t.kind} className="tool-anchor">
+              <button
+                ref={paintRef}
+                type="button"
+                className="tool-btn"
+                aria-label="채색"
+                title="채색 · 다시 누르면 불투명도·부드러움 · 색이 겹치면 섞여요"
+                aria-pressed={tool === 'paint'}
+                aria-haspopup="dialog"
+                aria-expanded={paintOpen}
+                onClick={() => (tool === 'paint' ? setPaintOpen((v) => !v) : onTool('paint'))}
+              >
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                  <path d={t.icon} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+                </svg>
+                <span className="tool-corner" aria-hidden="true" />
+              </button>
+              {paintOpen && (
+                <ToolPopover title="채색" anchor={paintRef} onClose={() => setPaintOpen(false)}>
+                  <p className="tool-pop-caption">색이 겹치면 물감처럼 섞이고, 선 위에 칠해도 선이 비쳐요.</p>
+                  <div className="width-options" role="group" aria-label="불투명도">
+                    {PAINT_OPACITY_NAMES.map((name, i) => (
+                      <button
+                        key={name}
+                        type="button"
+                        className="width-option"
+                        aria-pressed={paintOpacity === PAINT_OPACITIES[i]}
+                        onClick={() => props.onPaintOpacity?.(PAINT_OPACITIES[i])}
+                      >
+                        <span className="width-dot" style={{ width: 14, height: 14, opacity: PAINT_OPACITIES[i] }} />
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="paint-opacity">
+                    불투명도 {Math.round(paintOpacity * 100)}%
+                    <input
+                      type="range"
+                      aria-label="불투명도"
+                      min={10}
+                      max={100}
+                      value={Math.round(paintOpacity * 100)}
+                      onChange={(e) => {
+                        const v = clampOpacity(Number(e.target.value) / 100)
+                        if (v !== null) props.onPaintOpacity?.(v)
+                      }}
+                    />
+                  </label>
+                  <label className="pressure-toggle">
+                    부드러운 가장자리
+                    <input type="checkbox" checked={props.paintSoft ?? false} onChange={(e) => props.onPaintSoft?.(e.target.checked)} />
+                  </label>
+                </ToolPopover>
+              )}
+            </div>
+          )
         ) : t.kind === 'shape' ? (
           <div key={t.kind} className="tool-anchor">
             <button
@@ -334,6 +432,15 @@ export function Toolbar(props: Props) {
               onDone={() => setWidthOpen(false)}
               names={ERASER_SIZE_NAMES}
               round
+            />
+          ) : paintMode ? (
+            <WidthPanel
+              widthLevel={paintLevel}
+              customWidth={paintWidthPx}
+              onWidth={(level) => props.onPaintLevel?.(level)}
+              onCustomWidth={props.onPaintWidth}
+              onDone={() => setWidthOpen(false)}
+              max={PAINT_WIDTH_MAX}
             />
           ) : (
             <WidthPanel

@@ -188,3 +188,27 @@ describe('손가락 스크롤이 시작되면 지면이 알린다', () => {
     fireEvent.pointerUp(frame, { pointerId: 2, pointerType: 'touch', clientX: 300, clientY: 100 })
   })
 })
+
+describe('채색 붓', () => {
+  test('채색 도구로 그으면 불투명도·부드러움이 붙은 paint 획이 저장되고, 라이브 캔버스는 multiply로 섞인다', () => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    const doc = new Y.Doc()
+    const { container } = render(
+      <PageView doc={doc} tool="paint" ink="#f2c230" widthLevel={1} author="나" paintWidth={64} paintOpacity={0.3} paintSoft />,
+    )
+    const el = container.querySelector('.page-frame') as HTMLElement
+    expect(container.querySelector('canvas.color-canvas')).toBeInTheDocument()
+    expect(container.querySelector('canvas.live-canvas')).toHaveAttribute('data-blend', 'multiply')
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100, button: 0, buttons: 1 })
+    fireEvent.pointerMove(el, { pointerId: 1, pointerType: 'mouse', clientX: 200, clientY: 120, buttons: 1 })
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'mouse', clientX: 200, clientY: 120 })
+    const strokes = doc.getMap('strokes')
+    expect(strokes.size).toBe(1)
+    const m = [...strokes.values()][0] as Y.Map<unknown>
+    expect(m.get('tool')).toBe('paint')
+    expect(m.get('width')).toBe(64)
+    expect(m.get('opacity')).toBe(0.3)
+    expect(m.get('soft')).toBe(true)
+  })
+})

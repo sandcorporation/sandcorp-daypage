@@ -1,8 +1,8 @@
 import * as Y from 'yjs'
 import { readStrokes, readTextBoxes, textBoxContent, type TextBox } from './doc'
 import { LINE_GAP, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
-import { layerPlan, readLayers } from './layers'
-import { paintLayers, paintPaper } from './render'
+import { layerOf, layerPlan, readLayers } from './layers'
+import { paintColorStrokes, paintLayers, paintPaper } from './render'
 import type { Paper } from './paper'
 import { textStyle } from './textStyle'
 
@@ -142,8 +142,12 @@ export async function renderPagePng(doc: Y.Doc, pixelScale = 1, paper?: Paper): 
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas를 쓸 수 없어요')
   paintPaper(ctx, pixelScale, paper)
-  // 내가 숨긴 레이어도 담는다(모두가 본 페이지 그대로).
-  paintLayers(ctx, layerPlan(readStrokes(doc), readLayers(doc)), pixelScale)
+  // 내가 숨긴 레이어도 담는다(모두가 본 페이지 그대로). 채색은 종이 위에 multiply로, 그 위에 펜·형광펜.
+  const strokes = readStrokes(doc)
+  const layers = readLayers(doc)
+  const opacityOf = (id: string) => layers.find((l) => l.id === id)?.opacity ?? 1
+  paintColorStrokes(ctx, strokes, pixelScale, (s) => opacityOf(layerOf(s, layers)))
+  paintLayers(ctx, layerPlan(strokes, layers), pixelScale)
   ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
   for (const box of readTextBoxes(doc)) paintTextBox(ctx, doc, box)
   return new Promise((resolve, reject) =>

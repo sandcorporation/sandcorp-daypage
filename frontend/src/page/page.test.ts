@@ -71,3 +71,20 @@ describe('끄는 동안의 장 기준 이동량', () => {
     expect(pageDelta({ x: 200, y: 200 }, before, { x: 200, y: 200 }, scrolled, 0.5)).toEqual({ dx: 0, dy: 200 })
   })
 })
+
+describe('채색 획', () => {
+  test('불투명도·부드러운 가장자리가 문서에 남고 그대로 읽힌다', () => {
+    const doc = createPageDoc('2026-10-22')
+    const s: Stroke = { id: 'p1', tool: 'paint', color: '#f2c230', width: 48, points: [10, 10, 0.5, 200, 10, 0.5], author: '나', createdAt: 1, opacity: 0.3, soft: true }
+    addStroke(doc, s)
+    expect(readStrokes(doc)).toEqual([s])
+  })
+
+  test('펜 획에는 채색 속성이 붙지 않는다', () => {
+    const doc = createPageDoc('2026-10-22')
+    addStroke(doc, { id: 'a', tool: 'pen', color: '#000', width: 4, points: [0, 0, 0.5, 1, 1, 0.5], author: '나', createdAt: 1, opacity: 0.3, soft: true })
+    const [s] = readStrokes(doc)
+    expect(s.opacity).toBeUndefined()
+    expect(s.soft).toBeUndefined()
+  })
+})

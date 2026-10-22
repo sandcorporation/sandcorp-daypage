@@ -2203,3 +2203,21 @@
     padding: 70px 8px 60px;
   }
 }
+
+/* 색 캔버스: 채색 획을 종이와 multiply로 섞는다(잉크 캔버스 아래). 채색 중인 라이브 캔버스도 같은 방식으로 미리 보인다 */
+.page-frame canvas.color-canvas,
+.page-frame canvas.live-canvas[data-blend='multiply'] {
+  mix-blend-mode: multiply;
+}
+
+.paint-opacity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted-2);
+}
+.paint-opacity input[type='range'] {
+  width: 100%;
+}

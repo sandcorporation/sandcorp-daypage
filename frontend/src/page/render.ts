@@ -3,6 +3,7 @@ import { brushOf, type Stroke } from './doc'
 import type { LayerPlanItem } from './layers'
 import { grainPattern, grainSeed } from './texture'
 import { DEFAULT_PAPER, paintPaperOn, type Paper } from './paper'
+import { DEFAULT_PAINT_OPACITY } from './tools'
 
 export const HIGHLIGHTER_ALPHA = 0.45
 
@@ -65,11 +66,11 @@ function outlineOptions(stroke: Stroke, triples: [number, number, number][]): St
   }
 }
 
-/** perfect-freehand 외곽선(펜) 또는 굵은 선(형광펜)을 Path2D로. */
+/** perfect-freehand 외곽선(펜) 또는 굵은 선(형광펜·채색)을 Path2D로. */
 export function strokePath(stroke: Stroke): Path2D {
   const triples = toTriples(stroke.points)
   const path = new Path2D()
-  if (stroke.tool === 'highlighter') {
+  if (stroke.tool === 'highlighter' || stroke.tool === 'paint') {
     if (triples.length === 0) return path
     path.moveTo(triples[0][0], triples[0][1])
     for (const [x, y] of triples.slice(1)) path.lineTo(x, y)
@@ -90,7 +91,7 @@ export function strokePath(stroke: Stroke): Path2D {
 
 export function paintStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void {
   const path = strokePath(stroke)
-  if (stroke.tool === 'highlighter') {
+  if (stroke.tool === 'highlighter' || stroke.tool === 'paint') {
     ctx.save()
     ctx.strokeStyle = stroke.color
     ctx.lineWidth = stroke.width
@@ -132,6 +133,92 @@ export function paintStrokes(ctx: CanvasRenderingContext2D, strokes: Stroke[], p
     }
   }
   for (const s of pens) paintStroke(ctx, s)
+}
+
+/** 점들의 경계 상자(굵기 제외). hit.ts의 strokeBounds와 달리 여기 두어 모듈이 서로 물리지 않게 한다. */
+function pointBounds(stroke: Stroke): { x: number; y: number; width: number; height: number } {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (let i = 0; i + 1 < stroke.points.length; i += 3) {
+    minX = Math.min(minX, stroke.points[i])
+    maxX = Math.max(maxX, stroke.points[i])
+    minY = Math.min(minY, stroke.points[i + 1])
+    maxY = Math.max(maxY, stroke.points[i + 1])
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+/** 채색 획 하나의 불투명도(없으면 기본값) */
+export function paintOpacity(stroke: Stroke): number {
+  return typeof stroke.opacity === 'number' ? stroke.opacity : DEFAULT_PAINT_OPACITY
+}
+
+/** 부드러운 가장자리의 번짐 반지름(px, 장 좌표) */
+export function softRadius(stroke: Stroke): number {
+  return stroke.soft ? Math.max(2, stroke.width * 0.25) : 0
+}
+
+/**
+ * 채색 획 하나를 색 캔버스에 multiply로 겹쳐 그린다. alpha는 획 불투명도 × 레이어 불투명도.
+ * 부드러운 가장자리는 획 경계 상자 크기의 임시 캔버스에 그려 번지게 한 뒤 합친다(전체 크기 임시 캔버스는 쓰지 않는다).
+ * ctx의 transform은 pixelScale 배율이어야 한다.
+ */
+export function paintColorStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, alpha: number, pixelScale: number): void {
+  ctx.save()
+  ctx.globalCompositeOperation = 'multiply'
+  ctx.globalAlpha = alpha
+  const blur = softRadius(stroke)
+  if (blur === 0 || typeof document === 'undefined') {
+    paintStroke(ctx, stroke)
+    ctx.restore()
+    return
+  }
+  const b = pointBounds(stroke)
+  const pad = blur * 3 + stroke.width / 2
+  const w = Math.ceil((b.width + pad * 2) * pixelScale)
+  const h = Math.ceil((b.height + pad * 2) * pixelScale)
+  if (w <= 0 || h <= 0 || w * h > 16_000_000) {
+    paintStroke(ctx, stroke)
+    ctx.restore()
+    return
+  }
+  const off = document.createElement('canvas')
+  off.width = w
+  off.height = h
+  const octx = off.getContext('2d')
+  if (!octx) {
+    paintStroke(ctx, stroke)
+    ctx.restore()
+    return
+  }
+  octx.setTransform(pixelScale, 0, 0, pixelScale, -(b.x - pad) * pixelScale, -(b.y - pad) * pixelScale)
+  octx.filter = `blur(${blur * pixelScale}px)`
+  paintStroke(octx, stroke)
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.drawImage(off, (b.x - pad) * pixelScale, (b.y - pad) * pixelScale)
+  ctx.restore()
+}
+
+/**
+ * 색 캔버스 전체: 채색 획들을 multiply로 겹쳐 그린다. multiply는 순서와 무관하므로 레이어 순서는 보지 않고
+ * alphaOf로 레이어 불투명도·흐림만 반영한다(0이면 건너뛴다).
+ */
+export function paintColorStrokes(
+  ctx: CanvasRenderingContext2D,
+  strokes: Stroke[],
+  pixelScale: number,
+  alphaOf: (stroke: Stroke) => number = () => 1,
+): void {
+  ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+  for (const s of strokes) {
+    if (s.tool !== 'paint') continue
+    const alpha = paintOpacity(s) * alphaOf(s)
+    if (alpha <= 0) continue
+    paintColorStroke(ctx, s, alpha, pixelScale)
+    ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+  }
 }
 
 /** 종이(이미지 저장용). 화면에서는 CSS 배경(paper.ts의 paperStyle)을 쓴다. */

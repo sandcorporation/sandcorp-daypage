@@ -2,12 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Mutable
 import * as Y from 'yjs'
 import { addStroke, newId, readStroke, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
-import { canDrawOn, highlightPlan, layerOf, layerPlan, layersMap, readLayers } from './layers'
+import { canDrawOn, DIM, highlightPlan, layerOf, layerPlan, layersMap, readLayers } from './layers'
 import { strokeBounds, unionRect } from './hit'
-import { canvasPixelRatio, paintLayers, paintStroke, paintStrokes } from './render'
+import { canvasPixelRatio, paintColorStrokes, paintLayers, paintOpacity, paintStroke, paintStrokes, softRadius } from './render'
 import { appendPlan, paintedAfter, type Painted } from './inkCache'
 import { matrixScale, transformPoints, type Matrix } from './transform'
-import { fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
+import { DEFAULT_PAINT_OPACITY, fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { PAN_START_EVENT, TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
 import { DEFAULT_SHAPE, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
@@ -38,6 +38,10 @@ type Props = {
   widthLevel: WidthLevel
   /** 직접 정한 굵기(px). 있으면 단계 대신 쓴다 */
   customWidth?: number | null
+  /** 채색 붓: 굵기(px)·불투명도(0.1~1)·부드러운 가장자리 */
+  paintWidth?: number
+  paintOpacity?: number
+  paintSoft?: boolean
   /** 펜 종류(펜·도형일 때 쓴다) */
   brush?: Brush
   /** 도형 도구에서 고른 도형 */
@@ -97,6 +101,9 @@ export function PageView({
   ink,
   widthLevel,
   customWidth = null,
+  paintWidth = 48,
+  paintOpacity: paintAlpha = DEFAULT_PAINT_OPACITY,
+  paintSoft = false,
   brush,
   shape = DEFAULT_SHAPE,
   eraserRadius,
@@ -129,6 +136,8 @@ export function PageView({
   const viewportRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   const inkCanvasRef = useRef<HTMLCanvasElement>(null)
+  // 채색 획은 잉크 아래 색 캔버스에 multiply로 겹친다(render.ts paintColorStrokes)
+  const colorCanvasRef = useRef<HTMLCanvasElement>(null)
   const liveCanvasRef = useRef<HTMLCanvasElement>(null)
   const [scale, setScale] = useState(0.5)
   const drawing = useRef<Stroke | null>(null)
@@ -355,6 +364,20 @@ export function PageView({
     // 지우개를 올려 둔 자리에서 지워질 획은 따로 흐리게 그리고 점선 상자로 감싼다
     const doomedIds = eraseTargets?.length ? new Set(eraseTargets) : null
     const kept = doomedIds ? strokes.filter((s) => !doomedIds.has(s.id)) : strokes
+    // 색 캔버스: 채색 획 전부(숨긴 레이어 0, 레이어 불투명도·강조 흐림·지우개 미리보기만 반영)
+    const color = colorCanvasRef.current?.getContext('2d')
+    if (color) {
+      color.setTransform(1, 0, 0, 1, 0, 0)
+      color.clearRect(0, 0, color.canvas.width, color.canvas.height)
+      paintColorStrokes(color, strokes, pixelScale, (s) => {
+        const id = layerOf(s, layers)
+        if (hiddenLayers?.has(id)) return 0
+        let a = layers.find((l) => l.id === id)?.opacity ?? 1
+        if (highlightLayer && id !== highlightLayer) a *= DIM
+        if (doomedIds?.has(s.id)) a *= ERASE_PREVIEW_ALPHA
+        return a
+      })
+    }
     const plan = layerPlan(kept, layers, hiddenLayers)
     paintLayers(ctx, highlightPlan(plan, highlightLayer), pixelScale)
     if (doomedIds) {
@@ -453,7 +476,14 @@ export function PageView({
     if (!s) return
     ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
     if (s.tool === 'highlighter') ctx.globalAlpha = 0.45
+    else if (s.tool === 'paint') {
+      // 라이브 캔버스는 CSS multiply(data-blend)로 종이·잉크와 섞인다. 불투명도·번짐만 여기서.
+      ctx.globalAlpha = paintOpacity(s)
+      const r = softRadius(s)
+      if (r) ctx.filter = `blur(${r * pixelScale}px)`
+    }
     paintStroke(ctx, s)
+    ctx.filter = 'none'
     ctx.globalAlpha = 1
     const c = curve.current
     if (c) paintCurveMarks(ctx, c.controls, curveNearFirst.current, scale)
@@ -740,7 +770,7 @@ export function PageView({
       paintLive()
       return
     }
-    if (tool === 'pen' || tool === 'highlighter') {
+    if (tool === 'pen' || tool === 'highlighter' || tool === 'paint') {
       if (!canDrawHere()) return
       e.currentTarget.setPointerCapture(e.pointerId)
       activePointer.current = e.pointerId
@@ -751,12 +781,13 @@ export function PageView({
         id: newId(),
         tool,
         color: ink,
-        width: strokeWidth(tool, widthLevel, customWidth),
+        width: tool === 'paint' ? paintWidth : strokeWidth(tool, widthLevel, customWidth),
         points: [round(p.x), round(p.y), firstPressure],
         author,
         createdAt: Date.now(),
         ...(tool === 'pen' && brush ? { brush } : {}),
         ...(tool === 'pen' && !pressureOn ? { steady: true } : {}),
+        ...(tool === 'paint' ? { opacity: paintAlpha, ...(paintSoft ? { soft: true } : {}) } : {}),
         ...(layer ? { layer } : {}),
       }
       paintLive()
@@ -953,6 +984,14 @@ export function PageView({
           style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})`, ...paperStyle(paper) }}
         />
         <canvas
+          ref={colorCanvasRef}
+          className="color-canvas"
+          width={Math.round(width * dpr)}
+          height={Math.round(height * dpr)}
+          style={{ width, height }}
+          aria-hidden="true"
+        />
+        <canvas
           ref={inkCanvasRef}
           width={Math.round(width * dpr)}
           height={Math.round(height * dpr)}
@@ -961,6 +1000,8 @@ export function PageView({
         />
         <canvas
           ref={liveCanvasRef}
+          className="live-canvas"
+          data-blend={tool === 'paint' ? 'multiply' : undefined}
           width={Math.round(width * dpr)}
           height={Math.round(height * dpr)}
           style={{ width, height }}

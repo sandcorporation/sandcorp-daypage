@@ -60,3 +60,7 @@ describe('덧그리기 판단', () => {
     expect(r?.strokes.map((s) => s.id)).toEqual(['a', 'b', 'u'])
   })
 })
+
+test('채색 획은 잉크 캔버스에 덧그리지 않는다(색 캔버스가 맡는다)', () => {
+  expect(appendPlan(NOTHING_PAINTED, [stroke('p', 1, { tool: 'paint' })], [base])).toBeNull()
+})
