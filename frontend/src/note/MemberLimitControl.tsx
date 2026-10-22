@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { useDismiss } from '../components/useDismiss'
 import { MemberLimitPicker } from '../components/MemberLimitPicker'
 import { MemberList } from './MemberList'
 
@@ -22,18 +23,8 @@ export function MemberLimitControl({ memberCount, memberLimit, editable, onChang
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const close = (e: PointerEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false)
-    }
-    window.addEventListener('pointerdown', close)
-    window.addEventListener('keydown', close)
-    return () => {
-      window.removeEventListener('pointerdown', close)
-      window.removeEventListener('keydown', close)
-    }
-  }, [open])
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
 
   const label = memberLabel(memberCount, memberLimit)
   if (!editable) return <span className="member-badge">{label}</span>

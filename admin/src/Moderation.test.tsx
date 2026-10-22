@@ -53,7 +53,7 @@ test('노트 목록에서 노트를 열면 참여자·페이지와 읽기 전용
   await userEvent.click(await screen.findByRole('link', { name: '우리집 노트' }))
   expect(await screen.findByRole('heading', { name: '우리집 노트' })).toBeInTheDocument()
   expect(screen.getByText('푸른 고래')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: '지금 쓰는 장 보기' })).toHaveAttribute('href', '/staff/notes/n1/2026-10-20')
+  expect(screen.getByRole('link', { name: '열린 페이지 보기' })).toHaveAttribute('href', '/staff/notes/n1/2026-10-20')
   expect(screen.getByRole('link', { name: /10\/19/ })).toHaveAttribute('href', '/staff/notes/n1/2026-10-19')
 })
 

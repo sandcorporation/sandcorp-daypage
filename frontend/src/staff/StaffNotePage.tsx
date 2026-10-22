@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { api, ApiError } from '../api/client'
 import { SealedPageView } from '../history/HistoryPage'
-import { formatShortDate, seqSuffix } from '../note/time'
+import { formatPageKey, formatShortDate, seqSuffix } from '../note/time'
 import { normalizePaper } from '../page/paper'
 import { ErrorScreen } from '../pages/ErrorScreen'
 import '../note/note.css'
@@ -48,7 +48,7 @@ export function StaffNotePage() {
   if (!note) return <div className="grid-bg" />
 
   const days = [
-    { key: note.openPage, label: '지금 쓰는 장', meta: '쓰는 중', paper: note.paper },
+    { key: note.openPage, label: '열린 페이지', meta: '지금 쓰는 중', paper: note.paper },
     ...note.pages.map((p) => ({
       key: p.key,
       label: formatShortDate(p.date) + seqSuffix(p.seq),
@@ -105,7 +105,7 @@ export function StaffNotePage() {
           noteId={noteId}
           noteName={note.name}
           pageKey={selected.key}
-          label={selected.key === note.openPage ? `지금 쓰는 장 · ${selected.key}` : undefined}
+          label={selected.key === note.openPage ? `열린 페이지 · ${formatPageKey(selected.key)}` : undefined}
           paper={normalizePaper(selected.paper)}
           src={`/api/admin/notes/${noteId}/pages/${selected.key}`}
         />

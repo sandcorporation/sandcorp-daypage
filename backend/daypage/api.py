@@ -249,8 +249,8 @@ def update_note(request, note_id: str, body: UpdateNoteIn):
     if rescheduled is not None:
         now = clock.now()
         if rescheduled.due_at <= now:
-            # 새 봉인 시각이 이미 지났다: 바로 봉인하고 접속자를 새 장으로 옮긴다
-            sealing.seal_and_announce(now)
+            # 새 봉인 시각이 이미 지났다: 이 노트의 장만 바로 봉인하고 접속자를 새 장으로 옮긴다
+            sealing.roll_note(note, now)
         else:
             announce_note_event(
                 note.id,

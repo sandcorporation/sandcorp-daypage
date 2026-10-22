@@ -52,7 +52,8 @@ async def test_four_oclock_note_accepts_until_four_then_seals_and_rolls(moment):
     assert msg["bytes"][0] == MESSAGE_PAGE_ROLLED
     assert b'"key":"2026-10-16"' in msg["bytes"]
     assert await expect_close(y.ws) == 4409
-    assert await page_rows(note_id) == [("2026-10-15", 1, True), ("2026-10-16", 1, False)]
+    # 새 장은 누가 들어올 때 열린다(봉인 작업이 빈 장을 만들지 않는다)
+    assert await page_rows(note_id) == [("2026-10-15", 1, True)]
 
 
 async def test_write_after_due_is_refused_even_before_the_sealing_job_runs(moment):
@@ -98,7 +99,7 @@ async def test_owner_moves_seal_hour_forward_and_the_page_seals_eleven_minutes_l
     assert msg["bytes"][0] == MESSAGE_PAGE_ROLLED
     assert b'"key":"2026-10-16-2"' in msg["bytes"]
     assert await expect_close(y.ws) == 4409
-    assert await page_rows(note_id) == [("2026-10-16", 1, True), ("2026-10-16", 2, False)]
+    assert await page_rows(note_id) == [("2026-10-16", 1, True)]
 
 
 async def test_moving_seal_hour_to_a_time_already_passed_seals_right_away(moment):

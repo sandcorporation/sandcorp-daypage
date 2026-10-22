@@ -9,7 +9,7 @@ from django.db import transaction
 
 from . import clock
 from .models import Note, Page
-from .pages import _merge, doc_stats, drop_empty_text_boxes, open_page, page_key
+from .pages import _merge, current_key, doc_stats, drop_empty_text_boxes
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +55,27 @@ def announce_roll(note_ids: set[str], key: str) -> None:
         async_to_sync(layer.group_send)(note_group(note_id), {"type": "page.rolled", "key": key})
 
 
+def _announce_next(note_ids: set[str], now: dt.datetime) -> None:
+    """노트마다 다음 장의 키로 교체를 알린다. 장은 만들지 않는다(아무도 안 들어오는 노트에 빈 장이 매일 쌓이지 않게)."""
+    for note_id in note_ids:
+        note = Note.objects.filter(pk=note_id).first()
+        if note is not None:
+            announce_roll({note_id}, current_key(note, now))
+
+
 def seal_and_announce(now: dt.datetime | None = None) -> int:
-    """봉인하고, 노트마다 새 장을 열어 그 키로 교체를 알린다."""
+    """기간이 끝난 장을 모두 봉인하고 그 노트들의 접속자에게 교체를 알린다(봉인 작업)."""
     now = now or clock.now()
     sealed = seal_due_pages(now)
-    for note_id in {p.note_id for p in sealed}:
-        note = Note.objects.filter(pk=note_id).first()
-        if note is None:
-            continue
-        page = open_page(note, now)
-        announce_roll({note_id}, page_key(page.date, page.seq))
+    _announce_next({p.note_id for p in sealed}, now)
+    return len(sealed)
+
+
+def roll_note(note: Note, now: dt.datetime | None = None) -> int:
+    """이 노트의 기간이 끝난 장만 봉인하고 교체를 알린다(주인이 봉인 시각을 이미 지난 시각으로 바꿨을 때)."""
+    now = now or clock.now()
+    due = list(Page.objects.filter(note=note, sealed_at__isnull=True, due_at__lte=now).order_by("date", "seq"))
+    sealed = [p for p in due if seal_page(p.id)]
+    if sealed:
+        _announce_next({note.id}, now)
     return len(sealed)

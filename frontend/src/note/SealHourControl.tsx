@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { useDismiss } from '../components/useDismiss'
 
 type Props = {
   /** 봉인 시각(KST 0~23시) */
@@ -19,18 +20,8 @@ export function SealHourControl({ sealHour, editable, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const close = (e: PointerEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false)
-    }
-    window.addEventListener('pointerdown', close)
-    window.addEventListener('keydown', close)
-    return () => {
-      window.removeEventListener('pointerdown', close)
-      window.removeEventListener('keydown', close)
-    }
-  }, [open])
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(ref, open, close)
 
   if (!editable) return null
 

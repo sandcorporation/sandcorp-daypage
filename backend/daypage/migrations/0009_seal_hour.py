@@ -3,19 +3,14 @@
 기존 장은 모두 자정 기준이었으므로 opened_at = 날짜 00:00 KST, due_at = 다음 날 00:00 KST, seq = 1로 채운다.
 """
 
-import datetime as dt
-from zoneinfo import ZoneInfo
-
 from django.db import migrations, models
 
-KST = ZoneInfo("Asia/Seoul")
-
-
-def fill_periods(apps, schema_editor):
-    Page = apps.get_model("daypage", "Page")
-    for page in Page.objects.all().only("id", "date"):
-        start = dt.datetime.combine(page.date, dt.time.min, tzinfo=KST)
-        Page.objects.filter(pk=page.pk).update(opened_at=start, due_at=start + dt.timedelta(days=1))
+# 날짜(KST 자정)를 timestamptz로: 장이 많아도 UPDATE 한 번
+FILL_PERIODS = """
+UPDATE daypage_page
+SET opened_at = (date::timestamp AT TIME ZONE 'Asia/Seoul'),
+    due_at = (date::timestamp AT TIME ZONE 'Asia/Seoul') + interval '1 day'
+"""
 
 
 class Migration(migrations.Migration):
@@ -34,7 +29,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(model_name="page", name="opened_at", field=models.DateTimeField(null=True)),
         migrations.AddField(model_name="page", name="due_at", field=models.DateTimeField(null=True)),
-        migrations.RunPython(fill_periods, migrations.RunPython.noop),
+        migrations.RunSQL(FILL_PERIODS, migrations.RunSQL.noop),
         migrations.AlterField(model_name="page", name="opened_at", field=models.DateTimeField()),
         migrations.AlterField(model_name="page", name="due_at", field=models.DateTimeField()),
         migrations.RemoveConstraint(model_name="page", name="uniq_page_note_date"),

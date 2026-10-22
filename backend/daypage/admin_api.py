@@ -171,7 +171,6 @@ def update_suggestion(request, suggestion_id: int, payload: StatusIn):
 
 @router.get("/notes")
 def list_notes(request):
-    today = clock.today_kst()
     notes = list(
         Note.objects.annotate(
             member_count=Count("members", distinct=True),
@@ -195,7 +194,7 @@ def list_notes(request):
             "memberLimit": n.member_limit,
             "pageCount": n.page_count,
             "lastVisitedAt": n.last_visit.isoformat() if n.last_visit else None,
-            # 오늘 장의 저장 크기(바이트). 내용은 보지 않는다.
+            # 열린 페이지의 저장 크기(바이트). 내용은 보지 않는다.
             "todayBytes": sizes.get(n.id, 0),
             "closed": n.closed_at is not None,
         }

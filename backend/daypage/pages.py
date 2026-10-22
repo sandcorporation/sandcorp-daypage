@@ -25,9 +25,13 @@ def parse_key(key: str) -> tuple[dt.date, int]:
     rest = key[10:]
     if rest == "":
         return date, 1
-    if not rest.startswith("-") or not rest[1:].isdigit() or int(rest[1:]) < 2:
+    if not rest.startswith("-") or not rest[1:].isdigit():
         raise ValueError(key)
-    return date, int(rest[1:])
+    seq = int(rest[1:])
+    # 정규형만 받는다('-02', '-1' 같은 별칭은 경로마다 다르게 풀리므로)
+    if seq < 2 or page_key(date, seq) != key:
+        raise ValueError(key)
+    return date, seq
 
 
 def _new_page(note: Note, date: dt.date, seq: int, opened_at: dt.datetime, due_at: dt.datetime) -> Page:
@@ -59,6 +63,10 @@ def open_page(note: Note, now: dt.datetime | None = None) -> Page:
     from . import sealing
 
     now = now or clock.now()
+    # 거의 늘 열린 장이 있다: 잠금 없이 먼저 본다(GET·웹소켓 입장마다 노트 행을 잠그지 않게)
+    last = _latest(note)
+    if last is not None and last.sealed_at is None and now < last.due_at:
+        return last
     with transaction.atomic():
         note = Note.objects.select_for_update().get(pk=note.pk)
         last = _latest(note)
@@ -69,7 +77,10 @@ def open_page(note: Note, now: dt.datetime | None = None) -> Page:
         start = clock.boundary_before(now, note.seal_hour)
         date = start.date()
         seq = (Page.objects.filter(note=note, date=date).aggregate(models.Max("seq"))["seq__max"] or 0) + 1
-        return _new_page(note, date, seq, start, start + dt.timedelta(days=1))
+        page = _new_page(note, date, seq, start, start + dt.timedelta(days=1))
+    # 봉인 작업보다 먼저 새 장을 열었으면 옛 장에 남은 접속자를 이리로 옮긴다
+    sealing.announce_roll({note.id}, page_key(page.date, page.seq))
+    return page
 
 
 def reschedule_open_page(note: Note) -> Page | None:
