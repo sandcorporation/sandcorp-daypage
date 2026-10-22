@@ -63,6 +63,8 @@ MESSAGE_QUEUED = 101
 MESSAGE_NOTE_COLORS = 102
 # 노트 종이가 바뀜: {"type":"note_paper","paper":{pattern, margin, color}}
 MESSAGE_NOTE_PAPER = 103
+# 장의 봉인 예정 시각이 바뀜(주인이 봉인 시각을 바꿈): {"type":"note_page","key","dueAt","sealHour"}
+MESSAGE_NOTE_PAGE = 104
 
 # 대기 중에 받아 두었다가 입장하면 다시 처리할 메시지 수(클라이언트가 연결하자마자 보내는 sync step1·커서)
 HELD_LIMIT = 16
@@ -140,8 +142,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         user = self.scope.get("user")
         if user is None or not user.is_authenticated:
             return await self.close(code=CLOSE_UNAUTHORIZED)
+        key = kwargs["key"]
         try:
-            date = dt.date.fromisoformat(kwargs["date"])
+            pages.parse_key(key)
         except ValueError:
             return await self.close(code=CLOSE_NOT_FOUND)
 
@@ -153,13 +156,14 @@ class PageConsumer(AsyncWebsocketConsumer):
             return await self.close(code=blocked)
         if member is None:
             return await self.close(code=CLOSE_UNAUTHORIZED)
-        if date != clock.today_kst():
+        # 지금 쓰는 장만 받는다(지난 장·아직 안 열린 장은 거절)
+        if key != await db(pages.current_key)(note):
             return await self.close(code=CLOSE_NOT_TODAY)
 
         # 상한은 사람 수로 센다. 먼저 등록한 뒤 입장 순서로 판정해야 동시에 와도 상한을 넘지 않는다.
         # 이미 들어와 있는 사람의 새 탭·재연결은 그 사람의 첫 입장 순서를 따른다.
         registry = rooms.registry()
-        conn = rooms.Conn(date.isoformat(), self.channel_name, user.id, time.time())
+        conn = rooms.Conn(key, self.channel_name, user.id, time.time())
         await registry.add(self.note_id, conn)
         if not rooms.admitted(await registry.connections(self.note_id), user.id, settings.MAX_CONCURRENT_PER_NOTE):
             await registry.remove(self.note_id, conn)
@@ -167,7 +171,9 @@ class PageConsumer(AsyncWebsocketConsumer):
 
         self.note = note
         self.member = member
-        self.date = date
+        self.key = key
+        # 장의 봉인 예정 시각. 쓰기는 이 전까지만 받는다(주인이 봉인 시각을 바꾸면 note.page 알림으로 갱신).
+        self.due_at: dt.datetime | None = None
         self.conn = conn
         self.heartbeat = asyncio.create_task(self._heartbeat())
 
@@ -197,7 +203,7 @@ class PageConsumer(AsyncWebsocketConsumer):
         if self.conn is None:
             # 대기열에서 오는 길: 노트별 상한을 다시 판정한다(기다리는 사이 노트가 찼을 수 있다).
             registry = rooms.registry()
-            conn = rooms.Conn(self.date.isoformat(), self.channel_name, self.waiter.user_id, time.time())
+            conn = rooms.Conn(self.key, self.channel_name, self.waiter.user_id, time.time())
             await registry.add(self.note_id, conn)
             if not rooms.admitted(
                 await registry.connections(self.note_id), conn.user_id, settings.MAX_CONCURRENT_PER_NOTE
@@ -215,12 +221,12 @@ class PageConsumer(AsyncWebsocketConsumer):
         await store.report_input(self.channel_name, self.last_input)
         await store.wait_remove(self.waiter)
         self.waiter = None
-        if self.date != clock.today_kst():  # 기다리는 사이 자정이 지났다
+        page = await db(pages.open_page)(self.note)
+        if pages.page_key(page.date, page.seq) != self.key:  # 기다리는 사이 장이 바뀌었다
             self.entering = False
             return await self.close(code=CLOSE_NOT_TODAY)
-
-        page = await db(pages.get_or_create_page)(self.note, self.date)
         self.page_id = page.id
+        self.due_at = page.due_at
         # 노트 지움·자정 교체 알림은 노트 그룹으로 온다.
         await self.channel_layer.group_add(note_group(self.note_id), self.channel_name)
         # 정지·내보내기는 사용자에게 알린다(그 사람의 모든 연결을 끊는다)
@@ -434,9 +440,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         update = read_message(data[2:])
         if not update or update == EMPTY_UPDATE:
             return
-        # 자정 경계는 받은 시각으로 바로 판정한다(DB를 기다리지 않는다).
+        # 봉인 경계는 받은 시각으로 바로 판정한다(DB를 기다리지 않는다).
         received_at = clock.now()
-        if clock.kst_date_of(received_at) != self.date:
+        if self.due_at is not None and received_at >= self.due_at:
             await self.close(code=CLOSE_NOT_TODAY)
             return
         await self.room.local_update(self, update, received_at)
@@ -477,12 +483,23 @@ class PageConsumer(AsyncWebsocketConsumer):
     # ── 노트 그룹 알림 ─────────────────────────────────────────
 
     async def page_rolled(self, event) -> None:
-        """자정 교체: 새 장 날짜를 알리고 이 방을 닫는다. 클라이언트는 새 날짜 방으로 옮겨 간다."""
-        if event["date"] == self.date.isoformat():
+        """페이지 교체: 새 장의 키를 알리고 이 방을 닫는다. 클라이언트는 새 장 방으로 옮겨 간다."""
+        if event["key"] == self.key:
             return
-        payload = json.dumps({"type": "page_rolled", "date": event["date"]}, separators=(",", ":")).encode()
+        payload = json.dumps({"type": "page_rolled", "key": event["key"]}, separators=(",", ":")).encode()
         await self.send(bytes_data=bytes([MESSAGE_PAGE_ROLLED]) + write_message(payload))
         await self.close(code=CLOSE_NOT_TODAY)
+
+    async def note_page(self, event) -> None:
+        """주인이 봉인 시각을 바꿨다: 이 장의 봉인 예정 시각이 바뀌었다. 모두의 카운트다운을 바꾸도록 전한다."""
+        if event["key"] == self.key:
+            self.due_at = dt.datetime.fromisoformat(event["dueAt"])
+        self.push(
+            daypage_message(
+                MESSAGE_NOTE_PAGE,
+                {"type": "note_page", "key": event["key"], "dueAt": event["dueAt"], "sealHour": event["sealHour"]},
+            )
+        )
 
     async def note_colors(self, event) -> None:
         """노트 색이 바뀌었다. 도구 막대를 바로 바꾸도록 전한다."""

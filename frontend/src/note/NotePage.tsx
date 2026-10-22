@@ -184,7 +184,7 @@ export function NotePage({ initial }: Props) {
   const clearFocus = useCallback(() => setFocusId(null), []);
 
   // 장(날짜)마다 새 문서. 자정 교체 때 날짜가 바뀌면 새 방으로 옮겨 간다.
-  const doc = useMemo(() => new Y.Doc(), [note.today]); // eslint-disable-line react-hooks/exhaustive-deps
+  const doc = useMemo(() => new Y.Doc(), [note.page.key]); // eslint-disable-line react-hooks/exhaustive-deps
   // 내 변경에 붙이는 표식(되돌리기는 이것만 추적한다)
   const origin = useMemo(() => ({ local: true }), []);
   const history = useUndo(doc, origin);
@@ -229,22 +229,22 @@ export function NotePage({ initial }: Props) {
     layers[layers.length - 1].id;
   // 내 화면에서만 숨긴 레이어(이 브라우저에 노트·날짜별로 기억)
   const [hiddenState, setHiddenState] = useState(() => ({
-    date: note.today,
-    set: loadHiddenLayers(note.id, note.today),
+    date: note.page.key,
+    set: loadHiddenLayers(note.id, note.page.key),
   }));
   const hiddenLayers =
-    hiddenState.date === note.today
+    hiddenState.date === note.page.key
       ? hiddenState.set
-      : loadHiddenLayers(note.id, note.today);
+      : loadHiddenLayers(note.id, note.page.key);
   const toggleHidden = useCallback(
     (id: string) => {
       const next = new Set(hiddenLayers);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      saveHiddenLayers(note.id, note.today, next);
-      setHiddenState({ date: note.today, set: next });
+      saveHiddenLayers(note.id, note.page.key, next);
+      setHiddenState({ date: note.page.key, set: next });
     },
-    [hiddenLayers, note.id, note.today],
+    [hiddenLayers, note.id, note.page.key],
   );
   const edit = useEditTools(
     doc,
@@ -263,7 +263,7 @@ export function NotePage({ initial }: Props) {
     window.clearTimeout(retryTimer.current);
     try {
       const fresh = await api<NoteDetail>(`/api/notes/${note.id}`);
-      if (fresh.today !== note.today) setNote(fresh);
+      if (fresh.page.key !== note.page.key) setNote(fresh);
       // 날짜가 그대로면(시계 차이 등) 잠시 뒤 같은 장으로 다시 붙는다.
       else
         retryTimer.current = window.setTimeout(
@@ -276,7 +276,7 @@ export function NotePage({ initial }: Props) {
       // 네트워크 오류는 화면을 굳히지 않고 다시 시도한다.
       retryTimer.current = window.setTimeout(() => void refreshToday(), 5000);
     }
-  }, [note.id, note.today]);
+  }, [note.id, note.page.key]);
   useEffect(() => () => window.clearTimeout(retryTimer.current), []);
 
   const setNoteColors = useCallback(
@@ -311,7 +311,7 @@ export function NotePage({ initial }: Props) {
   );
   const { provider, status, synced, queuePosition, reconnect } = useRealtime({
     noteId: note.id,
-    date: note.today,
+    pageKey: note.page.key,
     doc,
     onNotToday: refreshToday,
     onFatal: setFatal,
@@ -348,10 +348,10 @@ export function NotePage({ initial }: Props) {
   // 서버 알림을 놓쳐도 자정이 지나면 스스로 오늘 장을 다시 확인한다.
   useEffect(() => {
     const wait =
-      new Date(note.nextMidnight).getTime() - (Date.now() + clockOffset) + 3000;
+      new Date(note.page.dueAt).getTime() - (Date.now() + clockOffset) + 3000;
     const timer = window.setTimeout(refreshToday, Math.max(1000, wait));
     return () => window.clearTimeout(timer);
-  }, [note.nextMidnight, clockOffset, refreshToday]);
+  }, [note.page.dueAt, clockOffset, refreshToday]);
 
   const onEditing = useCallback(
     (boxId: string | null) => {
@@ -533,7 +533,7 @@ export function NotePage({ initial }: Props) {
       {!focus && (
         <NoteHeader
           note={note}
-          pageDate={note.today}
+          page={note.page}
           clockOffset={clockOffset}
           peers={uniquePeople(presence.peers, note.me.nickname)}
           onRename={rename}

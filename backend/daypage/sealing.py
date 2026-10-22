@@ -1,5 +1,6 @@
-"""자정 봉인: 지난 장을 최종 스냅샷으로 굳히고 접속자에게 자정 교체를 알린다."""
+"""봉인: 기간이 끝난 장을 최종 스냅샷으로 굳히고 접속자에게 페이지 교체를 알린다."""
 
+import datetime as dt
 import logging
 
 from asgiref.sync import async_to_sync
@@ -8,7 +9,7 @@ from django.db import transaction
 
 from . import clock
 from .models import Note, Page
-from .pages import _merge, doc_stats, drop_empty_text_boxes
+from .pages import _merge, doc_stats, drop_empty_text_boxes, open_page, page_key
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,10 @@ def seal_page(page_id: int) -> bool:
         return True
 
 
-def seal_due_pages() -> list[Page]:
-    """오늘(KST) 이전의 봉인 안 된 장을 모두 봉인한다. 여러 번 돌려도 결과가 같다."""
-    today = clock.today_kst()
-    due = list(Page.objects.filter(sealed_at__isnull=True, date__lt=today).order_by("date"))
+def seal_due_pages(now: dt.datetime | None = None) -> list[Page]:
+    """봉인 예정 시각이 지난 장을 모두 봉인한다. 여러 번 돌려도 결과가 같다."""
+    now = now or clock.now()
+    due = list(Page.objects.filter(sealed_at__isnull=True, due_at__lte=now).order_by("date", "seq"))
     sealed = []
     for page in due:
         if seal_page(page.id):
@@ -45,15 +46,23 @@ def seal_due_pages() -> list[Page]:
     return sealed
 
 
-def announce_roll(note_ids: set[str], today: str) -> None:
+def announce_roll(note_ids: set[str], key: str) -> None:
+    """노트 접속자에게 페이지 교체를 알린다. key는 새로 열린 장의 키."""
     from .consumers import note_group
 
     layer = get_channel_layer()
     for note_id in note_ids:
-        async_to_sync(layer.group_send)(note_group(note_id), {"type": "page.rolled", "date": today})
+        async_to_sync(layer.group_send)(note_group(note_id), {"type": "page.rolled", "key": key})
 
 
-def seal_and_announce() -> int:
-    sealed = seal_due_pages()
-    announce_roll({p.note_id for p in sealed}, clock.today_kst().isoformat())
+def seal_and_announce(now: dt.datetime | None = None) -> int:
+    """봉인하고, 노트마다 새 장을 열어 그 키로 교체를 알린다."""
+    now = now or clock.now()
+    sealed = seal_due_pages(now)
+    for note_id in {p.note_id for p in sealed}:
+        note = Note.objects.filter(pk=note_id).first()
+        if note is None:
+            continue
+        page = open_page(note, now)
+        announce_roll({note_id}, page_key(page.date, page.seq))
     return len(sealed)

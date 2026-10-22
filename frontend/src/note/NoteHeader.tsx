@@ -3,12 +3,12 @@ import { Link } from 'react-router'
 import { Logo } from '../components/Brand'
 import { Countdown } from './Countdown'
 import { NoteName } from './NoteName'
-import { formatPageDate } from './time'
-import type { NoteDetail, Peer } from './types'
+import { formatPageDate, seqSuffix } from './time'
+import type { NoteDetail, OpenPage, Peer } from './types'
 
 type Props = {
   note: NoteDetail
-  pageDate: string
+  page: OpenPage
   clockOffset: number
   peers: Peer[]
   onRename: (name: string) => Promise<void>
@@ -16,7 +16,7 @@ type Props = {
   settings?: ReactNode
 }
 
-export function NoteHeader({ note, pageDate, clockOffset, peers, onRename, onShare, settings }: Props) {
+export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, settings }: Props) {
   const shown = [{ nickname: note.me.nickname, color: note.me.color, isMe: true }, ...peers]
   const ref = useRef<HTMLElement>(null)
   // 머리글 높이를 --note-header-h로 알린다. 툴바가 이 아래에 붙는다(휴대폰에서는 머리글이 두 줄로 높아진다).
@@ -42,8 +42,11 @@ export function NoteHeader({ note, pageDate, clockOffset, peers, onRename, onSha
         <div className="note-title">
           <NoteName name={note.name} editable={note.isOwner} onRename={onRename} />
           <p className="note-sub">
-            <span className="note-sub-date">{formatPageDate(pageDate)} 페이지 · </span>
-            <Countdown nextMidnight={note.nextMidnight} clockOffset={clockOffset} />
+            <span className="note-sub-date">
+              {formatPageDate(page.date)}
+              {seqSuffix(page.seq)} 페이지 ·{' '}
+            </span>
+            <Countdown until={page.dueAt} clockOffset={clockOffset} />
           </p>
         </div>
       </div>

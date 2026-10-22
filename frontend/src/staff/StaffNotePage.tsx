@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { api, ApiError } from '../api/client'
 import { SealedPageView } from '../history/HistoryPage'
-import { formatShortDate } from '../note/time'
+import { formatShortDate, seqSuffix } from '../note/time'
 import { normalizePaper } from '../page/paper'
 import { ErrorScreen } from '../pages/ErrorScreen'
 import '../note/note.css'
@@ -13,10 +13,11 @@ type StaffNote = {
   id: string
   name: string
   paper: unknown
-  today: string
+  /** 지금 쓰는 장의 키 */
+  openPage: string
   closed: { at: string; reason: string } | null
   members: { id: number; userId: number; nickname: string; color: string }[]
-  pages: { date: string; participantCount: number; strokeCount: number; paper: unknown }[]
+  pages: { key: string; date: string; seq: number; participantCount: number; strokeCount: number; paper: unknown }[]
 }
 
 /**
@@ -24,7 +25,7 @@ type StaffNote = {
  * 참여자가 되지 않고, 열 때마다 운영자 기록에 남는다. 닫기·정지는 운영자 페이지(/admin)에서 한다.
  */
 export function StaffNotePage() {
-  const { noteId = '', date } = useParams()
+  const { noteId = '', pageKey } = useParams()
   const navigate = useNavigate()
   const [note, setNote] = useState<StaffNote | null>(null)
   const [error, setError] = useState<'missing' | 'server' | null>(null)
@@ -47,15 +48,15 @@ export function StaffNotePage() {
   if (!note) return <div className="grid-bg" />
 
   const days = [
-    { date: note.today, label: '오늘', meta: '지금 쓰는 중', paper: note.paper },
+    { key: note.openPage, label: '지금 쓰는 장', meta: '쓰는 중', paper: note.paper },
     ...note.pages.map((p) => ({
-      date: p.date,
-      label: formatShortDate(p.date),
+      key: p.key,
+      label: formatShortDate(p.date) + seqSuffix(p.seq),
       meta: `참여 ${p.participantCount}명 · 획 ${p.strokeCount}개`,
       paper: p.paper,
     })),
   ]
-  const selected = days.find((d) => d.date === date) ?? days[0]
+  const selected = days.find((d) => d.key === pageKey) ?? days[0]
 
   return (
     <div className="history-screen">
@@ -82,12 +83,12 @@ export function StaffNotePage() {
           <h1 id="staff-pages-title">페이지</h1>
           <ol>
             {days.map((d) => (
-              <li key={d.date}>
+              <li key={d.key}>
                 <button
                   type="button"
                   className="history-item"
-                  aria-current={d.date === selected.date ? 'true' : undefined}
-                  onClick={() => navigate(`/staff/notes/${noteId}/${d.date}`)}
+                  aria-current={d.key === selected.key ? 'true' : undefined}
+                  onClick={() => navigate(`/staff/notes/${noteId}/${d.key}`)}
                 >
                   <span className="note-card-thumb" aria-hidden="true" />
                   <span>
@@ -100,13 +101,13 @@ export function StaffNotePage() {
           </ol>
         </section>
         <SealedPageView
-          key={selected.date}
+          key={selected.key}
           noteId={noteId}
           noteName={note.name}
-          date={selected.date}
-          label={selected.date === note.today ? `오늘 · ${formatShortDate(selected.date)}` : undefined}
+          pageKey={selected.key}
+          label={selected.key === note.openPage ? `지금 쓰는 장 · ${selected.key}` : undefined}
           paper={normalizePaper(selected.paper)}
-          src={`/api/admin/notes/${noteId}/pages/${selected.date}`}
+          src={`/api/admin/notes/${noteId}/pages/${selected.key}`}
         />
       </main>
     </div>

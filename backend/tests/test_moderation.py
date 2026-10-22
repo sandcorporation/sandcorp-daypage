@@ -7,7 +7,7 @@ import pytest
 from django.test import Client
 from pycrdt import Doc, Map
 
-from daypage import clock
+from daypage import clock, pages
 from daypage.models import AdminLog, Note, NoteBan, NoteMember, Page, PageUpdate, User
 from tests.helpers import create_note, login_as
 
@@ -56,7 +56,7 @@ def test_staff_sees_note_detail_with_members_and_pages_and_it_is_logged():
     assert [m["nickname"] for m in body["members"]] == list(
         NoteMember.objects.filter(note_id=note_id).order_by("joined_at").values_list("nickname", flat=True)
     )
-    assert body["today"] == clock.today_kst().isoformat()
+    assert body["openPage"] == clock.today_kst().isoformat()
     assert [p["date"] for p in body["pages"]] == [yesterday.isoformat()]
     assert body["closed"] is None
 
@@ -70,7 +70,7 @@ def test_staff_reads_today_and_sealed_pages_as_document_bytes():
     owner, guest, note_id = note_with_guest()
     note = Note.objects.get(pk=note_id)
     today = clock.today_kst()
-    page = Page.objects.create(note=note, date=today)
+    page = pages.open_page(note)  # 참여자가 들어오며 이미 열린 오늘 장
     PageUpdate.objects.create(page=page, update=doc_bytes("오늘 메모"))
     admin = staff()
 

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import * as Y from 'yjs'
 import { api, ApiError } from '../api/client'
 import { useToast } from '../components/Toast'
-import { formatShortDate } from '../note/time'
+import { formatPageKey, formatShortDate, seqSuffix } from '../note/time'
 import { ZoomControl, type Zoom } from '../note/ZoomControl'
 import type { NoteDetail } from '../note/types'
 import { downloadBlob, exportFileName, renderPagePng } from '../page/exportPng'
@@ -14,13 +14,22 @@ import { blockedKind, ErrorScreen, type BlockedKind } from '../pages/ErrorScreen
 import '../note/note.css'
 import './history.css'
 
-type SealedPage = { date: string; participantCount: number; strokeCount: number; paper?: unknown }
+type SealedPage = {
+  key: string
+  date: string
+  seq: number
+  openedAt: string
+  closedAt: string
+  participantCount: number
+  strokeCount: number
+  paper?: unknown
+}
 
 const noop = () => {}
 const NO_EDITORS = new Map()
 
 export function HistoryPage() {
-  const { noteId = '', date } = useParams()
+  const { noteId = '', pageKey } = useParams()
   const navigate = useNavigate()
   const [note, setNote] = useState<NoteDetail | null>(null)
   const [pages, setPages] = useState<SealedPage[] | null>(null)
@@ -50,7 +59,7 @@ export function HistoryPage() {
     }
   }, [noteId])
 
-  const selected = date ?? pages?.[0]?.date ?? null
+  const selected = pageKey ?? pages?.[0]?.key ?? null
 
   if (blocked) return <ErrorScreen kind={blocked.kind} detail={blocked.detail} />
   if (error) return <ErrorScreen kind={error} />
@@ -86,16 +95,19 @@ export function HistoryPage() {
             <h1 id="history-title">지난 페이지</h1>
             <ol>
               {pages.map((p) => (
-                <li key={p.date}>
+                <li key={p.key}>
                   <button
                     type="button"
                     className="history-item"
-                    aria-current={p.date === selected ? 'true' : undefined}
-                    onClick={() => navigate(`/note/${noteId}/history/${p.date}`)}
+                    aria-current={p.key === selected ? 'true' : undefined}
+                    onClick={() => navigate(`/note/${noteId}/history/${p.key}`)}
                   >
                     <span className="note-card-thumb" aria-hidden="true" />
                     <span>
-                      <span className="history-date">{formatShortDate(p.date)}</span>
+                      <span className="history-date">
+                        {formatShortDate(p.date)}
+                        {seqSuffix(p.seq)}
+                      </span>
                       <span className="history-meta">
                         참여 {p.participantCount}명 · 획 {p.strokeCount}개
                       </span>
@@ -110,8 +122,8 @@ export function HistoryPage() {
               key={selected}
               noteId={noteId}
               noteName={note.name}
-              date={selected}
-              paper={normalizePaper(pages?.find((p) => p.date === selected)?.paper)}
+              pageKey={selected}
+              paper={normalizePaper(pages?.find((p) => p.key === selected)?.paper)}
             />
           )}
         </main>
@@ -124,14 +136,15 @@ export function HistoryPage() {
 export function SealedPageView({
   noteId,
   noteName,
-  date,
+  pageKey,
   paper,
   src,
   label,
 }: {
   noteId: string
   noteName: string
-  date: string
+  /** 장의 키(`2026-10-21`, `2026-10-21-2`) */
+  pageKey: string
   paper: Paper
   src?: string
   /** 제목(없으면 날짜) */
@@ -146,18 +159,18 @@ export function SealedPageView({
   const { toast, show } = useToast()
 
   useEffect(() => {
-    api<ArrayBuffer>(src ?? `/api/notes/${noteId}/pages/${date}`)
+    api<ArrayBuffer>(src ?? `/api/notes/${noteId}/pages/${pageKey}`)
       .then((buf) => {
         Y.applyUpdate(doc, new Uint8Array(buf))
         setLoaded('ok')
       })
       .catch(() => setLoaded('missing'))
-  }, [doc, noteId, date, src])
+  }, [doc, noteId, pageKey, src])
 
   async function save() {
     setSaving(true)
     try {
-      downloadBlob(await renderPagePng(doc, 1, paper), exportFileName(noteName, date))
+      downloadBlob(await renderPagePng(doc, 1, paper), exportFileName(noteName, pageKey))
     } catch {
       show('이미지를 만들지 못했어요')
     } finally {
@@ -166,9 +179,9 @@ export function SealedPageView({
   }
 
   return (
-    <section className="history-view" aria-label={`${formatShortDate(date)} 페이지`}>
+    <section className="history-view" aria-label={`${formatPageKey(pageKey)} 페이지`}>
       <div className="history-view-head">
-        <h2>{label ?? formatShortDate(date)}</h2>
+        <h2>{label ?? formatPageKey(pageKey)}</h2>
         <div className="history-view-actions">
           <span className="readonly-badge">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">

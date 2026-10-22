@@ -48,7 +48,8 @@ const FATAL_CODES: Record<number, FatalReason> = {
 
 type Options = {
   noteId: string
-  date: string
+  /** 붙을 장의 키(`2026-10-21`, `2026-10-21-2`) */
+  pageKey: string
   doc: Y.Doc
   /** 오늘 장이 아니라며 닫혔을 때(자정이 지났거나 봉인됨) */
   onNotToday: () => void
@@ -65,7 +66,7 @@ export function wsBaseUrl(noteId: string): string {
   return `${proto}//${window.location.host}/ws/notes/${noteId}/pages`
 }
 
-export function useRealtime({ noteId, date, doc, onNotToday, onFatal, onNoteColors, onNotePaper }: Options) {
+export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteColors, onNotePaper }: Options) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [synced, setSynced] = useState(false)
@@ -77,11 +78,11 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal, onNoteColo
 
   useEffect(() => {
     // 같은 브라우저의 다른 탭과 직접 주고받지 않고 항상 서버를 거친다(서버가 봉인·권한을 판단).
-    const p = new WebsocketProvider(wsBaseUrl(noteId), date, doc, { disableBc: true, maxBackoffTime: 5000 })
+    const p = new WebsocketProvider(wsBaseUrl(noteId), pageKey, doc, { disableBc: true, maxBackoffTime: 5000 })
     let everConnected = false
     // 자정 교체 알림: 새 날짜의 빈 장으로 옮겨 간다.
     p.messageHandlers[MESSAGE_PAGE_ROLLED] = (_encoder, decoder) => {
-      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; date: string }
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; key: string }
       if (msg.type === 'page_rolled') {
         p.shouldConnect = false
         onNotToday()
@@ -151,7 +152,7 @@ export function useRealtime({ noteId, date, doc, onNotToday, onFatal, onNoteColo
     }
     // 콜백은 바뀌어도 다시 연결하지 않는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noteId, date, doc, generation])
+  }, [noteId, pageKey, doc, generation])
 
   /** 지금 provider를 버리고 새로 붙는다 */
   const reconnect = useCallback(() => setGeneration((g) => g + 1), [])

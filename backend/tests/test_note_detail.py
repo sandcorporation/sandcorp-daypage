@@ -3,6 +3,7 @@ import datetime as dt
 import pytest
 
 from daypage import clock
+from daypage.models import Note
 from tests.helpers import create_note, login_as
 
 pytestmark = pytest.mark.django_db
@@ -41,14 +42,30 @@ def test_entering_another_note_assigns_a_separate_membership():
     assert {n["id"] for n in guest.get("/api/me").json()["notes"]} == {first, second}
 
 
-def test_detail_has_kst_today_and_next_midnight(monkeypatch):
+def test_detail_has_open_page_and_seal_hour(monkeypatch):
     patch_kst(monkeypatch, 2026, 10, 15, 23, 59, 50)
     owner = login_as(1)
     note_id = create_note(owner)
     body = owner.get(f"/api/notes/{note_id}").json()
-    assert body["today"] == "2026-10-15"
-    assert dt.datetime.fromisoformat(body["nextMidnight"]) == dt.datetime(2026, 10, 16, tzinfo=clock.KST)
+    assert body["page"]["key"] == "2026-10-15"
+    assert body["page"]["date"] == "2026-10-15"
+    assert body["page"]["seq"] == 1
+    assert dt.datetime.fromisoformat(body["page"]["dueAt"]) == dt.datetime(2026, 10, 16, tzinfo=clock.KST)
+    assert body["sealHour"] == 0
     assert body["isOwner"] is True
+
+
+def test_page_of_a_note_sealing_at_four_starts_at_four(monkeypatch):
+    """봉인 시각 4시 노트: 새벽 1시는 아직 어제 장이고, 어제 장은 오늘 4시에 끝난다."""
+    patch_kst(monkeypatch, 2026, 10, 16, 1, 0, 0)
+    owner = login_as(1)
+    note_id = create_note(owner)
+    Note.objects.filter(pk=note_id).update(seal_hour=4)
+    body = owner.get(f"/api/notes/{note_id}").json()
+    assert body["page"]["key"] == "2026-10-15"
+    assert dt.datetime.fromisoformat(body["page"]["openedAt"]) == dt.datetime(2026, 10, 15, 4, tzinfo=clock.KST)
+    assert dt.datetime.fromisoformat(body["page"]["dueAt"]) == dt.datetime(2026, 10, 16, 4, tzinfo=clock.KST)
+    assert body["sealHour"] == 4
 
 
 def test_owner_can_rename_note():

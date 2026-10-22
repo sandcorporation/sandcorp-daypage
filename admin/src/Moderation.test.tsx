@@ -28,12 +28,13 @@ const NOTE = {
   memberLimit: null,
   paper: {},
   closed: null,
-  today: '2026-10-20',
+  openPage: '2026-10-20',
+  sealHour: 0,
   members: [
     { id: 11, userId: 3, nickname: '노란 감자', color: '#f2c230', joinedAt: '2026-10-10T01:00:00Z', lastVisitedAt: '2026-10-20T01:00:00Z' },
     { id: 12, userId: 4, nickname: '푸른 고래', color: '#2a47b0', joinedAt: '2026-10-11T01:00:00Z', lastVisitedAt: '2026-10-20T02:00:00Z' },
   ],
-  pages: [{ date: '2026-10-19', participantCount: 2, strokeCount: 40, paper: null }],
+  pages: [{ key: '2026-10-19', date: '2026-10-19', seq: 1, participantCount: 2, strokeCount: 40, paper: null }],
 }
 
 afterEach(() => {
@@ -52,7 +53,7 @@ test('노트 목록에서 노트를 열면 참여자·페이지와 읽기 전용
   await userEvent.click(await screen.findByRole('link', { name: '우리집 노트' }))
   expect(await screen.findByRole('heading', { name: '우리집 노트' })).toBeInTheDocument()
   expect(screen.getByText('푸른 고래')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: '오늘 페이지 보기' })).toHaveAttribute('href', '/staff/notes/n1/2026-10-20')
+  expect(screen.getByRole('link', { name: '지금 쓰는 장 보기' })).toHaveAttribute('href', '/staff/notes/n1/2026-10-20')
   expect(screen.getByRole('link', { name: /10\/19/ })).toHaveAttribute('href', '/staff/notes/n1/2026-10-19')
 })
 

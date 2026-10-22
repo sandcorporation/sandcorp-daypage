@@ -116,7 +116,7 @@ async def test_people_on_yesterdays_page_are_told_to_roll_over(monkeypatch):
 
     msg = await y.ws.receive_output(timeout=3)
     assert msg["bytes"][0] == MESSAGE_PAGE_ROLLED
-    assert b'"date":"2026-10-16"' in msg["bytes"]
+    assert b'"key":"2026-10-16"' in msg["bytes"]
     assert await expect_close(y.ws) == 4409
 
 

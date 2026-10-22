@@ -18,10 +18,10 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<HomePage />} />
         <Route path="/note/:noteId" element={<NoteRoute />} />
         <Route path="/note/:noteId/history" element={<HistoryPage />} />
-        <Route path="/note/:noteId/history/:date" element={<HistoryPage />} />
+        <Route path="/note/:noteId/history/:pageKey" element={<HistoryPage />} />
         {/* 운영자 보기(읽기 전용). 운영자가 아니면 노트를 찾을 수 없다고 보인다 */}
         <Route path="/staff/notes/:noteId" element={<StaffNotePage />} />
-        <Route path="/staff/notes/:noteId/:date" element={<StaffNotePage />} />
+        <Route path="/staff/notes/:noteId/:pageKey" element={<StaffNotePage />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

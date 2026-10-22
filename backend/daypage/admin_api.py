@@ -181,7 +181,7 @@ def list_notes(request):
     )
     sizes = {
         p["note_id"]: p["size"]
-        for p in Page.objects.filter(date=today, note_id__in=[n.id for n in notes])
+        for p in Page.objects.filter(sealed_at__isnull=True, note_id__in=[n.id for n in notes])
         .annotate(size=Coalesce(Length("state"), 0) + Coalesce(Sum(Length("updates__update")), 0))
         .values("note_id", "size")
     }
@@ -238,7 +238,7 @@ def note_detail(request, note_id: str):
     note = get_object_or_404(Note, pk=note_id)
     moderation.log(request.auth, "view_note", note=note)
     members = NoteMember.objects.filter(note=note).order_by("joined_at", "id")
-    sealed = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date")
+    sealed = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date", "-seq")
     return {
         "id": note.id,
         "name": note.name,
@@ -247,7 +247,9 @@ def note_detail(request, note_id: str):
         "memberLimit": note.member_limit,
         "paper": note.paper,
         "closed": moderation.closed(note),
-        "today": clock.today_kst().isoformat(),
+        # 지금 쓰는 장의 키(장을 만들지는 않는다)
+        "openPage": pages.current_key(note),
+        "sealHour": note.seal_hour,
         "members": [
             {
                 "id": m.id,
@@ -260,22 +262,31 @@ def note_detail(request, note_id: str):
             for m in members
         ],
         "pages": [
-            {"date": p.date.isoformat(), "participantCount": p.participant_count, "strokeCount": p.stroke_count, "paper": p.paper}
+            {
+                "key": pages.page_key(p.date, p.seq),
+                "date": p.date.isoformat(),
+                "seq": p.seq,
+                "openedAt": p.opened_at.astimezone(clock.KST).isoformat(),
+                "closedAt": p.due_at.astimezone(clock.KST).isoformat(),
+                "participantCount": p.participant_count,
+                "strokeCount": p.stroke_count,
+                "paper": p.paper,
+            }
             for p in sealed
         ],
     }
 
 
-@router.get("/notes/{note_id}/pages/{date}")
-def note_page(request, note_id: str, date: str):
-    """장 하나의 Yjs 문서(바이너리). 봉인된 장은 그대로, 오늘 장은 스냅샷과 증분을 합쳐 준다."""
+@router.get("/notes/{note_id}/pages/{key}")
+def note_page(request, note_id: str, key: str):
+    """장 하나의 Yjs 문서(바이너리). 봉인된 장은 그대로, 쓰는 중인 장은 스냅샷과 증분을 합쳐 준다."""
     note = get_object_or_404(Note, pk=note_id)
     try:
-        day = dt.date.fromisoformat(date)
+        day, seq = pages.parse_key(key)
     except ValueError:
         raise Http404
-    page = get_object_or_404(Page, note=note, date=day)
-    moderation.log(request.auth, "view_page", note=note, detail=day.isoformat())
+    page = get_object_or_404(Page, note=note, date=day, seq=seq)
+    moderation.log(request.auth, "view_page", note=note, detail=key)
     if page.sealed_at is not None:
         data = bytes(page.state)
     else:

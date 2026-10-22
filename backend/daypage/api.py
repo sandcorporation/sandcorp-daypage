@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
-from . import clock, membership, moderation, paper, rooms
+from . import clock, membership, moderation, pages, paper, rooms
 from .models import Note, NoteBan, NoteMember, Page, Suggestion
 
 
@@ -40,10 +40,21 @@ def share_url(note_id: str) -> str:
     return f"{settings.PUBLIC_ORIGIN.rstrip('/')}/note/{note_id}"
 
 
-def online_count(note_id: str) -> int:
-    """오늘 장에 접속한 사람 수(같은 사람의 여러 탭은 한 명)."""
-    conns = rooms.registry().connections_sync(note_id)
-    return rooms.online_users(conns, clock.today_kst().isoformat())
+def online_count(note: Note) -> int:
+    """지금 쓰는 장에 접속한 사람 수(같은 사람의 여러 탭은 한 명)."""
+    conns = rooms.registry().connections_sync(note.id)
+    return rooms.online_users(conns, pages.current_key(note))
+
+
+def page_info(page: Page) -> dict:
+    """노트 API가 주는 장 정보. key로 방에 붙고, dueAt까지 남은 시간을 센다."""
+    return {
+        "key": pages.page_key(page.date, page.seq),
+        "date": page.date.isoformat(),
+        "seq": page.seq,
+        "openedAt": page.opened_at.astimezone(clock.KST).isoformat(),
+        "dueAt": page.due_at.astimezone(clock.KST).isoformat(),
+    }
 
 
 @api.get("/health", auth=None)
@@ -151,7 +162,7 @@ def create_note(request, body: CreateNoteIn):
 @api.get("/notes/{note_id}/preview", auth=None)
 def preview(request, note_id: str):
     note = get_object_or_404(Note, pk=note_id)
-    return {"name": note.name, "online": online_count(note.id), "isFull": note.is_full()}
+    return {"name": note.name, "online": online_count(note), "isFull": note.is_full()}
 
 
 @api.get("/notes/{note_id}")
@@ -167,11 +178,11 @@ def note_detail(request, note_id: str):
         "name": note.name,
         "url": share_url(note.id),
         "isOwner": note.owner_id == request.user.id,
-        "today": clock.today_kst().isoformat(),
-        "nextMidnight": clock.next_midnight_kst().isoformat(),
+        "page": page_info(pages.open_page(note)),
+        "sealHour": note.seal_hour,
         "serverNow": clock.now().isoformat(),
         "me": {"nickname": member.nickname, "color": member.color},
-        "online": online_count(note.id),
+        "online": online_count(note),
         "memberCount": note.members.count(),
         "memberLimit": note.member_limit,
         "colors": note.colors,
@@ -303,27 +314,32 @@ def announce_note_event(note_id: str, event: dict) -> None:
 @api.get("/notes/{note_id}/pages")
 def sealed_pages(request, note_id: str):
     note = member_note(request, note_id)
-    pages = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date")
+    sealed = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date", "-seq")
     return [
         {
+            "key": pages.page_key(p.date, p.seq),
             "date": p.date.isoformat(),
+            "seq": p.seq,
+            "openedAt": p.opened_at.astimezone(clock.KST).isoformat(),
+            # 봉인된 순간이 아니라 기간이 끝난 순간(봉인 작업이 늦어도 같다)
+            "closedAt": p.due_at.astimezone(clock.KST).isoformat(),
             "participantCount": p.participant_count,
             "strokeCount": p.stroke_count,
             # 그날 쓰던 종이(종이 설정 전에 봉인한 장은 기본 줄 노트)
             "paper": paper.normalize(p.paper),
         }
-        for p in pages
+        for p in sealed
     ]
 
 
-@api.get("/notes/{note_id}/pages/{date}")
-def sealed_page_snapshot(request, note_id: str, date: str):
+@api.get("/notes/{note_id}/pages/{key}")
+def sealed_page_snapshot(request, note_id: str, key: str):
     note = member_note(request, note_id)
     try:
-        day = dt.date.fromisoformat(date)
+        day, seq = pages.parse_key(key)
     except ValueError:
         raise Http404
-    page = get_object_or_404(Page, note=note, date=day, sealed_at__isnull=False, is_empty=False)
+    page = get_object_or_404(Page, note=note, date=day, seq=seq, sealed_at__isnull=False, is_empty=False)
     res = HttpResponse(bytes(page.state), content_type="application/octet-stream")
     # 봉인된 장은 바뀌지 않는다.
     res["Cache-Control"] = "private, max-age=86400, immutable"

@@ -3,7 +3,7 @@
 import datetime as dt
 
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from pycrdt import Doc, Map, XmlFragment, XmlText
 
 from . import clock
@@ -11,17 +11,76 @@ from .models import Note, Page, PageUpdate
 
 
 class PageSealed(Exception):
-    """봉인된 장이거나 자정이 지나 더는 쓸 수 없는 장."""
+    """봉인된 장이거나 봉인 시각이 지나 더는 쓸 수 없는 장."""
+
+
+def page_key(date: dt.date, seq: int = 1) -> str:
+    """장을 가리키는 문자열. 그날 첫 장은 날짜 그대로, 둘째부터는 `-2`, `-3`을 붙인다."""
+    return date.isoformat() if seq == 1 else f"{date.isoformat()}-{seq}"
+
+
+def parse_key(key: str) -> tuple[dt.date, int]:
+    """페이지 키를 (날짜, 순번)으로. 모양이 아니면 ValueError."""
+    date = dt.date.fromisoformat(key[:10])
+    rest = key[10:]
+    if rest == "":
+        return date, 1
+    if not rest.startswith("-") or not rest[1:].isdigit() or int(rest[1:]) < 2:
+        raise ValueError(key)
+    return date, int(rest[1:])
+
+
+def _new_page(note: Note, date: dt.date, seq: int, opened_at: dt.datetime, due_at: dt.datetime) -> Page:
+    doc = Doc()
+    doc.get("meta", type=Map)["date"] = date.isoformat()
+    return Page.objects.create(note=note, date=date, seq=seq, opened_at=opened_at, due_at=due_at, state=doc.get_update())
 
 
 def get_or_create_page(note: Note, date: dt.date) -> Page:
-    page, created = Page.objects.get_or_create(note=note, date=date)
-    if created:
-        doc = Doc()
-        doc.get("meta", type=Map)["date"] = date.isoformat()
-        page.state = doc.get_update()
-        page.save(update_fields=["state"])
-    return page
+    """그 날짜의 첫 장(노트의 봉인 시각 기준 하루). 시험·시드용."""
+    page = Page.objects.filter(note=note, date=date, seq=1).first()
+    if page is not None:
+        return page
+    start = dt.datetime.combine(date, dt.time(hour=note.seal_hour), tzinfo=clock.KST)
+    return _new_page(note, date, 1, start, start + dt.timedelta(days=1))
+
+
+def _latest(note: Note) -> Page | None:
+    return Page.objects.filter(note=note).order_by("-date", "-seq").first()
+
+
+def open_page(note: Note, now: dt.datetime | None = None) -> Page:
+    """지금 쓰는 장. 마지막 장이 아직 봉인 전이고 기간 안이면 그것, 아니면 새 장을 연다.
+
+    마지막 장의 기간이 끝났는데 봉인 작업이 아직 안 돌았으면 먼저 봉인한다(사용자는 늘 올바른 장을 본다).
+    새 장은 지금 이전의 가장 최근 경계(노트의 봉인 시각)에서 시작해 하루 뒤에 끝나고, 같은 날짜에 이미 장이
+    있으면 다음 순번을 받는다.
+    """
+    from . import sealing
+
+    now = now or clock.now()
+    with transaction.atomic():
+        note = Note.objects.select_for_update().get(pk=note.pk)
+        last = _latest(note)
+        if last is not None and last.sealed_at is None:
+            if now < last.due_at:
+                return last
+            sealing.seal_page(last.id)
+        start = clock.boundary_before(now, note.seal_hour)
+        date = start.date()
+        seq = (Page.objects.filter(note=note, date=date).aggregate(models.Max("seq"))["seq__max"] or 0) + 1
+        return _new_page(note, date, seq, start, start + dt.timedelta(days=1))
+
+
+def current_key(note: Note, now: dt.datetime | None = None) -> str:
+    """지금 쓰는 장의 키. 장을 만들지는 않는다(미리보기·접속자 수 세기용)."""
+    now = now or clock.now()
+    last = _latest(note)
+    if last is not None and last.sealed_at is None and now < last.due_at:
+        return page_key(last.date, last.seq)
+    date = clock.boundary_before(now, note.seal_hour).date()
+    seq = (Page.objects.filter(note=note, date=date).aggregate(models.Max("seq"))["seq__max"] or 0) + 1
+    return page_key(date, seq)
 
 
 def load_updates(page_id: int) -> list[bytes]:
@@ -51,7 +110,7 @@ def append_update(page_id: int, update: bytes, received_at: dt.datetime) -> int:
     """
     with transaction.atomic():
         page = Page.objects.select_for_update().get(pk=page_id)
-        if page.sealed_at is not None or clock.kst_date_of(received_at) != page.date:
+        if page.sealed_at is not None or received_at >= page.due_at:
             raise PageSealed
         PageUpdate.objects.create(page=page, update=update)
         return PageUpdate.objects.filter(page=page).count()

@@ -46,8 +46,26 @@ def test_sealed_pages_newest_first_without_empty_ones(history):
     res = owner.get(f"/api/notes/{note_id}/pages")
     assert res.status_code == 200
     assert res.json() == [
-        {"date": "2026-10-15", "participantCount": 1, "strokeCount": 1, "paper": DEFAULT_PAPER},
-        {"date": "2026-10-13", "participantCount": 2, "strokeCount": 3, "paper": DEFAULT_PAPER},
+        {
+            "key": "2026-10-15",
+            "date": "2026-10-15",
+            "seq": 1,
+            "openedAt": "2026-10-15T00:00:00+09:00",
+            "closedAt": "2026-10-16T00:00:00+09:00",
+            "participantCount": 1,
+            "strokeCount": 1,
+            "paper": DEFAULT_PAPER,
+        },
+        {
+            "key": "2026-10-13",
+            "date": "2026-10-13",
+            "seq": 1,
+            "openedAt": "2026-10-13T00:00:00+09:00",
+            "closedAt": "2026-10-14T00:00:00+09:00",
+            "participantCount": 2,
+            "strokeCount": 3,
+            "paper": DEFAULT_PAPER,
+        },
     ]
 
 

@@ -92,9 +92,11 @@ export type NoteDetail = {
   ownerId: number
   memberLimit: number | null
   closed: { at: string; reason: string } | null
-  today: string
+  /** 지금 쓰는 장의 키(`2026-10-21`, `2026-10-21-2`) */
+  openPage: string
+  sealHour: number
   members: { id: number; userId: number; nickname: string; color: string; joinedAt: string; lastVisitedAt: string }[]
-  pages: { date: string; participantCount: number; strokeCount: number }[]
+  pages: { key: string; date: string; seq: number; participantCount: number; strokeCount: number }[]
 }
 
 export type UserDetail = {

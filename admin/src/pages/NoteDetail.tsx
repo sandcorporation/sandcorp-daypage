@@ -50,12 +50,13 @@ export function NoteDetail({ id }: { id: string }) {
         <p className="muted small">Daypage의 운영자 보기 화면에서 열려요. 열 때마다 운영자 기록에 남아요.</p>
         <ul className="links">
           <li>
-            <a href={`/staff/notes/${note.id}/${note.today}`}>오늘 페이지 보기</a>
+            <a href={`/staff/notes/${note.id}/${note.openPage}`}>지금 쓰는 장 보기</a>
           </li>
           {note.pages.map((p) => (
-            <li key={p.date}>
-              <a href={`/staff/notes/${note.id}/${p.date}`}>
-                {dayLabel(p.date)} · 참여 {p.participantCount}명 · 획 {p.strokeCount}개
+            <li key={p.key}>
+              <a href={`/staff/notes/${note.id}/${p.key}`}>
+                {dayLabel(p.date)}
+                {p.seq > 1 ? ` (${p.seq})` : ''} · 참여 {p.participantCount}명 · 획 {p.strokeCount}개
               </a>
             </li>
           ))}

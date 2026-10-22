@@ -1,3 +1,4 @@
+import datetime as dt
 import secrets
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
@@ -53,6 +54,8 @@ class Note(models.Model):
     colors = models.JSONField(default=list, blank=True)
     # 노트 종이(paper.py). 빈 값이면 기본 줄 노트. db_default: 배포 중 옛 코드가 이 열 없이 노트를 만들어도 되게.
     paper = models.JSONField(default=dict, blank=True, db_default=Value({}, output_field=models.JSONField()))
+    # 봉인 시각(KST 0~23시). 노트의 하루는 이 시각에 시작해 다음 날 이 시각에 끝난다. 기본은 자정.
+    seal_hour = models.PositiveSmallIntegerField(default=0, db_default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     # 운영자가 닫은 노트(moderation.py). 지우지 않고, 다시 열 때까지 아무도 들어오지 못한다.
     closed_at = models.DateTimeField(null=True, blank=True)
@@ -83,10 +86,19 @@ class NoteMember(models.Model):
 
 
 class Page(models.Model):
-    """노트의 하루치 장. 내용은 Yjs 문서 바이너리(스냅샷 + 증분)로 저장한다."""
+    """노트의 하루치 장. 내용은 Yjs 문서 바이너리(스냅샷 + 증분)로 저장한다.
+
+    장은 기간(opened_at ~ due_at)을 갖는다. date는 기간이 시작된 경계의 KST 날짜이고, 봉인 시각을 바꿔 하루에
+    장이 둘 이상 생기면 seq로 구분한다(페이지 키 `2026-10-21`, `2026-10-21-2` — pages.page_key).
+    """
 
     note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="pages")
     date = models.DateField()
+    # 같은 날짜 안의 순번(1부터)
+    seq = models.PositiveSmallIntegerField(default=1, db_default=1)
+    # 장이 열린 순간과 봉인 예정 순간. 비워 두고 저장하면 날짜와 노트의 봉인 시각으로 채운다.
+    opened_at = models.DateTimeField()
+    due_at = models.DateTimeField()
     state = models.BinaryField(default=b"")
     sealed_at = models.DateTimeField(null=True, blank=True)
     stroke_count = models.PositiveIntegerField(default=0)
@@ -97,8 +109,19 @@ class Page(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["note", "date"], name="uniq_page_note_date")]
-        indexes = [models.Index(fields=["sealed_at", "date"])]
+        constraints = [models.UniqueConstraint(fields=["note", "date", "seq"], name="uniq_page_note_date_seq")]
+        indexes = [models.Index(fields=["sealed_at", "due_at"])]
+
+    def save(self, *args, **kwargs):
+        if self.opened_at is None or self.due_at is None:
+            from . import clock
+
+            start = dt.datetime.combine(self.date, dt.time(hour=self.note.seal_hour), tzinfo=clock.KST)
+            if self.opened_at is None:
+                self.opened_at = start
+            if self.due_at is None:
+                self.due_at = start + dt.timedelta(days=1)
+        super().save(*args, **kwargs)
 
 
 class PageUpdate(models.Model):
