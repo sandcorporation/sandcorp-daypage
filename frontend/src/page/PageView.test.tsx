@@ -234,3 +234,18 @@ describe('도형 채움', () => {
     expect(drawShape('arrow')).toBeUndefined()
   })
 })
+
+describe('스포이트', () => {
+  test('스포이트 모드에서 지면을 누르면 그 자리 색을 알리고 획은 생기지 않는다(캔버스가 없으면 종이 바탕색)', () => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    const doc = new Y.Doc()
+    const onPick = vi.fn()
+    const { container } = render(<PageView doc={doc} tool="pen" ink="#000" widthLevel={1} author="나" picking onPick={onPick} />)
+    const el = container.querySelector('.page-frame') as HTMLElement
+    expect(el).toHaveAttribute('data-picking', 'true')
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100, button: 0, buttons: 1 })
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100 })
+    expect(onPick).toHaveBeenCalledWith('#ffffff')
+    expect(doc.getMap('strokes').size).toBe(0)
+  })
+})

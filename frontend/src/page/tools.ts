@@ -24,6 +24,39 @@ export const INKS = [
   { name: '형광 노랑', color: '#F2C230' },
 ] as const
 
+/** 채색 팔레트: 파스텔·피부·자연색. 기본 잉크처럼 누구나 고를 수 있고 노트 색으로 더하지 않는다. */
+export const PAINT_PALETTE = [
+  { name: '파스텔 분홍', color: '#F6B8C8' },
+  { name: '파스텔 주황', color: '#F8C9A0' },
+  { name: '크림', color: '#F7E7A1' },
+  { name: '연두', color: '#CDE8A5' },
+  { name: '민트', color: '#A8E0CE' },
+  { name: '하늘', color: '#A9D4F2' },
+  { name: '라벤더', color: '#C8B8EC' },
+  { name: '살구', color: '#F3D3B8' },
+  { name: '살색', color: '#D9A47E' },
+  { name: '갈색', color: '#8C5A3C' },
+  { name: '풀색', color: '#5E9A4B' },
+  { name: '바다', color: '#2E7FB8' },
+] as const
+
+/** 기본 잉크·채색 팔레트·노트 색 중 하나인지(잉크로 쓸 수 있는 색) */
+export function isKnownInk(color: string, noteColors: readonly string[]): boolean {
+  const c = color.toLowerCase()
+  return (
+    INKS.some((i) => i.color.toLowerCase() === c) ||
+    PAINT_PALETTE.some((i) => i.color.toLowerCase() === c) ||
+    noteColors.some((n) => n.toLowerCase() === c)
+  )
+}
+
+/** 최근 쓴 색 목록에 color를 맨 앞으로 넣는다(중복 제거, 최대 6개) */
+export const RECENT_INKS_MAX = 6
+export function pushRecentInk(recent: readonly string[], color: string): string[] {
+  const c = color.toLowerCase()
+  return [c, ...recent.filter((r) => r.toLowerCase() !== c)].slice(0, RECENT_INKS_MAX)
+}
+
 export type WidthLevel = 0 | 1 | 2
 
 export const WIDTH_NAMES = ['가늘게', '보통', '굵게'] as const

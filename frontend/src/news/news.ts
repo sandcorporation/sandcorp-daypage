@@ -24,8 +24,22 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-22-paint',
+    date: '10월 22일 오전 -2',
+    items: [
+      {
+        kind: 'new',
+        title: '채색',
+        text: '도구 막대에 채색 붓이 생겼어요. 색이 겹치면 물감처럼 섞이고(노랑+파랑=초록), 선 위에 칠해도 선과 종이 줄이 비쳐요. 불투명도·부드러운 가장자리·200px까지 넓은 붓.',
+      },
+      { kind: 'new', title: '도형 채움', text: '사각형·원·삼각형과 첫 점으로 닫은 곡선의 안을 채워요. 도형 창에서 없음·연하게·보통·진하게.' },
+      { kind: 'new', title: '채색 팔레트·스포이트', text: '잉크 창에 파스텔·피부·자연색 12색과 최근 쓴 색이 보이고, 스포이트로 화면의 색을 집어 쓸 수 있어요.' },
+      { kind: 'fix', text: '연필·크레용으로 겹쳐 칠할 때 결이 끊기던 것을 이어지게 했어요.' },
+    ],
+  },
+  {
     id: '2026-10-22-seal-hour',
-    date: '10월 22일 오전',
+    date: '10월 22일 오전 -1',
     items: [
       {
         kind: 'new',

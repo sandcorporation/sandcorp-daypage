@@ -2225,3 +2225,12 @@
 .shape-fill {
   margin-top: 10px;
 }
+
+.ink-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.page-frame[data-picking] {
+  cursor: crosshair;
+}

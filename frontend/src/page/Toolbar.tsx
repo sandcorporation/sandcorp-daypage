@@ -54,6 +54,9 @@ type Props = {
   noteColors: string[]
   onAddColor: (color: string) => Promise<void>
   onRemoveColor?: (color: string) => void
+  /** 최근 쓴 잉크와 스포이트(잉크 창 안). 없으면 보이지 않는다 */
+  recentInks?: string[]
+  onEyedropper?: () => void
   /** 레이어 버튼으로 여는 레이어 패널 내용. 없으면 버튼을 보이지 않는다 */
   layerPanel?: ReactNode
   /** 직접 정한 굵기(px). 있으면 단계 대신 쓴다 */
@@ -405,7 +408,15 @@ export function Toolbar(props: Props) {
       {showFont && <FontPicker font={font} onFont={onFont} />}
       <div className="tool-sep" />
       {/* | 색 · 굵기 |: 색 버튼과 굵기 버튼을 나란히 두고 앞뒤 구분선으로 한 묶음 */}
-      <InkControl ink={ink} onInk={onInk} noteColors={noteColors} onAddColor={onAddColor} onRemoveColor={onRemoveColor} />
+      <InkControl
+        ink={ink}
+        onInk={onInk}
+        noteColors={noteColors}
+        onAddColor={onAddColor}
+        onRemoveColor={onRemoveColor}
+        recentInks={props.recentInks}
+        onEyedropper={props.onEyedropper}
+      />
       <div className="tool-anchor">
         <button
           ref={widthRef}

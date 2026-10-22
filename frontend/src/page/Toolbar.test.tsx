@@ -356,3 +356,24 @@ describe('도형 채움', () => {
     expect(onShapeFill).toHaveBeenCalledWith(0.6)
   })
 })
+
+describe('채색 팔레트·최근 색·스포이트', () => {
+  test('잉크 창에 채색 팔레트와 최근 색이 보이고 고르면 잉크가 된다', async () => {
+    const props = setup({ recentInks: ['#123456'], onEyedropper: vi.fn() })
+    await userEvent.click(screen.getByRole('button', { name: /^잉크:/ }))
+    await userEvent.click(screen.getByRole('button', { name: '민트' }))
+    expect(props.onInk).toHaveBeenCalledWith('#A8E0CE')
+    await userEvent.click(screen.getByRole('button', { name: /^잉크:/ }))
+    await userEvent.click(screen.getByRole('button', { name: '최근 노트 색 #123456' }))
+    expect(props.onInk).toHaveBeenCalledWith('#123456')
+  })
+
+  test('스포이트를 누르면 창이 닫히고 알린다', async () => {
+    const onEyedropper = vi.fn()
+    setup({ onEyedropper })
+    await userEvent.click(screen.getByRole('button', { name: /^잉크:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /스포이트/ }))
+    expect(onEyedropper).toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: '잉크' })).not.toBeInTheDocument()
+  })
+})

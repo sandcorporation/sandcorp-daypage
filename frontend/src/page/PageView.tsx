@@ -11,7 +11,7 @@ import { DEFAULT_PAINT_OPACITY, fountainPressure, strokeWidth, type Brush, type 
 import { PAN_START_EVENT, TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
 import { DEFAULT_SHAPE, closedShape, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
-import { DEFAULT_PAPER, paperStyle, type Paper } from './paper'
+import { DEFAULT_PAPER, paperPalette, paperStyle, type Paper } from './paper'
 import { anchorAt, fitScaleIn, isPanButton, pinchZoom, scrollAfterZoom, wheelZoom, type ClientPoint, type ZoomAnchor } from './viewport'
 
 /** 곡선: 첫 점·직전 점에서 이만큼(화면 px) 안을 누르면 닫기·끝내기로 본다 */
@@ -48,6 +48,9 @@ type Props = {
   shape?: ShapeKind
   /** 닫힌 도형의 채움 불투명도(0이면 테두리만) */
   shapeFill?: number
+  /** 스포이트: 다음 한 번의 지면 터치가 그 자리의 합성 색(종이+채색+잉크)을 집어 onPick으로 알린다 */
+  picking?: boolean
+  onPick?: (color: string) => void
   /** 노트 종이(모양·여백 선·색). 없으면 기본 줄 노트 */
   paper?: Paper
   /** 펜 전용 모드(penOnly.ts): 손가락은 그리지 않고 한 손가락으로도 스크롤한다 */
@@ -109,6 +112,8 @@ export function PageView({
   brush,
   shape = DEFAULT_SHAPE,
   shapeFill = 0,
+  picking = false,
+  onPick,
   eraserRadius,
   paper = DEFAULT_PAPER,
   fingerScrolls = false,
@@ -530,6 +535,30 @@ export function PageView({
     el.style.transform = `translate(${p.x * scale - r}px, ${p.y * scale - r}px)`
   }
 
+  /**
+   * 지면 한 점의 합성 색: 종이 바탕 → 색 캔버스(multiply) → 잉크 캔버스(보통 합성). 화면에 보이는 색과 거의 같다.
+   * 캔버스를 읽을 수 없으면(시험 환경) 종이 바탕색.
+   */
+  function sampleColor(p: Point): string {
+    const ground = paperPalette(paper.color).ground
+    const hex = (v: number) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')
+    const parse = (c: string) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]
+    let rgb = parse(ground)
+    const read = (canvas: HTMLCanvasElement | null) => {
+      try {
+        const d = canvas?.getContext('2d')?.getImageData(Math.floor(p.x * pixelScale), Math.floor(p.y * pixelScale), 1, 1).data
+        return d && d.length >= 4 ? [d[0], d[1], d[2], d[3] / 255] : null
+      } catch {
+        return null
+      }
+    }
+    const color = read(colorCanvasRef.current)
+    if (color) rgb = rgb.map((v, i) => v * (1 - color[3]) + ((v * color[i]) / 255) * color[3])
+    const ink = read(inkCanvasRef.current)
+    if (ink) rgb = rgb.map((v, i) => v * (1 - ink[3]) + ink[i] * ink[3])
+    return `#${rgb.map(hex).join('')}`
+  }
+
   function pagePoint(e: PointerEvent<HTMLDivElement>): Point {
     const rect = frameRef.current!.getBoundingClientRect()
     return clampToPage(toPagePoint(e.clientX, e.clientY, rect, scale))
@@ -782,6 +811,12 @@ export function PageView({
     if (activePointer.current !== null) return
     lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
+    if (picking) {
+      // 스포이트: 그리지 않고 색만 집는다
+      e.preventDefault()
+      onPick?.(sampleColor(p))
+      return
+    }
     placeRing(p)
     onGestureStart?.()
     if (tool === 'shape') {
@@ -997,6 +1032,7 @@ export function PageView({
         ref={frameRef}
         className="page-frame"
         style={{ width, height, cursor, touchAction: readOnly || tool === 'select' ? 'pan-x pan-y' : 'none' }}
+        data-picking={picking || undefined}
         onPointerDown={onPointerDown}
         onPointerMove={onMove}
         onPointerUp={onUp}

@@ -9,6 +9,7 @@ import {
   INKS,
   isBrush,
   PAINT_WIDTH_MAX,
+  RECENT_INKS_MAX,
   type Brush,
   type ToolKind,
   type WidthLevel,
@@ -38,6 +39,8 @@ export type ToolPrefs = {
   paintWidth: number | null
   paintOpacity: number
   paintSoft: boolean
+  /** 최근 쓴 잉크(#rrggbb, 최신이 앞, 최대 6) */
+  recentInks: string[]
 }
 
 export const DEFAULT_TOOL_PREFS: ToolPrefs = {
@@ -57,6 +60,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   paintWidth: null,
   paintOpacity: DEFAULT_PAINT_OPACITY,
   paintSoft: false,
+  recentInks: [],
 }
 
 const KEY = 'daypage:tool-prefs'
@@ -104,6 +108,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     paintWidth: typeof raw.paintWidth === 'number' ? clampCustomWidth(raw.paintWidth, PAINT_WIDTH_MAX) : null,
     paintOpacity: (typeof raw.paintOpacity === 'number' && clampOpacity(raw.paintOpacity)) || d.paintOpacity,
     paintSoft: typeof raw.paintSoft === 'boolean' ? raw.paintSoft : d.paintSoft,
+    recentInks: Array.isArray(raw.recentInks) ? raw.recentInks.filter(isHexColor).slice(0, RECENT_INKS_MAX) : [],
   }
 }
 

@@ -14,6 +14,8 @@ import { Toolbar } from "../page/Toolbar";
 import {
   INKS,
   eraserRadius,
+  isKnownInk,
+  pushRecentInk,
   strokeWidth,
   type Brush,
   type ToolKind,
@@ -79,7 +81,17 @@ export function NotePage({ initial }: Props) {
     saveToolbarDock(next);
   }, []);
   const [tool, setTool] = useState<ToolKind>(prefs.tool);
-  const [chosenInk, setInk] = useState<string>(prefs.ink);
+  const [chosenInk, setChosenInk] = useState<string>(prefs.ink);
+  // 최근 쓴 색(최신이 앞). 잉크를 고를 때마다 앞에 넣는다
+  const [recentInks, setRecentInks] = useState<string[]>(prefs.recentInks);
+  const setInk = useCallback((color: string) => {
+    setChosenInk(color);
+    setRecentInks((r) => pushRecentInk(r, color));
+  }, []);
+  // 스포이트: 켜면 다음 한 번의 지면 터치가 그 자리 색을 집는다
+  const [picking, setPicking] = useState(false);
+  // 새 번들이 나와 있는지(useNewVersion). 페이지 교체 때 옛 코드로 새 응답을 읽다 죽지 않게 새로고침한다(GlitchTip #102)
+  const newVersionRef = useRef(false);
   const [widthLevel, setWidthLevel] = useState<WidthLevel>(prefs.widthLevel);
   const [customWidth, setCustomWidth] = useState<number | null>(
     prefs.customWidth,
@@ -158,11 +170,7 @@ export function NotePage({ initial }: Props) {
   const [shape, setShape] = useState<ShapeKind>(prefs.shape);
   const [shapeFill, setShapeFill] = useState<ShapeFill>(prefs.shapeFill);
   // 고른 노트 색이 노트에서 빠졌으면 기본 잉크로 돌아간다.
-  const ink =
-    INKS.some((i) => i.color === chosenInk) ||
-    note.colors.includes(chosenInk.toLowerCase())
-      ? chosenInk
-      : INKS[0].color;
+  const ink = isKnownInk(chosenInk, note.colors) ? chosenInk : INKS[0].color;
   useEffect(
     () =>
       saveToolPrefs({
@@ -182,6 +190,7 @@ export function NotePage({ initial }: Props) {
         paintWidth,
         paintOpacity,
         paintSoft,
+        recentInks,
       }),
     [
       tool,
@@ -200,6 +209,7 @@ export function NotePage({ initial }: Props) {
       paintWidth,
       paintOpacity,
       paintSoft,
+      recentInks,
     ],
   );
   const [scale, setScale] = useState(0.5);
@@ -286,6 +296,10 @@ export function NotePage({ initial }: Props) {
   const retryTimer = useRef<number | undefined>(undefined);
   const refreshToday = useCallback(async () => {
     window.clearTimeout(retryTimer.current);
+    if (newVersionRef.current) {
+      window.location.reload();
+      return;
+    }
     try {
       const fresh = await api<NoteDetail>(`/api/notes/${note.id}`);
       if (fresh.page.key !== note.page.key) setNote(fresh);
@@ -362,6 +376,7 @@ export function NotePage({ initial }: Props) {
   const presence = usePresence(provider, note.me);
   const { setEditing } = presence;
   const newVersion = useNewVersion(status);
+  newVersionRef.current = newVersion;
 
   // 들어와 동기화가 끝나면, 지난번에 비워 둔 채 나간 내 빈 상자를 정리한다.
   // 다른 탭에서 쓰고 있는 상자는 남기도록, 접속자 정보가 들어올 틈을 둔다.
@@ -519,6 +534,19 @@ export function NotePage({ initial }: Props) {
     [note.id, show],
   );
 
+  // 스포이트로 집은 색: 아는 색이면 바로, 아니면 노트 색으로 더한 뒤 잉크로
+  const onPick = useCallback(
+    (color: string) => {
+      setPicking(false);
+      if (isKnownInk(color, note.colors)) {
+        setInk(color);
+        show(`색을 집었어요 ${color}`);
+        return;
+      }
+      void addColor(color).then(() => setInk(color));
+    },
+    [note.colors, addColor, setInk, show],
+  );
   const removeColor = useCallback(
     async (color: string) => {
       try {
@@ -653,6 +681,8 @@ export function NotePage({ initial }: Props) {
           onShape={setShape}
           shapeFill={shapeFill}
           onShapeFill={setShapeFill}
+          recentInks={recentInks}
+          onEyedropper={() => setPicking(true)}
           pressure={pressureOn}
           onPressure={setPressureOn}
           penOnly={penOnly}
@@ -682,6 +712,8 @@ export function NotePage({ initial }: Props) {
           brush={brush}
           shape={shape}
           shapeFill={shapeFill}
+          picking={picking}
+          onPick={onPick}
           eraserRadius={tool === "eraser" ? eraserR : undefined}
           paintWidth={paintPx}
           paintOpacity={paintOpacity}
