@@ -6,7 +6,7 @@ import { dockAt, type ToolbarDock } from './toolbarDock'
 import { BrushPicker } from './BrushPicker'
 import { WidthPanel } from './WidthPanel'
 import { ShapePicker } from './ShapePicker'
-import { SHAPES, type ShapeKind } from './shapes'
+import { SHAPES, type ShapeFill, type ShapeKind } from './shapes'
 import { InkControl } from './InkControl'
 import { FontPicker } from './FontPicker'
 import {
@@ -42,6 +42,9 @@ type Props = {
   onBrush: (brush: Brush) => void
   shape: ShapeKind
   onShape: (shape: ShapeKind) => void
+  /** 닫힌 도형의 채움. 없으면 도형 창에 채움 선택을 보이지 않는다 */
+  shapeFill?: ShapeFill
+  onShapeFill?: (fill: ShapeFill) => void
   pressure: boolean
   onPressure: (on: boolean) => void
   /** 펜 전용 모드. 없으면 설정을 보이지 않는다 */
@@ -377,6 +380,8 @@ export function Toolbar(props: Props) {
                     onShape(s)
                     setShapeOpen(false)
                   }}
+                  fill={props.shapeFill}
+                  onFill={props.onShapeFill}
                 />
               </ToolPopover>
             )}

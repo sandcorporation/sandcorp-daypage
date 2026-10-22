@@ -202,8 +202,29 @@ export function paintColorStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, 
   ctx.restore()
 }
 
+/** 도형 획의 닫힌 안쪽 경로(점을 이어 첫 점으로 닫는다) */
+export function fillPath(stroke: Stroke): Path2D {
+  const triples = toTriples(stroke.points)
+  const path = new Path2D()
+  if (triples.length < 3) return path
+  path.moveTo(triples[0][0], triples[0][1])
+  for (const [x, y] of triples.slice(1)) path.lineTo(x, y)
+  path.closePath()
+  return path
+}
+
+/** 도형의 안쪽을 색 캔버스에 multiply로 채운다 */
+export function paintFill(ctx: CanvasRenderingContext2D, stroke: Stroke, alpha: number): void {
+  ctx.save()
+  ctx.globalCompositeOperation = 'multiply'
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = stroke.color
+  ctx.fill(fillPath(stroke))
+  ctx.restore()
+}
+
 /**
- * 색 캔버스 전체: 채색 획들을 multiply로 겹쳐 그린다. multiply는 순서와 무관하므로 레이어 순서는 보지 않고
+ * 색 캔버스 전체: 채색 획과 도형 채움을 multiply로 겹쳐 그린다. multiply는 순서와 무관하므로 레이어 순서는 보지 않고
  * alphaOf로 레이어 불투명도·흐림만 반영한다(0이면 건너뛴다).
  */
 export function paintColorStrokes(
@@ -214,11 +235,14 @@ export function paintColorStrokes(
 ): void {
   ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
   for (const s of strokes) {
-    if (s.tool !== 'paint') continue
-    const alpha = paintOpacity(s) * alphaOf(s)
-    if (alpha <= 0) continue
-    paintColorStroke(ctx, s, alpha, pixelScale)
-    ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+    if (s.tool === 'paint') {
+      const alpha = paintOpacity(s) * alphaOf(s)
+      if (alpha > 0) paintColorStroke(ctx, s, alpha, pixelScale)
+      ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+    } else if (typeof s.fill === 'number' && s.fill > 0) {
+      const alpha = s.fill * alphaOf(s)
+      if (alpha > 0) paintFill(ctx, s, alpha)
+    }
   }
 }
 

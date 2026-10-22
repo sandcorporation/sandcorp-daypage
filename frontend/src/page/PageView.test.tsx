@@ -212,3 +212,25 @@ describe('채색 붓', () => {
     expect(m.get('soft')).toBe(true)
   })
 })
+
+describe('도형 채움', () => {
+  test('채움을 켜고 사각형을 그리면 fill이 붙고, 화살표에는 붙지 않는다', () => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    const drawShape = (shape: 'rect' | 'arrow') => {
+      const doc = new Y.Doc()
+      const { container, unmount } = render(
+        <PageView doc={doc} tool="shape" shape={shape} shapeFill={0.6} ink="#000" widthLevel={1} author="나" />,
+      )
+      const el = container.querySelector('.page-frame') as HTMLElement
+      fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100, button: 0, buttons: 1 })
+      fireEvent.pointerMove(el, { pointerId: 1, pointerType: 'mouse', clientX: 300, clientY: 250, buttons: 1 })
+      fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'mouse', clientX: 300, clientY: 250 })
+      const m = [...doc.getMap('strokes').values()][0] as Y.Map<unknown> | undefined
+      unmount()
+      return m?.get('fill')
+    }
+    expect(drawShape('rect')).toBe(0.6)
+    expect(drawShape('arrow')).toBeUndefined()
+  })
+})

@@ -104,3 +104,14 @@ describe('도형 점', () => {
     expect(curvePoints([{ x: 3, y: 4 }], false)).toEqual([3, 4, 0.5])
   })
 })
+
+test('사각형·원·삼각형은 닫힌 도형이고 화살표·곡선은 아니다', async () => {
+  const { closedShape, isShapeFill } = await import('./shapes')
+  expect(closedShape('rect')).toBe(true)
+  expect(closedShape('ellipse')).toBe(true)
+  expect(closedShape('triangle')).toBe(true)
+  expect(closedShape('arrow')).toBe(false)
+  expect(closedShape('curve')).toBe(false)
+  expect(isShapeFill(0.6)).toBe(true)
+  expect(isShapeFill(0.5)).toBe(false)
+})

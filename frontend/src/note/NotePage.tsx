@@ -19,7 +19,7 @@ import {
   type ToolKind,
   type WidthLevel,
 } from "../page/tools";
-import type { ShapeKind } from "../page/shapes";
+import type { ShapeFill, ShapeKind } from "../page/shapes";
 import { useEditTools } from "../page/useEditTools";
 import { isTypingTarget, useUndo } from "../page/useUndo";
 import { useNavigate } from "react-router";
@@ -156,6 +156,7 @@ export function NotePage({ initial }: Props) {
       );
   }, [penOnly, show]);
   const [shape, setShape] = useState<ShapeKind>(prefs.shape);
+  const [shapeFill, setShapeFill] = useState<ShapeFill>(prefs.shapeFill);
   // 고른 노트 색이 노트에서 빠졌으면 기본 잉크로 돌아간다.
   const ink =
     INKS.some((i) => i.color === chosenInk) ||
@@ -172,6 +173,7 @@ export function NotePage({ initial }: Props) {
         font,
         brush,
         shape,
+        shapeFill,
         pressure: pressureOn,
         penOnly,
         eraserLevel,
@@ -189,6 +191,7 @@ export function NotePage({ initial }: Props) {
       font,
       brush,
       shape,
+      shapeFill,
       pressureOn,
       penOnly,
       eraserLevel,
@@ -648,6 +651,8 @@ export function NotePage({ initial }: Props) {
           onBrush={setBrush}
           shape={shape}
           onShape={setShape}
+          shapeFill={shapeFill}
+          onShapeFill={setShapeFill}
           pressure={pressureOn}
           onPressure={setPressureOn}
           penOnly={penOnly}
@@ -676,6 +681,7 @@ export function NotePage({ initial }: Props) {
           customWidth={customWidth}
           brush={brush}
           shape={shape}
+          shapeFill={shapeFill}
           eraserRadius={tool === "eraser" ? eraserR : undefined}
           paintWidth={paintPx}
           paintOpacity={paintOpacity}

@@ -17,6 +17,20 @@ export const SHAPES: { id: ShapeKind; name: string; desc: string; icon: string }
 
 export const DEFAULT_SHAPE: ShapeKind = 'rect'
 
+/** 안을 채울 수 있는(닫힌) 도형. 곡선은 첫 점으로 닫았을 때만(그릴 때 따로 판단) */
+export function closedShape(kind: ShapeKind): boolean {
+  return kind === 'rect' || kind === 'ellipse' || kind === 'triangle'
+}
+
+/** 도형 채움 단계: 이름과 불투명도(0은 채우지 않음) */
+export const SHAPE_FILL_NAMES = ['없음', '연하게', '보통', '진하게'] as const
+export const SHAPE_FILLS = [0, 0.3, 0.6, 1] as const
+export type ShapeFill = (typeof SHAPE_FILLS)[number]
+
+export function isShapeFill(v: unknown): v is ShapeFill {
+  return SHAPE_FILLS.some((f) => f === v)
+}
+
 export function isShape(v: unknown): v is ShapeKind {
   return SHAPES.some((s) => s.id === v)
 }

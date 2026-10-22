@@ -345,3 +345,14 @@ describe('채색 붓', () => {
     expect(screen.queryByRole('button', { name: '채색' })).not.toBeInTheDocument()
   })
 })
+
+describe('도형 채움', () => {
+  test('도형 창에서 채움 단계를 고른다', async () => {
+    const onShapeFill = vi.fn()
+    setup({ tool: 'shape', shapeFill: 0, onShapeFill })
+    await userEvent.click(screen.getByRole('button', { name: /^도형/ }))
+    expect(screen.getByRole('button', { name: '없음' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: '보통' }))
+    expect(onShapeFill).toHaveBeenCalledWith(0.6)
+  })
+})

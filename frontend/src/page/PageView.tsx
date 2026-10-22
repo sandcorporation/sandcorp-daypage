@@ -4,13 +4,13 @@ import { addStroke, newId, readStroke, readStrokes, round, strokesMap, type Stro
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
 import { canDrawOn, DIM, highlightPlan, layerOf, layerPlan, layersMap, readLayers } from './layers'
 import { strokeBounds, unionRect } from './hit'
-import { canvasPixelRatio, paintColorStrokes, paintLayers, paintOpacity, paintStroke, paintStrokes, softRadius } from './render'
+import { canvasPixelRatio, fillPath, paintColorStrokes, paintLayers, paintOpacity, paintStroke, paintStrokes, softRadius } from './render'
 import { appendPlan, paintedAfter, type Painted } from './inkCache'
 import { matrixScale, transformPoints, type Matrix } from './transform'
 import { DEFAULT_PAINT_OPACITY, fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { PAN_START_EVENT, TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
-import { DEFAULT_SHAPE, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
+import { DEFAULT_SHAPE, closedShape, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
 import { DEFAULT_PAPER, paperStyle, type Paper } from './paper'
 import { anchorAt, fitScaleIn, isPanButton, pinchZoom, scrollAfterZoom, wheelZoom, type ClientPoint, type ZoomAnchor } from './viewport'
 
@@ -46,6 +46,8 @@ type Props = {
   brush?: Brush
   /** 도형 도구에서 고른 도형 */
   shape?: ShapeKind
+  /** 닫힌 도형의 채움 불투명도(0이면 테두리만) */
+  shapeFill?: number
   /** 노트 종이(모양·여백 선·색). 없으면 기본 줄 노트 */
   paper?: Paper
   /** 펜 전용 모드(penOnly.ts): 손가락은 그리지 않고 한 손가락으로도 스크롤한다 */
@@ -106,6 +108,7 @@ export function PageView({
   paintSoft = false,
   brush,
   shape = DEFAULT_SHAPE,
+  shapeFill = 0,
   eraserRadius,
   paper = DEFAULT_PAPER,
   fingerScrolls = false,
@@ -429,7 +432,7 @@ export function PageView({
       // 채색 획은 색 캔버스에 덧그리기만 하면 된다(multiply는 순서와 무관). painted가 있다는 건 미리보기·지우개
       // 표시·강조가 없다는 뜻이라 덧그린 결과가 전체 다시 그리기와 같다.
       const color = colorCanvasRef.current?.getContext('2d')
-      const paints = strokes.filter((s) => s.tool === 'paint')
+      const paints = strokes.filter((s) => s.tool === 'paint' || typeof s.fill === 'number')
       if (paints.length && !color) {
         repaint()
         return
@@ -492,6 +495,13 @@ export function PageView({
     const s = drawing.current
     if (!s) return
     ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+    // 닫힌 도형을 그리는 중이면 채움도 미리 보인다(라이브 캔버스는 보통 합성이라 대략의 모양)
+    if (tool === 'shape' && shapeFill > 0 && closedShape(shape) && !curve.current) {
+      ctx.globalAlpha = shapeFill * 0.9
+      ctx.fillStyle = s.color
+      ctx.fill(fillPath(s))
+      ctx.globalAlpha = 1
+    }
     if (s.tool === 'highlighter') ctx.globalAlpha = 0.45
     else if (s.tool === 'paint') {
       // 라이브 캔버스는 CSS multiply(data-blend)로 종이·잉크와 섞인다. 불투명도·번짐만 여기서.
@@ -504,7 +514,7 @@ export function PageView({
     ctx.globalAlpha = 1
     const c = curve.current
     if (c) paintCurveMarks(ctx, c.controls, curveNearFirst.current, scale)
-  }, [pixelScale, scale])
+  }, [pixelScale, scale, tool, shape, shapeFill])
 
   /** 지우개 동그라미를 장 좌표 p(없으면 숨김)에 둔다. 화면에서 너무 작아지지 않게 최소 크기를 둔다. */
   function placeRing(p: Point | null) {
@@ -636,7 +646,8 @@ export function PageView({
     curveNearFirst.current = false
     setCurveCount(0)
     onCurveChange?.(0)
-    if (c && s && c.controls.length >= 2) addStroke(doc, { ...s, points: curvePoints(c.controls, closed) }, origin)
+    if (c && s && c.controls.length >= 2)
+      addStroke(doc, { ...s, points: curvePoints(c.controls, closed), ...(closed && shapeFill > 0 ? { fill: shapeFill } : {}) }, origin)
     paintLive()
   }
 
@@ -911,7 +922,8 @@ export function PageView({
       shapeStart.current = null
       // 거의 움직이지 않은 탭은 도형으로 남기지 않는다
       const p = pagePoint(e)
-      if (s && start && Math.hypot(p.x - start.x, p.y - start.y) * scale >= 4) addStroke(doc, s, origin)
+      if (s && start && Math.hypot(p.x - start.x, p.y - start.y) * scale >= 4)
+        addStroke(doc, closedShape(shape) && shapeFill > 0 ? { ...s, fill: shapeFill } : s, origin)
       paintLive()
       return
     }

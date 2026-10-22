@@ -2221,3 +2221,7 @@
 .paint-opacity input[type='range'] {
   width: 100%;
 }
+
+.shape-fill {
+  margin-top: 10px;
+}

@@ -1,6 +1,6 @@
 import { DEFAULT_FONT, FONTS } from '../page/fonts'
 import { DEFAULT_PEN_ONLY, isPenOnlyMode, type PenOnlyMode } from '../page/penOnly'
-import { DEFAULT_SHAPE, isShape, type ShapeKind } from '../page/shapes'
+import { DEFAULT_SHAPE, isShape, isShapeFill, type ShapeFill, type ShapeKind } from '../page/shapes'
 import {
   clampCustomWidth,
   clampOpacity,
@@ -23,8 +23,9 @@ export type ToolPrefs = {
   customWidth: number | null
   font: string
   brush: Brush
-  /** 도형 도구에서 고른 도형 */
+  /** 도형 도구에서 고른 도형과 닫힌 도형의 채움(0이면 테두리만) */
   shape: ShapeKind
+  shapeFill: ShapeFill
   /** 필압 따라 굵기 바꾸기 */
   pressure: boolean
   /** 펜 전용 모드(penOnly.ts): 펜을 쓰면 손가락은 스크롤만 */
@@ -47,6 +48,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   font: DEFAULT_FONT.id,
   brush: DEFAULT_BRUSH,
   shape: DEFAULT_SHAPE,
+  shapeFill: 0,
   pressure: true,
   penOnly: DEFAULT_PEN_ONLY,
   eraserLevel: 1,
@@ -93,6 +95,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     font: FONTS.some((f) => f.id === raw.font) ? (raw.font as string) : d.font,
     brush: isBrush(raw.brush) ? raw.brush : d.brush,
     shape: isShape(raw.shape) ? raw.shape : d.shape,
+    shapeFill: isShapeFill(raw.shapeFill) ? raw.shapeFill : d.shapeFill,
     pressure: typeof raw.pressure === 'boolean' ? raw.pressure : d.pressure,
     penOnly: isPenOnlyMode(raw.penOnly) ? raw.penOnly : d.penOnly,
     eraserLevel: [0, 1, 2].includes(raw.eraserLevel as number) ? (raw.eraserLevel as WidthLevel) : d.eraserLevel,

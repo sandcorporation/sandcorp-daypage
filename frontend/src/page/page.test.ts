@@ -88,3 +88,12 @@ describe('채색 획', () => {
     expect(s.soft).toBeUndefined()
   })
 })
+
+describe('도형 채움', () => {
+  test('펜(도형) 획의 fill이 문서에 남는다', () => {
+    const doc = createPageDoc('2026-10-22')
+    const s: Stroke = { id: 'r', tool: 'pen', color: '#2a47b0', width: 6, points: [0, 0, 0.5, 100, 0, 0.5, 100, 100, 0.5, 0, 100, 0.5], author: '나', createdAt: 1, steady: true, fill: 0.6 }
+    addStroke(doc, s)
+    expect(readStrokes(doc)[0].fill).toBe(0.6)
+  })
+})

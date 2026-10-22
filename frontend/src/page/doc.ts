@@ -35,6 +35,8 @@ export type Stroke = {
   opacity?: number
   /** 채색 획의 부드러운 가장자리 */
   soft?: boolean
+  /** 닫힌 도형의 채움 불투명도(0.1~1). 안쪽을 색 캔버스에 multiply로 채운다. 없으면 테두리만 */
+  fill?: number
 }
 
 /** 획의 펜 종류. 없거나 모르는 값이면 볼펜(옛 획은 지금 모양 그대로). */
@@ -129,6 +131,7 @@ export function addStroke(doc: Y.Doc, stroke: Stroke, origin?: unknown, binary =
     if (stroke.tool === 'pen' && stroke.steady) m.set('steady', true)
     if (stroke.tool === 'paint' && typeof stroke.opacity === 'number') m.set('opacity', stroke.opacity)
     if (stroke.tool === 'paint' && stroke.soft) m.set('soft', true)
+    if (stroke.tool === 'pen' && typeof stroke.fill === 'number') m.set('fill', stroke.fill)
     if (stroke.layer) m.set('layer', stroke.layer)
     strokesMap(doc).set(stroke.id, m)
   }, origin)
@@ -148,6 +151,7 @@ export function readStroke(id: string, m: Y.Map<unknown>): Stroke {
     ...(typeof m.get('layer') === 'string' ? { layer: m.get('layer') as string } : {}),
     ...(typeof m.get('opacity') === 'number' ? { opacity: m.get('opacity') as number } : {}),
     ...(m.get('soft') === true ? { soft: true } : {}),
+    ...(typeof m.get('fill') === 'number' ? { fill: m.get('fill') as number } : {}),
   }
 }
 
