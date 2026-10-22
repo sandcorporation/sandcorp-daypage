@@ -173,13 +173,18 @@ def note_detail(request, note_id: str):
         member = membership.join(note, request.user)
     except membership.NoteFull:
         raise ApiError(403, "note_full", "이 노트는 정원이 찼어요.")
+    page = pages.open_page(note)
     return {
         "id": note.id,
         "name": note.name,
         "url": share_url(note.id),
         "isOwner": note.owner_id == request.user.id,
-        "page": page_info(pages.open_page(note)),
+        "page": page_info(page),
         "sealHour": note.seal_hour,
+        # 옛 번들(봉인 시각 배포 전)을 띄워 둔 탭이 페이지 교체 때 다시 읽어도 죽지 않게 당분간 같이 준다(GlitchTip #102).
+        # 2026-11 이후 지워도 된다.
+        "today": page.date.isoformat(),
+        "nextMidnight": page.due_at.astimezone(clock.KST).isoformat(),
         "serverNow": clock.now().isoformat(),
         "me": {"nickname": member.nickname, "color": member.color},
         "online": online_count(note),
