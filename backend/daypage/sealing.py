@@ -10,6 +10,7 @@ from django.db import transaction
 from . import clock
 from .models import Note, Page
 from .pages import _merge, current_key, doc_stats, drop_empty_text_boxes
+from .points import pack_points
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,10 @@ def seal_page(page_id: int) -> bool:
             return False
         doc = _merge(page)
         # 만들고 아무것도 쓰지 않은 채 남은 빈 글 상자는 기록에 남기지 않는다.
-        if drop_empty_text_boxes(doc):
+        dropped = drop_empty_text_boxes(doc)
+        # 봉인된 장은 더 바뀌지 않으니 옛 숫자 배열 점을 바이너리로 다시 써 스냅샷을 줄인다.
+        packed = pack_points(doc)
+        if dropped or packed:
             page.state = doc.get_update()
         page.stroke_count, page.participant_count, page.is_empty = doc_stats(doc)
         page.sealed_at = clock.now()
