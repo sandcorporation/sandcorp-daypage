@@ -157,3 +157,58 @@ def test_page_with_only_empty_text_boxes_is_sealed_as_empty(note_id, at):
     seal_due_pages()
     page.refresh_from_db()
     assert page.is_empty is True
+
+
+def point_strokes(count: int, per_stroke: int) -> dict[str, list[float]]:
+    """옛 형식(points 숫자 배열) 획의 점. 프론트처럼 좌표 0.1, 필압 0.01 단위로 반올림돼 있다."""
+    import random
+
+    rng = random.Random(54)
+    strokes = {}
+    for s in range(count):
+        x, y, points = rng.uniform(0, 1600), rng.uniform(0, 2400), []
+        for _ in range(per_stroke):
+            x += rng.uniform(-3, 3)
+            y += rng.uniform(-3, 3)
+            points += [round(x, 1), round(y, 1), round(rng.uniform(0.1, 1), 2)]
+        strokes[f"s{s}"] = points
+    return strokes
+
+
+def points_update(strokes: dict[str, list[float]], packed: dict[str, bytes] = {}) -> bytes:
+    doc = Doc()
+    s = doc.get("strokes", type=Map)
+    for sid, points in strokes.items():
+        s[sid] = Map({"tool": "pen", "color": "#222", "width": 3.0, "points": points, "author": "졸린 수달"})
+    for sid, pts in packed.items():
+        s[sid] = Map({"tool": "pen", "color": "#222", "width": 3.0, "pts": pts, "author": "푸른 펭귄"})
+    return doc.get_update()
+
+
+def test_stroke_points_are_packed_into_binary_when_sealed(note_id, at):
+    from daypage.points import decode_points, encode_points
+
+    old = point_strokes(40, 300)
+    already = encode_points([10, 20, 0.5, 11, 21, 0.6])
+    at(kst(2026, 10, 15, 22, 0))
+    page = make_page(note_id, dt.date(2026, 10, 15), points_update(old, {"new": already}))
+    PageUpdate.objects.create(page=page, update=box_update({"full": "안녕"}))
+    before = len(points_update(old, {"new": already})) + len(box_update({"full": "안녕"}))
+    at(kst(2026, 10, 16, 0, 1))
+    seal_due_pages()
+    page.refresh_from_db()
+
+    after = len(bytes(page.state))
+    # 점 1만 2천 개: 숫자 배열이면 점마다 30바이트쯤, 바이너리면 3~4바이트
+    assert after < before * 0.25, (before, after)
+    doc = Doc()
+    doc.apply_update(bytes(page.state))
+    strokes = doc.get("strokes", type=Map)
+    for sid, points in old.items():
+        stroke = strokes[sid]
+        assert "points" not in stroke
+        assert decode_points(bytes(stroke["pts"])) == pytest.approx(points, abs=1e-9)
+        assert (stroke["tool"], stroke["color"], stroke["width"], stroke["author"]) == ("pen", "#222", 3.0, "졸린 수달")
+    assert bytes(strokes["new"]["pts"]) == already
+    assert str(doc.get("textboxes", type=Map)["full"]["content"]).count("안녕") == 1
+    assert (page.stroke_count, page.participant_count) == (41, 2)
