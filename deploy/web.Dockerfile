@@ -7,6 +7,8 @@ RUN corepack enable
 WORKDIR /src
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
+# 메트릭 스니펫 주소(#51). 비면 태그가 안 들어간다. 운영 값은 워크스페이스 .env의 VITE_METRICS_SNIPPET_URL.
+ARG VITE_METRICS_SNIPPET_URL=
 COPY frontend/ ./
 RUN pnpm build
 
