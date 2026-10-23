@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, test } from 'vitest'
 import { decodePoints, encodePoints, POINT_FORMAT } from './pointCodec'
+import vectors from './pointCodec.vectors.json'
 
 describe('획 점 바이너리', () => {
   test('좌표(0.1 단위)와 필압(0.01 단위)을 그대로 되살린다', () => {
@@ -28,5 +29,13 @@ describe('획 점 바이너리', () => {
 
   test('모르는 형식이면 빈 획으로 읽는다(새 형식을 모르는 옛 코드가 깨지지 않게)', () => {
     expect(decodePoints(new Uint8Array([99, 1, 2, 3]))).toEqual([])
+  })
+})
+
+// 백엔드(backend/daypage/points.py)도 같은 벡터를 읽어 같은 바이트를 내는지 본다(봉인 때 서버가 점을 다시 쓴다).
+describe('공유 시험 벡터', () => {
+  const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+  test.each(vectors)('$name', ({ points, bytes }) => {
+    expect(hex(encodePoints(points))).toBe(bytes)
   })
 })

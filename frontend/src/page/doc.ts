@@ -8,6 +8,7 @@ import { decodePoints, encodePoints } from './pointCodec'
  *
  * strokes:   Y.Map<strokeId, Y.Map{ tool, color, width, points: number[] 또는 pts: Uint8Array, author, createdAt, brush?, steady?, layer? }>
  *            점은 옛 획은 숫자 배열(points), 바이너리로 쓴 획은 pts(pointCodec.ts). 읽을 때는 둘 다 읽는다.
+ *            봉인 때 서버가 남은 points를 pts로 다시 쓴다(backend/daypage/points.py, 같은 바이트).
  * layers:    레이어 목록(layers.ts)
  * textboxes: Y.Map<boxId, Y.Map{ x, y, width, color, fontSize, font, content: Y.XmlFragment, author }>
  * meta:      Y.Map{ date }
