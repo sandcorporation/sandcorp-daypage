@@ -163,3 +163,5 @@ SENTRY_FRONTEND_DSN = "" if DEBUG else env("SENTRY_FRONTEND_DSN")
 
 # 기능 건의: 한 사람이 하루(24시간)에 남길 수 있는 수
 SUGGESTIONS_PER_DAY = int(env("SUGGESTIONS_PER_DAY", "20"))
+# 새 건의·검토 중·반영함을 알릴 디스코드 웹훅(daypage/suggestions.py). 비면 알리지 않는다. 비밀값이라 .env에만 둔다.
+DISCORD_SUGGESTION_WEBHOOK = env("DISCORD_SUGGESTION_WEBHOOK", "")
