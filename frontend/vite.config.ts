@@ -1,11 +1,12 @@
 /// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
+import { metricsSnippet } from './metricsSnippet.js'
 
 const backend = process.env.BACKEND_URL ?? 'http://127.0.0.1:8000'
 
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), metricsSnippet(loadEnv(mode, process.cwd(), 'VITE_').VITE_METRICS_SNIPPET_URL)],
   server: {
     port: 5173,
     proxy: {
@@ -20,4 +21,4 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     css: false,
   },
-})
+}))
