@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-23-book-pdf',
+    date: '10월 23일 오전',
+    items: [
+      {
+        kind: 'new',
+        title: '책으로 저장',
+        text: '기록 화면의 ‘책으로 저장 (PDF)’을 누르면 지난 페이지를 모두 날짜순으로 엮은 PDF 한 권을 내려받아요. 표지에는 노트 이름과 기간이, 장마다 아래에 날짜와 쪽수가 들어가요. 참여한 사람들만 가질 수 있는, 세상에 몇 권 없는 책이에요. 건의해 주셔서 고마워요!',
+      },
+    ],
+  },
+  {
     id: '2026-10-22-paint',
     date: '10월 22일 오전 -2',
     items: [

@@ -133,8 +133,8 @@ function paintTextBox(ctx: CanvasRenderingContext2D, doc: Y.Doc, box: TextBox): 
   }
 }
 
-/** 장 전체를 한 장의 PNG로 그린다(종이 + 획 + 글 상자). */
-export async function renderPagePng(doc: Y.Doc, pixelScale = 1, paper?: Paper): Promise<Blob> {
+/** 장 전체를 캔버스 한 장에 그린다(종이 + 획 + 글 상자). PNG 저장과 책(PDF)이 함께 쓴다. */
+export async function renderPageCanvas(doc: Y.Doc, pixelScale = 1, paper?: Paper): Promise<HTMLCanvasElement> {
   await document.fonts?.ready
   const canvas = document.createElement('canvas')
   canvas.width = PAGE_WIDTH * pixelScale
@@ -150,14 +150,21 @@ export async function renderPagePng(doc: Y.Doc, pixelScale = 1, paper?: Paper): 
   paintLayers(ctx, layerPlan(strokes, layers), pixelScale)
   ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
   for (const box of readTextBoxes(doc)) paintTextBox(ctx, doc, box)
+  return canvas
+}
+
+/** 장 전체를 한 장의 PNG로 그린다(종이 + 획 + 글 상자). */
+export async function renderPagePng(doc: Y.Doc, pixelScale = 1, paper?: Paper): Promise<Blob> {
+  const canvas = await renderPageCanvas(doc, pixelScale, paper)
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('이미지를 만들지 못했어요'))), 'image/png'),
   )
 }
 
-export function exportFileName(noteName: string, date: string): string {
+/** 저장 파일 이름 `daypage-<노트 이름>-<꼬리>.<확장자>`. 파일 이름에 못 쓰는 글자는 _로 바꾼다. */
+export function exportFileName(noteName: string, tail: string, ext = 'png'): string {
   const safe = noteName.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'note'
-  return `daypage-${safe}-${date}.png`
+  return `daypage-${safe}-${tail}.${ext}`
 }
 
 export function downloadBlob(blob: Blob, fileName: string): void {

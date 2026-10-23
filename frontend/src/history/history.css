@@ -24,8 +24,16 @@
   max-width: 340px;
   min-width: 0;
 }
+.history-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
 .history-list h1 {
-  margin: 0 0 14px;
+  margin: 0;
   font-size: 20px;
 }
 .history-list ol {

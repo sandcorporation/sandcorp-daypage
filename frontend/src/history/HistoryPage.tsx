@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast'
 import { formatHourRange, formatPageKey, formatShortDate, seqSuffix } from '../note/time'
 import { ZoomControl, type Zoom } from '../note/ZoomControl'
 import type { NoteDetail } from '../note/types'
+import { bookFileName, bookOrder, renderNoteBook } from '../page/exportPdf'
 import { downloadBlob, exportFileName, renderPagePng } from '../page/exportPng'
 import { normalizePaper, type Paper } from '../page/paper'
 import { PageView } from '../page/PageView'
@@ -35,6 +36,8 @@ export function HistoryPage() {
   const [pages, setPages] = useState<SealedPage[] | null>(null)
   const [error, setError] = useState<'missing' | 'server' | null>(null)
   const [blocked, setBlocked] = useState<{ kind: BlockedKind; detail: string } | null>(null)
+  const [binding, setBinding] = useState<{ done: number; total: number } | null>(null)
+  const { toast, show } = useToast()
 
   useEffect(() => {
     let cancelled = false
@@ -60,6 +63,33 @@ export function HistoryPage() {
   }, [noteId])
 
   const selected = pageKey ?? pages?.[0]?.key ?? null
+
+  /** 지난 페이지를 모두 받아 날짜순으로 엮은 PDF 책을 내려받는다. 장은 하나씩 받아 그린다. */
+  async function saveBook() {
+    if (!note || !pages || pages.length === 0 || binding) return
+    setBinding({ done: 0, total: pages.length })
+    try {
+      const ordered = bookOrder(pages)
+      const blob = await renderNoteBook({
+        noteName: note.name,
+        memberCount: note.memberCount,
+        pages: ordered.map((p) => ({
+          page: { ...p, paper: normalizePaper(p.paper) },
+          load: async () => {
+            const doc = new Y.Doc()
+            Y.applyUpdate(doc, new Uint8Array(await api<ArrayBuffer>(`/api/notes/${noteId}/pages/${p.key}`)))
+            return doc
+          },
+        })),
+        onProgress: (done, total) => setBinding({ done, total }),
+      })
+      downloadBlob(blob, bookFileName(note.name, ordered[0].date, ordered[ordered.length - 1].date))
+    } catch {
+      show('책을 만들지 못했어요')
+    } finally {
+      setBinding(null)
+    }
+  }
 
   if (blocked) return <ErrorScreen kind={blocked.kind} detail={blocked.detail} />
   if (error) return <ErrorScreen kind={error} />
@@ -92,7 +122,18 @@ export function HistoryPage() {
       ) : (
         <main className="history-main">
           <section className="history-list" aria-labelledby="history-title">
-            <h1 id="history-title">지난 페이지</h1>
+            <div className="history-list-head">
+              <h1 id="history-title">지난 페이지</h1>
+              <button
+                type="button"
+                className="btn"
+                onClick={saveBook}
+                disabled={binding !== null}
+                title="지난 페이지를 모두 날짜순으로 엮은 PDF를 내려받아요"
+              >
+                {binding ? `엮는 중… ${binding.done}/${binding.total}` : '책으로 저장 (PDF)'}
+              </button>
+            </div>
             <ol>
               {pages.map((p) => (
                 <li key={p.key}>
@@ -129,6 +170,7 @@ export function HistoryPage() {
           )}
         </main>
       )}
+      {toast}
     </div>
   )
 }
