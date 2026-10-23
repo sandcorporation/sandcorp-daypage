@@ -65,9 +65,20 @@ describe('바이너리 점(pts)으로 쓴 획', () => {
     expect(readStrokes(doc).find((s) => s.id === 'b')!.points).toEqual([10, 10, 0.5, 30, 30, 0.5])
   })
 
-  test('1단계 배포: 기본은 아직 숫자 배열로 쓴다(새 형식을 모르는 화면이 남아 있을 수 있다)', () => {
+  test('새로 그린 획은 pts만 있다', () => {
     const doc = createPageDoc('2026-10-17')
     addStroke(doc, stroke('d', [1, 1, 0.5]))
-    expect(strokesMap(doc).get('d')!.get('points')).toEqual([1, 1, 0.5])
+    const m = strokesMap(doc).get('d')!
+    expect(m.get('pts')).toBeInstanceOf(Uint8Array)
+    expect(m.has('points')).toBe(false)
+  })
+
+  test('옮긴 획도 pts로 남는다', () => {
+    const doc = createPageDoc('2026-10-17')
+    addStroke(doc, stroke('d', [1, 1, 0.5]))
+    moveStrokes(doc, ['d'], 1, 1)
+    const m = strokesMap(doc).get('d')!
+    expect(m.get('pts')).toBeInstanceOf(Uint8Array)
+    expect(m.has('points')).toBe(false)
   })
 })
