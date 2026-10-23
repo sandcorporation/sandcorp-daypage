@@ -100,3 +100,17 @@ def test_failed_webhook_does_not_raise(settings, monkeypatch):
 def test_long_suggestion_fits_discord_limit():
     s = Suggestion(id=7, text="가" * 1000 + "\n" + "나" * 1000, status="new")
     assert len(suggestions.message(s, "done", "x" * 500)) <= 2000
+
+
+def test_webhook_address_is_not_logged(settings, monkeypatch, caplog):
+    """웹훅 주소는 비밀값이다. httpx가 INFO로 남기는 요청 주소가 로그에 나오지 않는다."""
+    import logging
+
+    settings.DISCORD_SUGGESTION_WEBHOOK = HOOK
+    s = leave()
+    transport = httpx.MockTransport(lambda request: httpx.Response(204))
+    real_client = httpx.Client
+    monkeypatch.setattr(suggestions.httpx, "post", lambda url, **k: real_client(transport=transport).post(url, **k))
+    with caplog.at_level(logging.INFO):
+        assert suggestions.send(s.id, "new") is True
+    assert "webhook" not in caplog.text
