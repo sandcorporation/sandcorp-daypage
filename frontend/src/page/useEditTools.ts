@@ -59,6 +59,7 @@ function fitted(bounds: Rect, m: Matrix): Matrix {
  * 지우개와 선택·이동 도구. 그리기·글씨는 다른 곳에서 처리한다.
  * 잠긴 레이어와 내가 숨긴 레이어의 획은 지우거나 고를 수 없고, 지우개는 지금 그리는 레이어의 획만 지운다.
  * 고른 묶음은 끌어서 옮기고, 모서리 손잡이로 키우거나 줄이고, 위쪽 손잡이로 돌린다(놓을 때 한 번 저장).
+ * onlyAuthor를 주면 선택·이동은 그 사람(나)이 그린 획만 다룬다. 남의 획은 눌러도 고르지 않고 상자로 둘러도 빠진다.
  */
 export function useEditTools(
   doc: Y.Doc,
@@ -70,6 +71,8 @@ export function useEditTools(
   currentLayer?: string,
   /** 지우개 반지름(장 좌표 px) */
   eraserRadius = ERASER_RADIUS,
+  /** 있으면 선택·이동은 이 닉네임이 그린 획만 고른다('내가 그린 획만 고르기') */
+  onlyAuthor?: string | null,
 ) {
   const [selected, setSelected] = useState<string[]>([])
   const [version, setVersion] = useState(0)
@@ -130,6 +133,10 @@ export function useEditTools(
     const editableNear = (rect: Rect) => editableStrokes(near(rect), readLayers(doc), hiddenLayers)
     const erasableNear = (rect: Rect) =>
       currentLayer ? erasableStrokes(near(rect), readLayers(doc), currentLayer, hiddenLayers) : editableNear(rect)
+    // 선택·이동이 고를 수 있는 획: '내가 그린 획만 고르기'가 켜져 있으면 남의 획은 뺀다
+    const mine = (strokes: Stroke[]) => (onlyAuthor ? strokes.filter((s) => s.author === onlyAuthor) : strokes)
+    const pickable = () => mine(editable())
+    const pickableNear = (rect: Rect) => mine(editableNear(rect))
     if (tool === 'eraser') {
       return {
         // 올려 두면 누를 때 지워질 획을 미리 알린다(화면에만 표시, 문서는 그대로)
@@ -180,7 +187,7 @@ export function useEditTools(
           if (!p) return null
           if (h) return cursorForHandle(h)
           const inBox = box && p.x >= box.x && p.x <= box.x + box.width && p.y >= box.y && p.y <= box.y + box.height
-          if (inBox || topStrokeAt(editableNear(pathBounds([p], PICK_TOLERANCE)), p, PICK_TOLERANCE)) return 'move'
+          if (inBox || topStrokeAt(pickableNear(pathBounds([p], PICK_TOLERANCE)), p, PICK_TOLERANCE)) return 'move'
           return null
         },
         down(p) {
@@ -196,10 +203,10 @@ export function useEditTools(
             drag.current = { kind: 'scale', ids: selected, bounds: box, anchor: anchorOf(box, h), corner: handlePoints(box, 0)[h], m: IDENTITY }
             return true
           }
-          const hit = topStrokeAt(editableNear(pathBounds([p], PICK_TOLERANCE)), p, PICK_TOLERANCE)
+          const hit = topStrokeAt(pickableNear(pathBounds([p], PICK_TOLERANCE)), p, PICK_TOLERANCE)
           if (hit) {
             // 기본 레이어가 아닌 레이어는 스티커처럼 통째로 잡는다
-            const ids = selected.includes(hit.id) ? selected : grabIds([hit.id], editable(), readLayers(doc))
+            const ids = selected.includes(hit.id) ? selected : grabIds([hit.id], pickable(), readLayers(doc))
             setSelected(ids)
             const bounds = selectionBox(ids) ?? { x: p.x, y: p.y, width: 0, height: 0 }
             drag.current = { kind: 'move', ids, start: p, bounds, m: IDENTITY }
@@ -232,7 +239,7 @@ export function useEditTools(
           }
           if (d?.kind === 'band') {
             const rect = normalizeRect(d.start, d.end)
-            setSelected(grabIds(strokesInRect(editableNear(rect), rect), editable(), readLayers(doc)))
+            setSelected(grabIds(strokesInRect(pickableNear(rect), rect), pickable(), readLayers(doc)))
             bump()
           }
         },
@@ -245,7 +252,7 @@ export function useEditTools(
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets, strokeIndex])
+  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets, strokeIndex, onlyAuthor])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)

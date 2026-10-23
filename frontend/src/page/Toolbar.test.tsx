@@ -377,3 +377,28 @@ describe('채색 팔레트·최근 색·스포이트', () => {
     expect(screen.queryByRole('dialog', { name: '잉크' })).not.toBeInTheDocument()
   })
 })
+
+describe('선택·이동 설정(내가 그린 획만 고르기)', () => {
+  test('선택 도구일 때 다시 누르면 창이 열리고, 체크를 바꾸면 알린다', async () => {
+    const onSelectMine = vi.fn()
+    setup({ tool: 'select', selectMine: false, onSelectMine })
+    await userEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
+    const box = screen.getByRole('checkbox', { name: '내가 그린 획만 고르기' })
+    expect(box).not.toBeChecked()
+    await userEvent.click(box)
+    expect(onSelectMine).toHaveBeenCalledWith(true)
+  })
+
+  test('다른 도구일 때 누르면 선택 도구로 바꾼다', async () => {
+    const props = setup({ tool: 'pen', selectMine: false, onSelectMine: vi.fn() })
+    await userEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
+    expect(props.onTool).toHaveBeenCalledWith('select')
+    expect(screen.queryByRole('checkbox', { name: '내가 그린 획만 고르기' })).not.toBeInTheDocument()
+  })
+
+  test('설정을 받지 않으면 창이 없다', async () => {
+    setup({ tool: 'select' })
+    await userEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
+    expect(screen.queryByRole('checkbox', { name: '내가 그린 획만 고르기' })).not.toBeInTheDocument()
+  })
+})

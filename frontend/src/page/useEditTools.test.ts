@@ -102,3 +102,54 @@ describe('선택 도구 끌기 취소', () => {
     expect(readStrokes(doc)[0].points).toEqual([100, 100, 0.5, 300, 100, 0.5])
   })
 })
+
+describe('내가 그린 획만 고르기', () => {
+  function others(id: string, x1: number, y1: number, x2: number, y2: number): Stroke {
+    return { ...line(id, x1, y1, x2, y2), author: '남' }
+  }
+  function setupMine() {
+    const doc = new Y.Doc()
+    addStroke(doc, line('mine', 100, 100, 300, 100))
+    addStroke(doc, others('theirs', 100, 300, 300, 300))
+    const hook = renderHook(() => useEditTools(doc, 'select', 'me', undefined, 1, undefined, undefined, '나'))
+    return { doc, hook, t: () => hook.result.current.pointerTool }
+  }
+
+  test('남의 획을 눌러 끌어도 고르거나 옮기지 않는다', () => {
+    const { doc, hook, t } = setupMine()
+    act(() => void t()?.down?.({ x: 200, y: 302 }, {} as never))
+    act(() => void t()?.move?.({ x: 260, y: 382 }))
+    expect(hook.result.current.preview).toBeNull()
+    expect(hook.result.current.selected).toEqual([])
+    act(() => void t()?.up?.({ x: 260, y: 382 }, {} as never))
+    expect(readStrokes(doc).find((s) => s.id === 'theirs')?.points).toEqual([100, 300, 0.5, 300, 300, 0.5])
+  })
+
+  test('내 획은 평소처럼 옮긴다', () => {
+    const { doc, hook, t } = setupMine()
+    act(() => void t()?.down?.({ x: 200, y: 102 }, {} as never))
+    act(() => void t()?.move?.({ x: 210, y: 112 }))
+    expect(hook.result.current.preview?.ids).toEqual(['mine'])
+    act(() => void t()?.up?.({ x: 210, y: 112 }, {} as never))
+    expect(readStrokes(doc).find((s) => s.id === 'mine')?.points).toEqual([110, 110, 0.5, 310, 110, 0.5])
+  })
+
+  test('상자로 둘러도 내 획만 골라지고, 남의 획 위에서는 옮기기 커서가 아니다', () => {
+    const { hook, t } = setupMine()
+    act(() => void t()?.down?.({ x: 50, y: 50 }, {} as never))
+    act(() => void t()?.move?.({ x: 350, y: 350 }))
+    act(() => void t()?.up?.({ x: 350, y: 350 }, {} as never))
+    expect(hook.result.current.selected).toEqual(['mine'])
+    let cursor: string | null | undefined
+    act(() => void (cursor = t()?.hover?.({ x: 200, y: 302 })))
+    expect(cursor).toBeNull()
+  })
+
+  test('설정을 끄면(사람을 넘기지 않으면) 남의 획도 고른다', () => {
+    const doc = new Y.Doc()
+    addStroke(doc, others('theirs', 100, 300, 300, 300))
+    const hook = renderHook(() => useEditTools(doc, 'select', 'me'))
+    act(() => void hook.result.current.pointerTool?.down?.({ x: 200, y: 302 }, {} as never))
+    expect(hook.result.current.selected).toEqual(['theirs'])
+  })
+})

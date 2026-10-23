@@ -77,6 +77,9 @@ type Props = {
   eraserWidth?: number | null
   onEraserLevel?: (level: WidthLevel) => void
   onEraserWidth?: (px: number) => void
+  /** 선택·이동: 내가 그린 획만 고르기. onSelectMine이 없으면 선택 버튼에 창을 두지 않는다 */
+  selectMine?: boolean
+  onSelectMine?: (on: boolean) => void
   /** 집중 모드(머리글·칩을 숨기고 종이만). 없으면 버튼을 보이지 않는다 */
   focus?: boolean
   onFocus?: (on: boolean) => void
@@ -199,6 +202,9 @@ export function Toolbar(props: Props) {
   const shapeInfo = SHAPES.find((s) => s.id === shape) ?? SHAPES[0]
   const [layersOpen, setLayersOpen] = useState(false)
   const layersRef = useRef<HTMLButtonElement>(null)
+  // 선택·이동 버튼을 다시 누르면 여는 창: 내가 그린 획만 고르기
+  const [selectOpen, setSelectOpen] = useState(false)
+  const selectRef = useRef<HTMLButtonElement>(null)
   const [brushOpen, setBrushOpen] = useState(false)
   const penRef = useRef<HTMLButtonElement>(null)
   const brushName = BRUSHES.find((b) => b.id === brush)?.name ?? BRUSHES[0].name
@@ -386,6 +392,35 @@ export function Toolbar(props: Props) {
                   fill={props.shapeFill}
                   onFill={props.onShapeFill}
                 />
+              </ToolPopover>
+            )}
+          </div>
+        ) : t.kind === 'select' && props.onSelectMine ? (
+          <div key={t.kind} className="tool-anchor">
+            <button
+              ref={selectRef}
+              type="button"
+              className="tool-btn"
+              aria-label={props.selectMine ? '선택·이동 (내 획만)' : '선택·이동'}
+              title={`선택·이동${props.selectMine ? ' (내가 그린 획만)' : ''} · 다시 누르면 설정`}
+              aria-pressed={tool === 'select'}
+              aria-haspopup="dialog"
+              aria-expanded={selectOpen}
+              onClick={() => (tool === 'select' ? setSelectOpen((v) => !v) : onTool('select'))}
+            >
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                <path d={t.icon} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+              </svg>
+              <span className="tool-corner" aria-hidden="true" />
+            </button>
+            {selectOpen && (
+              <ToolPopover title="선택·이동" anchor={selectRef} onClose={() => setSelectOpen(false)}>
+                <p className="tool-pop-caption">획을 누르거나 상자로 둘러 고른 뒤 끌어서 옮기고, 손잡이로 키우거나 돌려요.</p>
+                <label className="pressure-toggle">
+                  내가 그린 획만 고르기
+                  <input type="checkbox" checked={props.selectMine ?? false} onChange={(e) => props.onSelectMine?.(e.target.checked)} />
+                </label>
+                <p className="tool-pop-caption">켜 두면 다른 사람이 그린 획은 눌러도 고르거나 옮기지 않아요. 이 브라우저에만 기억해요.</p>
               </ToolPopover>
             )}
           </div>

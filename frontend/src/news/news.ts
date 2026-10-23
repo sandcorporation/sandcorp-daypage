@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-23-select-mine',
+    date: '10월 23일 오후',
+    items: [
+      {
+        kind: 'new',
+        title: '내가 그린 획만 고르기',
+        text: '선택·이동 도구를 쓰다가 다른 사람의 획을 잘못 옮기는 일이 있었죠. 선택·이동 버튼을 다시 누르면 열리는 창에서 ‘내가 그린 획만 고르기’를 켜 두면, 남의 획은 눌러도·상자로 둘러도 고르지 않아요. 이 브라우저에만 기억해요. 건의해 주셔서 고마워요!',
+      },
+    ],
+  },
+  {
     id: '2026-10-23-book-pdf',
     date: '10월 23일 오전',
     items: [

@@ -41,6 +41,8 @@ export type ToolPrefs = {
   paintSoft: boolean
   /** 최근 쓴 잉크(#rrggbb, 최신이 앞, 최대 6) */
   recentInks: string[]
+  /** 선택·이동이 내가 그린 획만 고르게(남의 획을 잘못 옮기지 않게) */
+  selectMine: boolean
 }
 
 export const DEFAULT_TOOL_PREFS: ToolPrefs = {
@@ -61,6 +63,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   paintOpacity: DEFAULT_PAINT_OPACITY,
   paintSoft: false,
   recentInks: [],
+  selectMine: false,
 }
 
 const KEY = 'daypage:tool-prefs'
@@ -109,6 +112,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     paintOpacity: (typeof raw.paintOpacity === 'number' && clampOpacity(raw.paintOpacity)) || d.paintOpacity,
     paintSoft: typeof raw.paintSoft === 'boolean' ? raw.paintSoft : d.paintSoft,
     recentInks: Array.isArray(raw.recentInks) ? raw.recentInks.filter(isHexColor).slice(0, RECENT_INKS_MAX) : [],
+    selectMine: typeof raw.selectMine === 'boolean' ? raw.selectMine : d.selectMine,
   }
 }
 
