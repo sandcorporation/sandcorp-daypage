@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
-from . import clock, membership, moderation, pages, paper, rooms, sealing
+from . import clock, membership, moderation, pages, paper, rooms, sealing, suggestions
 from .models import Note, NoteBan, NoteMember, Page, Suggestion
 
 
@@ -122,6 +122,7 @@ def create_suggestion(request, payload: SuggestionIn):
     if note_id and not NoteMember.objects.filter(note_id=note_id, user=request.user).exists():
         note_id = None
     s = Suggestion.objects.create(user=request.user, note_id=note_id, text=text)
+    suggestions.announce(s.id, "new")
     return 201, {"id": s.id}
 
 

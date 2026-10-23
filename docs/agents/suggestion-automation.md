@@ -8,7 +8,8 @@ push(=운영 배포)된다.
 
 | 것 | 어디 |
 |---|---|
-| 건의 조회 스크립트 | `scripts/suggestions.sh` (읽기 전용 SELECT, ssh `oracle` → `daypage-postgres-1`) |
+| 건의 조회·상태 스크립트 | `scripts/suggestions.sh` (조회는 읽기 전용 SELECT, ssh `oracle` → `daypage-postgres-1`. `status`만 `daypage-backend-1`의 관리 명령으로 상태 칸을 바꾼다) |
+| 디스코드 알림 | 새 건의·검토 중·반영함이 되면 `daypage-suggestion` 채널 웹훅으로 알린다. 운영 `.env`의 `DISCORD_SUGGESTION_WEBHOOK`(비밀값, 저장소에 없음). 비면 알리지 않는다 |
 | 배정 기록 | sub2 `~/.daypage/suggestions-dispatched` (한 줄에 건의 id 하나) |
 | 워커 프롬프트 | `docs/agents/suggestion-worker-prompt.md` (자동화에 넣은 본문과 같게 유지한다) |
 | Orca 자동화 | sub2, 이름 "건의함 자동 처리", 10분마다, precheck = `scripts/suggestions.sh check`, provider claude, repo daypage(실행마다 새 worktree) |
@@ -31,7 +32,7 @@ Orca 사이드바에서 **검토 중** 카드(읽지 않음 표시)를 열어 �
 - 고칠 점을 적으면 반영하고 다시 검토를 요청한다.
 - `보류` / `안 함` → 커밋만 남기고 끝낸다.
 
-건의 상태(`new`→`done` 등)는 운영 페이지에서 사람이 바꾼다. 자동화는 운영 DB에 쓰지 않는다.
+건의 상태는 워커가 `scripts/suggestions.sh status`로 바꾼다: 건의를 받으면 `reviewing`(검토 중), 승인받아 배포를 확인하면 `done`(반영함), "안 함"이면 `declined`. "보류"는 검토 중으로 둔다. 운영 페이지에서 사람이 바꿔도 같은 알림이 간다(안 함·새 건의로 되돌림은 알리지 않는다). 자동화가 운영 DB에 쓰는 것은 이 상태 칸 하나뿐이다.
 
 ## 손보기
 
@@ -42,6 +43,7 @@ orca-ide automations edit <id> --disabled --json      # 잠시 끄기
 orca-ide automations edit <id> --prompt "$(cat docs/agents/suggestion-worker-prompt.md)" --json   # 프롬프트 갱신
 scripts/suggestions.sh list                           # 지금 새 건의 보기(배정 기록 안 바꿈)
 scripts/suggestions.sh mark 7 8                       # 자동화가 건드리지 않게 건의 id 거르기
+scripts/suggestions.sh status 5 done "PR #50"         # 상태 바꾸기(검토 중·반영함은 디스코드에 알림)
 ```
 
 sub2 밖(예: Windows)에서 같은 건의를 손으로 처리하면, 자동화가 또 잡지 않게 `mark`로 걸러 두거나 운영 페이지에서 상태를 바꾼다.

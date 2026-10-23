@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404
 from ninja import Router, Schema
 from ninja.security import SessionAuth
 
-from . import admission, clock, moderation, pages
+from . import admission, clock, moderation, pages, suggestions
 from .models import AdminLog, Note, NoteMember, Page, Suggestion, User
 
 
@@ -161,8 +161,7 @@ class StatusIn(Schema):
 @router.patch("/suggestions/{suggestion_id}")
 def update_suggestion(request, suggestion_id: int, payload: StatusIn):
     s = get_object_or_404(Suggestion, pk=suggestion_id)
-    s.status = payload.status
-    s.save(update_fields=["status"])
+    suggestions.change_status(s, payload.status)
     return {"id": s.id, "status": s.status}
 
 
