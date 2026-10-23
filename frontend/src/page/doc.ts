@@ -79,10 +79,10 @@ export function newId(): string {
 }
 
 /**
- * 새 획의 점을 바이너리(pts)로 쓸지. 1단계 배포에서는 읽기만 익힌다(false): 그 전 코드를 쓰는 화면은
- * pts를 모르므로, 모두가 새로고침으로 이 코드를 받은 뒤(다음 배포) 켠다.
+ * 새 획의 점을 바이너리(pts)로 쓸지. 1단계 배포에서 읽기를 먼저 익혔고(옛 번들은 새 버전 감지로 새로고침된다),
+ * 2단계에서 켠다. 이미 있는 획은 원래 형식을 유지한다(isBinary).
  */
-export const WRITE_BINARY_POINTS = false
+export const WRITE_BINARY_POINTS = true
 
 // 바이너리 점을 풀어 둔 것. 다시 그릴 때마다 풀지 않는다(Yjs는 같은 값에 같은 Uint8Array를 돌려준다).
 const decoded = new WeakMap<Uint8Array, number[]>()
