@@ -24,6 +24,14 @@
 	# API·카카오 로그인은 아무 프로세스나
 	@backend path /api/* /auth/*
 	handle @backend {
+		# 봉인 스냅샷(점이 든 바이너리, application/octet-stream)은 Caddy 기본 압축 대상이 아니다.
+		# 이 두 경로의 octet-stream만 더 압축한다. 바깥의 encode는 이미 Content-Encoding이 붙은 응답을 건너뛴다.
+		@snapshot path_regexp ^/api/(admin/)?notes/[^/]+/pages/[^/]+$
+		encode @snapshot zstd gzip {
+			match {
+				header Content-Type application/octet-stream*
+			}
+		}
 		reverse_proxy backend:8000 backend2:8000 {
 			lb_policy round_robin
 			fail_duration 10s
