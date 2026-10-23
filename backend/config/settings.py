@@ -151,6 +151,11 @@ LOGGING = {
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", "INFO")},
+    # httpx는 INFO로 요청 주소를 통째로 남긴다. 디스코드 웹훅 주소(비밀값)가 로그에 찍히지 않게 경고부터만 본다.
+    "loggers": {
+        "httpx": {"level": "WARNING"},
+        "httpcore": {"level": "WARNING"},
+    },
 }
 
 # 오류 수집(GlitchTip). DSN이 있고 DEBUG가 꺼진 운영에서만 켠다.

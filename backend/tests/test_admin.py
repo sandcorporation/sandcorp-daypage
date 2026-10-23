@@ -127,7 +127,8 @@ def test_grant_staff_command_by_note_owner():
 
     owner = login_as(5)
     note_id = create_note(owner)
-    call_command("grant_staff", "--note", note_id)
+    # 노트 id는 '-'로 시작할 수 있어(무작위) 옵션과 값을 붙여 넘긴다.
+    call_command("grant_staff", f"--note={note_id}")
     assert User.objects.get(kakao_id=5).is_staff is True
     call_command("grant_staff", str(User.objects.get(kakao_id=5).id), "--off")
     assert User.objects.get(kakao_id=5).is_staff is False
