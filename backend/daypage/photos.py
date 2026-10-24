@@ -81,9 +81,10 @@ class S3Store:
         return self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read()
 
     def delete(self, keys: list[str]) -> None:
-        for i in range(0, len(keys), 1000):
-            chunk = keys[i : i + 1000]
-            self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": [{"Key": k} for k in chunk], "Quiet": True})
+        # 여러 개 한꺼번에 지우기(DeleteObjects)는 OCI가 Content-MD5를 요구하는데 botocore는 더는 붙이지 않는다.
+        # 한 번에 지우는 건 많아야 한 장의 올리기 횟수(UPLOADS_PER_PAGE)라 하나씩 지운다.
+        for k in keys:
+            self.client.delete_object(Bucket=self.bucket, Key=k)
 
 
 class MemoryStore:
