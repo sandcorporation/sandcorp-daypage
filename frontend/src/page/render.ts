@@ -10,10 +10,16 @@ export const HIGHLIGHTER_ALPHA = 0.45
 /** 캔버스 한 장의 최대 픽셀 수. iOS Safari 한도(약 16.7M)보다 여유 있게 잡는다. */
 export const MAX_CANVAS_PIXELS = 12_000_000
 
+/**
+ * 캔버스 배율 상한. 휴대폰은 기기 배율이 3이라 지면 캔버스 3장이 배율 2의 2.25배 픽셀이 되고, multiply로 겹치는
+ * 색 캔버스 탓에 스크롤·그리기마다 그 픽셀을 모두 다시 섞어 발열이 컸다. 손글씨는 2배에서도 눈으로 차이가 거의 없다.
+ */
+export const MAX_CANVAS_DPR = 2
+
 /** 화면 크기(CSS px)와 기기 배율로 캔버스 배율을 정한다. 너무 크면 선명도를 낮춰 상한 안에 맞춘다. */
 export function canvasPixelRatio(cssWidth: number, cssHeight: number, dpr: number): number {
   const fit = Math.floor(Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, cssWidth * cssHeight)) * 1000) / 1000
-  return Math.min(dpr, fit)
+  return Math.min(dpr, MAX_CANVAS_DPR, fit)
 }
 
 /** 그리는 순서: 형광펜이 항상 펜 아래에 오도록, 같은 도구 안에서는 그린 시각 순(같으면 id). */

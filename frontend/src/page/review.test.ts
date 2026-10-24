@@ -3,7 +3,7 @@ import { createPageDoc, readTextBoxes, textBoxContent, textBoxText } from './doc
 import { linesOf, wrapLine } from './exportPng'
 import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 import { clampMoveDelta } from './hit'
-import { canvasPixelRatio, MAX_CANVAS_PIXELS } from './render'
+import { canvasPixelRatio, MAX_CANVAS_DPR, MAX_CANVAS_PIXELS } from './render'
 import { createTextBoxAt, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
 
 function boxWith(text: string, author = '졸린 수달') {
@@ -71,6 +71,12 @@ describe('캔버스 크기', () => {
     const ratio = canvasPixelRatio(PAGE_WIDTH, PAGE_HEIGHT, 3)
     expect(PAGE_WIDTH * ratio * PAGE_HEIGHT * ratio).toBeLessThanOrEqual(MAX_CANVAS_PIXELS)
     expect(canvasPixelRatio(400, 600, 2)).toBe(2)
+  })
+
+  test('기기 배율이 3인 휴대폰에서도 캔버스 배율은 2를 넘지 않는다(발열)', () => {
+    expect(MAX_CANVAS_DPR).toBe(2)
+    expect(canvasPixelRatio(390, 585, 3)).toBe(2)
+    expect(canvasPixelRatio(390, 585, 1.5)).toBe(1.5)
   })
 })
 

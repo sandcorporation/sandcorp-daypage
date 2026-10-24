@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-24-mobile-heat',
+    date: '10월 24일 오후',
+    items: [
+      {
+        kind: 'fix',
+        title: '휴대폰 발열 줄이기',
+        text: '휴대폰으로 지면을 열면 기기가 뜨거워지는 일이 있었죠. 화면이 아주 촘촘한 휴대폰에서는 지면을 필요 이상으로 세밀하게 그리고 있었어서, 눈으로 보기에는 거의 같은 선명도로 그리는 양을 절반 넘게 줄였어요. 건의해 주셔서 고마워요!',
+      },
+    ],
+  },
+  {
     id: '2026-10-23-select-mine',
     date: '10월 23일 오후',
     items: [
