@@ -27,6 +27,8 @@ class User(AbstractBaseUser):
     suspended_until = models.DateTimeField(null=True, blank=True)
     suspension_permanent = models.BooleanField(default=False, db_default=False)
     suspension_reason = models.CharField(max_length=200, blank=True, default="", db_default="")
+    # 바꾼 단축키(shortcuts.py): 기본값과 다른 동작만 {동작: [키 조합]}. 어느 기기에서든 같다.
+    shortcuts = models.JSONField(default=dict, blank=True, db_default=Value({}, output_field=models.JSONField()))
 
     USERNAME_FIELD = "kakao_id"
 

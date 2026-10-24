@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 import re
 from typing import Literal
 
@@ -11,7 +12,7 @@ from django.shortcuts import get_object_or_404
 from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
-from . import clock, membership, moderation, pages, paper, rooms, sealing, suggestions
+from . import clock, membership, moderation, pages, paper, rooms, sealing, shortcuts, suggestions
 from .models import Note, NoteBan, NoteMember, Page, Suggestion
 
 
@@ -97,6 +98,27 @@ def me(request):
         # 정지 중이면 {until(영구면 null), reason}. 첫 화면이 사유를 보인다.
         "suspension": moderation.suspension(request.user),
     }
+
+
+@api.get("/me/shortcuts")
+def get_shortcuts(request):
+    """내가 바꾼 단축키(기본값과 다른 동작만)."""
+    return request.user.shortcuts or {}
+
+
+@api.put("/me/shortcuts")
+def put_shortcuts(request):
+    """바꾼 단축키를 통째로 저장한다. 빈 {}이면 모두 기본값."""
+    try:
+        raw = json.loads(request.body or b"null")
+    except ValueError:
+        raw = None
+    value = shortcuts.validate(raw)
+    if value is None:
+        raise ApiError(422, "invalid_shortcuts", "단축키 값이 올바르지 않아요.")
+    request.user.shortcuts = value
+    request.user.save(update_fields=["shortcuts"])
+    return value
 
 
 class SuggestionIn(Schema):

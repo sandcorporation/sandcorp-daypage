@@ -22,6 +22,7 @@ import {
   type WidthLevel,
 } from './tools'
 import { PEN_ONLY_MODES, type PenOnlyMode } from './penOnly'
+import { keyHint, useKeymap } from './shortcuts'
 
 type Props = {
   tool: ToolKind
@@ -214,6 +215,7 @@ export function Toolbar(props: Props) {
   const penActive = tool === 'pen' || tool === 'highlighter'
   const penName = lastPen === 'highlighter' ? '형광펜' : brushName
   const dock = props.dock ?? 'left'
+  const keymap = useKeymap()
   return (
     <PopoverSideContext.Provider value={POPOVER_SIDE[dock]}>
     <nav aria-label="도구" className="toolbar" data-dock={dock}>
@@ -226,7 +228,7 @@ export function Toolbar(props: Props) {
               type="button"
               className="tool-btn"
               aria-label={`펜 (${penName})`}
-              title={`펜 (${penName}) · 다시 누르면 펜 종류·형광펜 · Shift+드래그로 직선`}
+              title={`펜 (${penName})${keyHint(keymap, lastPen)} · 다시 누르면 펜 종류·형광펜 · Shift+드래그로 직선`}
               aria-pressed={penActive}
               aria-haspopup="dialog"
               aria-expanded={brushOpen}
@@ -313,7 +315,7 @@ export function Toolbar(props: Props) {
                 type="button"
                 className="tool-btn"
                 aria-label="채색"
-                title="채색 · 다시 누르면 불투명도·부드러움 · 색이 겹치면 섞여요"
+                title={`채색${keyHint(keymap, 'paint')} · 다시 누르면 불투명도·부드러움 · 색이 겹치면 섞여요`}
                 aria-pressed={tool === 'paint'}
                 aria-haspopup="dialog"
                 aria-expanded={paintOpen}
@@ -370,7 +372,7 @@ export function Toolbar(props: Props) {
               type="button"
               className="tool-btn"
               aria-label={`도형 (${shapeInfo.name})`}
-              title={`도형 (${shapeInfo.name}) · 다시 누르면 도형 종류`}
+              title={`도형 (${shapeInfo.name})${keyHint(keymap, 'shape')} · 다시 누르면 도형 종류`}
               aria-pressed={tool === 'shape'}
               aria-haspopup="dialog"
               aria-expanded={shapeOpen}
@@ -402,7 +404,7 @@ export function Toolbar(props: Props) {
               type="button"
               className="tool-btn"
               aria-label={props.selectMine ? '선택·이동 (내 획만)' : '선택·이동'}
-              title={`선택·이동${props.selectMine ? ' (내가 그린 획만)' : ''} · 다시 누르면 설정`}
+              title={`선택·이동${props.selectMine ? ' (내가 그린 획만)' : ''}${keyHint(keymap, 'select')} · 다시 누르면 설정`}
               aria-pressed={tool === 'select'}
               aria-haspopup="dialog"
               aria-expanded={selectOpen}
@@ -430,7 +432,7 @@ export function Toolbar(props: Props) {
           type="button"
           className="tool-btn"
           aria-label={t.label}
-          title={t.kind === 'highlighter' ? `${t.label} · Shift+드래그로 직선` : t.label}
+          title={`${t.label}${keyHint(keymap, t.kind)}${t.kind === 'highlighter' ? ' · Shift+드래그로 직선' : ''}`}
           aria-pressed={tool === t.kind}
           onClick={() => onTool(t.kind)}
         >
@@ -529,12 +531,12 @@ export function Toolbar(props: Props) {
           )}
         </div>
       )}
-      <button type="button" className="tool-btn" aria-label="되돌리기" title="되돌리기 (Ctrl+Z)" disabled={!canUndo} onClick={onUndo}>
+      <button type="button" className="tool-btn" aria-label="되돌리기" title={`되돌리기${keyHint(keymap, 'undo')}`} disabled={!canUndo} onClick={onUndo}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M7 5L3 9l4 4M3 9h9a5 5 0 010 10h-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      <button type="button" className="tool-btn" aria-label="다시하기" title="다시하기 (Ctrl+Shift+Z)" disabled={!canRedo} onClick={onRedo}>
+      <button type="button" className="tool-btn" aria-label="다시하기" title={`다시하기${keyHint(keymap, 'redo')}`} disabled={!canRedo} onClick={onRedo}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M13 5l4 4-4 4M17 9H8a5 5 0 000 10h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -544,7 +546,7 @@ export function Toolbar(props: Props) {
           type="button"
           className="tool-btn"
           aria-label={props.focus ? '집중 모드 끝내기' : '집중 모드'}
-          title={props.focus ? '집중 모드 끝내기 (Esc)' : '집중 모드: 머리글을 숨기고 종이만 크게'}
+          title={props.focus ? '집중 모드 끝내기 (Esc)' : `집중 모드${keyHint(keymap, 'focus')}: 머리글을 숨기고 종이만 크게`}
           aria-pressed={!!props.focus}
           onClick={() => props.onFocus?.(!props.focus)}
         >
