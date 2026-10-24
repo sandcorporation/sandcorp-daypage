@@ -16,4 +16,5 @@ def test_client_config_hands_out_frontend_dsn(client, settings):
     settings.SENTRY_FRONTEND_DSN = "https://key@glitchtip.example/2"
     settings.SENTRY_ENVIRONMENT = "production"
     res = client.get("/api/client-config")
-    assert res.json() == {"sentryDsn": "https://key@glitchtip.example/2", "environment": "production"}
+    assert res.json()["sentryDsn"] == "https://key@glitchtip.example/2"
+    assert res.json()["environment"] == "production"

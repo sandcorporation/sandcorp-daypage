@@ -238,8 +238,9 @@ export async function renderBookPage(
   index: number,
   total: number,
   pixelScale: number,
+  photos?: string,
 ): Promise<HTMLCanvasElement> {
-  const inner = await renderPageCanvas(doc, pixelScale, page.paper)
+  const inner = await renderPageCanvas(doc, pixelScale, page.paper, photos)
   const canvas = document.createElement('canvas')
   canvas.width = PAGE_WIDTH * pixelScale
   canvas.height = BOOK_PAGE_HEIGHT * pixelScale
@@ -284,6 +285,8 @@ export type BookOptions = {
   memberCount: number
   /** 어떤 순서로 주어도 날짜순으로 엮는다 */
   pages: BookSource[]
+  /** 사진 주소 앞부분(photoBase) */
+  photos?: string
   /** 장을 하나 그릴 때마다(표지 제외) */
   onProgress?: (done: number, total: number) => void
   /** 장 좌표 1당 픽셀. 1.5면 2400×3744px(약 360dpi). 너무 크면 iPad의 캔버스 한계(약 1,670만 픽셀)를 넘는다 */
@@ -297,6 +300,7 @@ export async function renderNoteBook({
   noteName,
   memberCount,
   pages,
+  photos,
   onProgress,
   pixelScale = 1.5,
   quality = 0.9,
@@ -329,7 +333,7 @@ export async function renderNoteBook({
   for (let i = 0; i < total; i++) {
     const { page, load } = ordered[i]
     const doc = await load()
-    const canvas = await renderBookPage(doc, { ...page, paper: page.paper ?? DEFAULT_PAPER }, i, total, pixelScale)
+    const canvas = await renderBookPage(doc, { ...page, paper: page.paper ?? DEFAULT_PAPER }, i, total, pixelScale, photos)
     pdfPages.push(toPdfPage(canvas, await canvasJpeg(canvas, quality), pixelScale))
     doc.destroy()
     onProgress?.(i + 1, total)

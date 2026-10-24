@@ -2338,3 +2338,75 @@
     display: none;
   }
 }
+
+/* 사진: 종이 위·잉크 아래(page/PhotoLayer.tsx). 선택·이동 도구일 때만 테두리와 손잡이가 보인다 */
+.page-layer.photos .photo {
+  position: absolute;
+  display: block;
+  object-fit: fill;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.photo-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dashed var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.photo-frame.is-dragging {
+  border-style: solid;
+}
+.photo-grip,
+.photo-remove,
+.photo-handle {
+  position: absolute;
+  z-index: 20;
+  box-sizing: border-box;
+  border: 1.5px solid var(--line);
+  background: var(--white);
+  color: var(--muted);
+  box-shadow: 0 2px 6px rgba(31, 33, 40, 0.1);
+  touch-action: none;
+}
+.photo-grip {
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  width: 28px;
+  height: 36px;
+  padding: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+.photo-grip:active {
+  cursor: grabbing;
+}
+.photo-remove {
+  right: 0;
+  top: 0;
+  transform-origin: 100% 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.photo-remove:hover {
+  color: var(--ink, #1f2128);
+}
+.photo-handle {
+  right: 0;
+  bottom: 0;
+  transform-origin: 100% 100%;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--accent);
+  cursor: nwse-resize;
+}

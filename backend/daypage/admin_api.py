@@ -275,6 +275,14 @@ def note_detail(request, note_id: str):
     }
 
 
+@router.get("/notes/{note_id}/photos/{photo_id}")
+def note_photo(request, note_id: str, photo_id: str):
+    """장에 붙은 사진(운영자가 신고된 노트를 볼 때). 열람 기록은 장을 열 때 남는다."""
+    from .api import photo_response
+
+    return photo_response(get_object_or_404(Note, pk=note_id), photo_id)
+
+
 @router.get("/notes/{note_id}/pages/{key}")
 def note_page(request, note_id: str, key: str):
     """장 하나의 Yjs 문서(바이너리). 봉인된 장은 그대로, 쓰는 중인 장은 스냅샷과 증분을 합쳐 준다."""

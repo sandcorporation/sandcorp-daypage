@@ -4,6 +4,7 @@ import { LINE_GAP, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 import { layerOf, layerPlan, readLayers } from './layers'
 import { paintColorStrokes, paintLayers, paintPaper } from './render'
 import type { Paper } from './paper'
+import { decodePhoto, readPhotos } from './photos'
 import { textStyle } from './textStyle'
 
 export type Marks = Record<string, Record<string, unknown> | undefined>
@@ -133,8 +134,14 @@ function paintTextBox(ctx: CanvasRenderingContext2D, doc: Y.Doc, box: TextBox): 
   }
 }
 
-/** 장 전체를 캔버스 한 장에 그린다(종이 + 획 + 글 상자). PNG 저장과 책(PDF)이 함께 쓴다. */
-export async function renderPageCanvas(doc: Y.Doc, pixelScale = 1, paper?: Paper): Promise<HTMLCanvasElement> {
+/** 장 전체를 캔버스 한 장에 그린다(종이 + 사진 + 획 + 글 상자). PNG 저장과 책(PDF)이 함께 쓴다. */
+export async function renderPageCanvas(
+  doc: Y.Doc,
+  pixelScale = 1,
+  paper?: Paper,
+  /** 사진 주소 앞부분(photoBase). 없으면 사진은 빼고 그린다 */
+  photos?: string,
+): Promise<HTMLCanvasElement> {
   await document.fonts?.ready
   const canvas = document.createElement('canvas')
   canvas.width = PAGE_WIDTH * pixelScale
@@ -142,6 +149,14 @@ export async function renderPageCanvas(doc: Y.Doc, pixelScale = 1, paper?: Paper
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas를 쓸 수 없어요')
   paintPaper(ctx, pixelScale, paper)
+  // 사진은 종이 위, 채색·잉크 아래
+  ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+  for (const photo of photos ? readPhotos(doc) : []) {
+    const image = await decodePhoto(photos!, photo)
+    if (!image) continue
+    ctx.drawImage(image, photo.x, photo.y, photo.width, photo.height)
+    image.close()
+  }
   // 내가 숨긴 레이어도 담는다(모두가 본 페이지 그대로). 채색은 종이 위에 multiply로, 그 위에 펜·형광펜.
   const strokes = readStrokes(doc)
   const layers = readLayers(doc)
@@ -154,8 +169,8 @@ export async function renderPageCanvas(doc: Y.Doc, pixelScale = 1, paper?: Paper
 }
 
 /** 장 전체를 한 장의 PNG로 그린다(종이 + 획 + 글 상자). */
-export async function renderPagePng(doc: Y.Doc, pixelScale = 1, paper?: Paper): Promise<Blob> {
-  const canvas = await renderPageCanvas(doc, pixelScale, paper)
+export async function renderPagePng(doc: Y.Doc, pixelScale = 1, paper?: Paper, photos?: string): Promise<Blob> {
+  const canvas = await renderPageCanvas(doc, pixelScale, paper, photos)
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('이미지를 만들지 못했어요'))), 'image/png'),
   )

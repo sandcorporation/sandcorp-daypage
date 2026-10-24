@@ -92,6 +92,8 @@ type Props = {
   onGestureStart?: () => void
   /** 장 좌표계(1600×2400) 위에 올라가는 DOM 레이어(글 상자, 커서 등) */
   children?: ReactNode
+  /** 종이 바로 위·채색과 잉크 아래에 깔리는 DOM 레이어(사진). 포인터는 받지 않는다 */
+  underlay?: ReactNode
   /** 선택 표시 등 획 위에 겹쳐 그리는 오버레이 */
   overlay?: (ctx: CanvasRenderingContext2D) => void
   overlayVersion?: number
@@ -137,6 +139,7 @@ export function PageView({
   fitHeight = false,
   onZoom,
   children,
+  underlay,
   overlay,
   overlayVersion,
   preview,
@@ -1049,6 +1052,11 @@ export function PageView({
           className="page-layer paper"
           style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})`, ...paperStyle(paper) }}
         />
+        {underlay && (
+          <div className="page-layer photos" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
+            {underlay}
+          </div>
+        )}
         <canvas
           ref={colorCanvasRef}
           className="color-canvas"

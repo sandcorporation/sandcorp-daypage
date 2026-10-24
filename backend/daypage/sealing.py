@@ -7,7 +7,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
 
-from . import clock
+from . import clock, photos
 from .models import Note, Page
 from .pages import _merge, current_key, doc_stats, drop_empty_text_boxes
 from .points import pack_points
@@ -27,7 +27,9 @@ def seal_page(page_id: int) -> bool:
         dropped = drop_empty_text_boxes(doc)
         # 봉인된 장은 더 바뀌지 않으니 옛 숫자 배열 점을 바이너리로 다시 써 스냅샷을 줄인다.
         packed = pack_points(doc)
-        if dropped or packed:
+        # 문서에서 빠졌거나 한도를 넘은 사진은 저장소에서 지운다.
+        settled = photos.settle_sealed_photos(doc, page)
+        if dropped or packed or settled:
             page.state = doc.get_update()
         page.stroke_count, page.participant_count, page.is_empty = doc_stats(doc)
         page.sealed_at = clock.now()

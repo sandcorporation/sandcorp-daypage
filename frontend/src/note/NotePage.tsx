@@ -4,6 +4,9 @@ import { useToast } from "../components/Toast";
 import * as Y from "yjs";
 import { PageView, type PointerTool } from "../page/PageView";
 import { TextLayer } from "../page/TextLayer";
+import { PhotoControls, PhotoImages, type PhotoDrag } from "../page/PhotoLayer";
+import { photoBase } from "../page/photos";
+import { usePhotoPicker } from "../page/usePhotoPicker";
 import { createTextBoxAt, removeLeftoverEmptyBoxes } from "../page/textbox";
 import { updateTextBox } from "../page/doc";
 import { fontOf } from "../page/fonts";
@@ -238,6 +241,18 @@ export function NotePage({ initial }: Props) {
   // 내 변경에 붙이는 표식(되돌리기는 이것만 추적한다)
   const origin = useMemo(() => ({ local: true }), []);
   const history = useUndo(doc, origin);
+  // 사진: 끄는 동안의 자리(놓을 때 한 번만 문서에 쓴다)
+  const [photoDrag, setPhotoDrag] = useState<PhotoDrag | null>(null);
+  const photoPicker = usePhotoPicker({
+    doc,
+    noteId: note.id,
+    author: note.me.nickname,
+    origin,
+    scale,
+    // 붙이자마자 옮기거나 크기를 바꿀 수 있게 선택·이동 도구로
+    onPlaced: () => setTool("select"),
+    show,
+  });
   // 도형 곡선을 찍는 중이면 되돌리기는 획 대신 마지막으로 찍은 점을 지운다.
   const curveControl = useRef<{ undoPoint: () => void } | null>(null);
   const [curvePoints, setCurvePoints] = useState(0);
@@ -694,6 +709,7 @@ export function NotePage({ initial }: Props) {
         />
       )}
       <div className="note-body" data-dock={dock}>
+        {photoPicker.input}
         <Toolbar
           dock={dock}
           onDock={moveToolbar}
@@ -745,6 +761,8 @@ export function NotePage({ initial }: Props) {
           noteColors={note.colors}
           onAddColor={addColor}
           onRemoveColor={(c) => void removeColor(c)}
+          onPhoto={photoPicker.enabled ? photoPicker.open : undefined}
+          photoBlocked={photoPicker.blocked}
           layerPanel={
             <LayerPanel
               doc={doc}
@@ -800,6 +818,13 @@ export function NotePage({ initial }: Props) {
           preview={edit.preview}
           eraseTargets={edit.eraseTargets}
           onGestureStart={history.stopCapturing}
+          underlay={
+            <PhotoImages
+              doc={doc}
+              base={photoBase(note.id)}
+              preview={photoDrag}
+            />
+          }
         >
           <TextLayer
             doc={doc}
@@ -814,6 +839,14 @@ export function NotePage({ initial }: Props) {
             me={note.me.nickname}
             noteColors={note.colors}
           />
+          {tool === "select" && (
+            <PhotoControls
+              doc={doc}
+              scale={scale}
+              origin={origin}
+              onPreview={setPhotoDrag}
+            />
+          )}
           <Cursors peers={presence.peers} scale={scale} />
         </PageView>
       </div>

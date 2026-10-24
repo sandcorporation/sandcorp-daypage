@@ -411,3 +411,23 @@ describe('선택·이동 설정(내가 그린 획만 고르기)', () => {
     expect(screen.queryByRole('checkbox', { name: '내가 그린 획만 고르기' })).not.toBeInTheDocument()
   })
 })
+
+describe('사진 붙이기', () => {
+  test('사진 저장소가 없으면(onPhoto 없음) 버튼을 보이지 않는다', () => {
+    setup()
+    expect(screen.queryByRole('button', { name: '사진 붙이기' })).not.toBeInTheDocument()
+  })
+
+  test('누르면 사진을 고른다', async () => {
+    const props = setup({ onPhoto: vi.fn() })
+    await userEvent.click(screen.getByRole('button', { name: '사진 붙이기' }))
+    expect(props.onPhoto).toHaveBeenCalled()
+  })
+
+  test('한도가 차면 버튼이 꺼지고 까닭을 보인다', () => {
+    setup({ onPhoto: vi.fn(), photoBlocked: '사진은 한 페이지에 3장까지 붙일 수 있어요' })
+    const btn = screen.getByRole('button', { name: '사진 붙이기' })
+    expect(btn).toBeDisabled()
+    expect(btn).toHaveAttribute('title', '사진은 한 페이지에 3장까지 붙일 수 있어요')
+  })
+})

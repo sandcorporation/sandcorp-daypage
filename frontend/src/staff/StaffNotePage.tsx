@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { api, ApiError } from '../api/client'
 import { SealedPageView } from '../history/HistoryPage'
+import { photoBase } from '../page/photos'
 import { formatPageKey, formatShortDate, seqSuffix } from '../note/time'
 import { normalizePaper } from '../page/paper'
 import { ErrorScreen } from '../pages/ErrorScreen'
@@ -108,6 +109,7 @@ export function StaffNotePage() {
           label={selected.key === note.openPage ? `열린 페이지 · ${formatPageKey(selected.key)}` : undefined}
           paper={normalizePaper(selected.paper)}
           src={`/api/admin/notes/${noteId}/pages/${selected.key}`}
+          photos={photoBase(noteId, true)}
         />
       </main>
     </div>

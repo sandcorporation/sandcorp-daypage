@@ -134,6 +134,21 @@ class PageUpdate(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class Photo(models.Model):
+    """지면에 붙인 사진 한 장의 원본(줄인 WebP·JPEG). 바이트는 오브젝트 저장소에 두고(photos.py), 장 문서에는 id와 자리만 둔다.
+
+    올린 장에 매인다. 장 문서에서 빠진 사진은 봉인할 때 지운다(되돌리기로 다시 붙일 수 있게 그때까지 둔다).
+    """
+
+    id = models.CharField(primary_key=True, max_length=32)
+    note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="photos")
+    page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name="photos")
+    uploader = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    mime = models.CharField(max_length=20)
+    size = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class Suggestion(models.Model):
     """기능 건의. 사용자가 노트 화면에서 남기고 운영자 페이지에서 읽는다."""
 

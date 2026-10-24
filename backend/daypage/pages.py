@@ -191,11 +191,12 @@ def drop_empty_text_boxes(doc: Doc) -> int:
 
 
 def doc_stats(doc: Doc) -> tuple[int, int, bool]:
-    """(획 수, 참여 인원, 빈 장 여부). 참여 인원은 획·글 상자를 만든 사람 수."""
+    """(획 수, 참여 인원, 빈 장 여부). 참여 인원은 획·글 상자·사진을 만든 사람 수."""
     strokes = doc.get("strokes", type=Map)
     boxes = doc.get("textboxes", type=Map)
+    photos = doc.get("photos", type=Map)
     authors: set[str] = set()
-    for item in list(strokes.values()) + list(boxes.values()):
+    for item in list(strokes.values()) + list(boxes.values()) + list(photos.values()):
         if isinstance(item, Map) and item.get("author"):
             authors.add(str(item.get("author")))
-    return len(strokes), len(authors), len(strokes) == 0 and len(boxes) == 0
+    return len(strokes), len(authors), len(strokes) == 0 and len(boxes) == 0 and len(photos) == 0

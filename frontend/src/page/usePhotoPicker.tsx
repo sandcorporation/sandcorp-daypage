@@ -1,0 +1,102 @@
+import { useEffect, useRef, useState } from 'react'
+import * as Y from 'yjs'
+import { ApiError } from '../api/client'
+import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
+import { newId } from './doc'
+import { usePhotos } from './PhotoLayer'
+import {
+  addPhoto,
+  PHOTO_ACCEPT,
+  PHOTO_LIMIT,
+  PhotoTooBig,
+  photosEnabled,
+  placePhoto,
+  shrinkPhoto,
+  uploadPhoto,
+} from './photos'
+
+type Options = {
+  doc: Y.Doc
+  noteId: string
+  author: string
+  origin: unknown
+  scale: number
+  /** 붙인 뒤(선택·이동 도구로 바꿔 바로 옮길 수 있게) */
+  onPlaced?: () => void
+  show: (message: string) => void
+}
+
+/** 지금 화면에 보이는 장의 가운데(장 좌표). 장이 화면 밖이면 장 가운데 */
+function visibleCenter(scale: number): { x: number; y: number } {
+  const rect = document.querySelector('.page-frame')?.getBoundingClientRect()
+  if (!rect) return { x: PAGE_WIDTH / 2, y: PAGE_HEIGHT / 2 }
+  const left = Math.max(rect.left, 0)
+  const right = Math.min(rect.right, window.innerWidth)
+  const top = Math.max(rect.top, 0)
+  const bottom = Math.min(rect.bottom, window.innerHeight)
+  if (right <= left || bottom <= top) return { x: PAGE_WIDTH / 2, y: PAGE_HEIGHT / 2 }
+  return { x: ((left + right) / 2 - rect.left) / scale, y: ((top + bottom) / 2 - rect.top) / scale }
+}
+
+/**
+ * 사진 붙이기: 숨은 파일 고르기 칸과, 도구 막대 버튼에 넘길 open·blocked. 서버에 사진 저장소가 없으면 enabled가 false.
+ * 고른 사진은 줄여 올리고, 받은 id를 지금 보이는 자리 가운데에 붙인다.
+ */
+export function usePhotoPicker({ doc, noteId, author, origin, scale, onPlaced, show }: Options) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [enabled, setEnabled] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const count = usePhotos(doc).length
+
+  useEffect(() => {
+    let alive = true
+    void photosEnabled().then((on) => alive && setEnabled(on))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const blocked = busy
+    ? '사진을 올리는 중이에요'
+    : count >= PHOTO_LIMIT
+      ? `사진은 한 페이지에 ${PHOTO_LIMIT}장까지 붙일 수 있어요`
+      : null
+
+  async function onFile(file: File) {
+    if (count >= PHOTO_LIMIT) return
+    setBusy(true)
+    try {
+      const shrunk = await shrinkPhoto(file)
+      const src = await uploadPhoto(noteId, shrunk.data, shrunk.mime)
+      const c = visibleCenter(scale)
+      addPhoto(
+        doc,
+        { id: newId(), src, author, createdAt: Date.now(), ...placePhoto(shrunk.width, shrunk.height, c.x, c.y) },
+        origin,
+      )
+      onPlaced?.()
+    } catch (e) {
+      if (e instanceof PhotoTooBig) show('사진을 충분히 줄이지 못했어요. 다른 사진으로 해 주세요.')
+      else if (e instanceof ApiError) show(e.message)
+      else show('사진을 열지 못했어요. JPEG·PNG·WebP 사진으로 해 주세요.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const input = enabled ? (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={PHOTO_ACCEPT}
+      hidden
+      onChange={(e) => {
+        const file = e.currentTarget.files?.[0]
+        e.currentTarget.value = ''
+        if (file) void onFile(file)
+      }}
+    />
+  ) : null
+
+  return { enabled, blocked, input, open: () => inputRef.current?.click() }
+}

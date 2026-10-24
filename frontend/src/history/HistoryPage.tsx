@@ -11,6 +11,8 @@ import { downloadBlob, exportFileName, renderPagePng } from '../page/exportPng'
 import { normalizePaper, type Paper } from '../page/paper'
 import { PageView } from '../page/PageView'
 import { TextLayer } from '../page/TextLayer'
+import { PhotoImages } from '../page/PhotoLayer'
+import { photoBase } from '../page/photos'
 import { blockedKind, ErrorScreen, type BlockedKind } from '../pages/ErrorScreen'
 import '../note/note.css'
 import './history.css'
@@ -81,6 +83,7 @@ export function HistoryPage() {
             return doc
           },
         })),
+        photos: photoBase(noteId),
         onProgress: (done, total) => setBinding({ done, total }),
       })
       downloadBlob(blob, bookFileName(note.name, ordered[0].date, ordered[ordered.length - 1].date))
@@ -182,6 +185,7 @@ export function SealedPageView({
   pageKey,
   paper,
   src,
+  photos,
   label,
 }: {
   noteId: string
@@ -190,6 +194,8 @@ export function SealedPageView({
   pageKey: string
   paper: Paper
   src?: string
+  /** 사진 주소 앞부분(없으면 참여자용 photoBase(noteId)) */
+  photos?: string
   /** 제목(없으면 날짜) */
   label?: string
 }) {
@@ -200,6 +206,7 @@ export function SealedPageView({
   const onZoom = useCallback((z: number) => setZoom(z), [])
   const [saving, setSaving] = useState(false)
   const { toast, show } = useToast()
+  const photoSrc = photos ?? photoBase(noteId)
 
   useEffect(() => {
     api<ArrayBuffer>(src ?? `/api/notes/${noteId}/pages/${pageKey}`)
@@ -213,7 +220,7 @@ export function SealedPageView({
   async function save() {
     setSaving(true)
     try {
-      downloadBlob(await renderPagePng(doc, 1, paper), exportFileName(noteName, pageKey))
+      downloadBlob(await renderPagePng(doc, 1, paper, photoSrc), exportFileName(noteName, pageKey))
     } catch {
       show('이미지를 만들지 못했어요')
     } finally {
@@ -252,6 +259,7 @@ export function SealedPageView({
           onScale={setScale}
           zoom={zoom}
           onZoom={onZoom}
+          underlay={<PhotoImages doc={doc} base={photoSrc} />}
         >
           <TextLayer
             doc={doc}

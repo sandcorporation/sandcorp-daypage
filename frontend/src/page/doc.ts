@@ -2,6 +2,7 @@ import * as Y from 'yjs'
 import { DEFAULT_BRUSH, isBrush, type Brush } from './tools'
 import { matrixScale, transformPoints, type Matrix } from './transform'
 import { decodePoints, encodePoints } from './pointCodec'
+import { photosMap } from './photos'
 
 /**
  * 장 하나의 Yjs 문서 구조.
@@ -11,6 +12,7 @@ import { decodePoints, encodePoints } from './pointCodec'
  *            봉인 때 서버가 남은 points를 pts로 다시 쓴다(backend/daypage/points.py, 같은 바이트).
  * layers:    레이어 목록(layers.ts)
  * textboxes: Y.Map<boxId, Y.Map{ x, y, width, color, fontSize, font, content: Y.XmlFragment, author }>
+ * photos:    사진(photos.ts)
  * meta:      Y.Map{ date }
  */
 
@@ -259,7 +261,7 @@ export function deleteTextBox(doc: Y.Doc, id: string, origin?: unknown): void {
 }
 
 export function isPageEmpty(doc: Y.Doc): boolean {
-  return strokesMap(doc).size === 0 && textboxesMap(doc).size === 0
+  return strokesMap(doc).size === 0 && textboxesMap(doc).size === 0 && photosMap(doc).size === 0
 }
 
 export function round(v: number): number {

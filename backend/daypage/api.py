@@ -12,8 +12,8 @@ from django.shortcuts import get_object_or_404
 from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
-from . import clock, membership, moderation, pages, paper, rooms, sealing, shortcuts, suggestions
-from .models import Note, NoteBan, NoteMember, Page, Suggestion
+from . import clock, membership, moderation, pages, paper, photos, rooms, sealing, shortcuts, suggestions
+from .models import Note, NoteBan, NoteMember, Page, Photo, Suggestion
 
 
 class ApiError(Exception):
@@ -66,7 +66,12 @@ def health(request):
 @api.get("/client-config", auth=None)
 def client_config(request):
     """프론트가 실행할 때 받아 가는 설정. 오류 수집 DSN은 빌드에 넣지 않고 여기서 내려준다(운영에서만 값이 있다)."""
-    return {"sentryDsn": settings.SENTRY_FRONTEND_DSN or None, "environment": settings.SENTRY_ENVIRONMENT}
+    return {
+        "sentryDsn": settings.SENTRY_FRONTEND_DSN or None,
+        "environment": settings.SENTRY_ENVIRONMENT,
+        # 사진 저장소가 설정돼 있을 때만 사진 붙이기를 보인다
+        "photos": photos.configured(),
+    }
 
 
 @api.get("/me", auth=None)
@@ -403,11 +408,62 @@ def sealed_page_snapshot(request, note_id: str, key: str):
     return res
 
 
+@api.post("/notes/{note_id}/photos")
+def upload_photo(request, note_id: str):
+    """사진 올리기(본문은 줄인 그림 바이트 그대로). 참여자라면 누구나, 지금 쓰는 장에 매인다. 장 문서에 붙이는 건 브라우저가 한다."""
+    note = member_note(request, note_id)
+    s = photos.store()
+    if s is None:
+        raise ApiError(503, "photos_off", "지금은 사진을 붙일 수 없어요.")
+    data = request.body
+    if len(data) > photos.PHOTO_MAX_BYTES:
+        raise ApiError(413, "photo_too_big", "사진이 너무 커요.")
+    mime = photos.sniff_mime(data)
+    if mime is None:
+        raise ApiError(400, "bad_photo", "JPEG·PNG·WebP 사진만 붙일 수 있어요.")
+    with transaction.atomic():
+        page = Page.objects.select_for_update().get(pk=pages.open_page(note).pk)
+        if Photo.objects.filter(page=page).count() >= photos.UPLOADS_PER_PAGE:
+            raise ApiError(429, "photos_full", "오늘 페이지에는 사진을 더 올릴 수 없어요.")
+        photo = Photo.objects.create(id=photos.new_id(), note=note, page=page, uploader=request.user, mime=mime, size=len(data))
+        # 저장소에 못 올리면 행도 남기지 않는다(트랜잭션이 되돌린다)
+        try:
+            s.put(photos.object_key(note.id, photo.id), data, mime)
+        except Exception:
+            raise ApiError(502, "photo_store_failed", "사진을 올리지 못했어요. 잠시 뒤 다시 해 주세요.")
+    return {"id": photo.id}
+
+
+@api.get("/notes/{note_id}/photos/{photo_id}")
+def get_photo(request, note_id: str, photo_id: str):
+    note = member_note(request, note_id)
+    return photo_response(note, photo_id)
+
+
+def photo_response(note: Note, photo_id: str) -> HttpResponse:
+    """사진 원본. 저장소에서 받아 그대로 준다(같은 출처라 캔버스에 그려 저장할 수 있다)."""
+    photo = get_object_or_404(Photo, pk=photo_id, note=note)
+    s = photos.store()
+    if s is None:
+        raise Http404
+    try:
+        data = s.get(photos.object_key(note.id, photo.id))
+    except Exception:
+        raise Http404
+    res = HttpResponse(data, content_type=photo.mime)
+    # 같은 id의 사진은 바뀌지 않는다. 저장소 요청을 줄이려고 브라우저가 오래 들고 있게 한다.
+    res["Cache-Control"] = "private, max-age=31536000, immutable"
+    res["X-Content-Type-Options"] = "nosniff"
+    return res
+
+
 @api.delete("/notes/{note_id}")
 def delete_note(request, note_id: str):
     """만든 사람만 지운다. 참여자가 있어도 지우고, 장·기록까지 모두 바로 없앤다(보관하지 않음)."""
     note = owned_note(request, note_id)
+    photo_keys = [photos.object_key(note.id, pid) for pid in Photo.objects.filter(note=note).values_list("id", flat=True)]
     note.delete()
+    photos.delete_later(photo_keys)
     # 접속해 있던 사람들의 방을 닫아 '노트를 찾을 수 없어요'로 보낸다.
     transaction.on_commit(lambda: announce_note_deleted(note_id))
     return HttpResponse(status=204)

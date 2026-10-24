@@ -60,6 +60,10 @@ type Props = {
   onEyedropper?: () => void
   /** 레이어 버튼으로 여는 레이어 패널 내용. 없으면 버튼을 보이지 않는다 */
   layerPanel?: ReactNode
+  /** 사진 붙이기. 없으면 버튼을 보이지 않는다 */
+  onPhoto?: () => void
+  /** 이 장에 더 붙일 수 없거나 올리는 중일 때(버튼 설명에 까닭을 보인다) */
+  photoBlocked?: string | null
   /** 직접 정한 굵기(px). 있으면 단계 대신 쓴다 */
   customWidth?: number | null
   /** 굵기를 px로 정했을 때. 없으면 직접 정하기를 보이지 않는다 */
@@ -558,6 +562,22 @@ export function Toolbar(props: Props) {
             </ToolPopover>
           )}
         </div>
+      )}
+      {props.onPhoto && (
+        <button
+          type="button"
+          className="tool-btn"
+          aria-label="사진 붙이기"
+          title={props.photoBlocked ?? '사진 붙이기'}
+          disabled={!!props.photoBlocked}
+          onClick={props.onPhoto}
+        >
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+            <rect x="3" y="4.5" width="16" height="13" rx="2" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="8" cy="9" r="1.6" fill="currentColor" />
+            <path d="M4 16l4.5-4.5 3 3 2.5-2.5L18 16" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+          </svg>
+        </button>
       )}
       <button type="button" className="tool-btn" aria-label="되돌리기" title={`되돌리기${keyHint(keymap, 'undo')}`} disabled={!canUndo} onClick={onUndo}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
