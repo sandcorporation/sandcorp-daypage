@@ -19,6 +19,12 @@ import { anchorAt, fitScaleIn, isPanButton, pinchZoom, scrollAfterZoom, wheelZoo
 const CURVE_SNAP_PX = 22
 /** 곡선: 이 시간(ms) 안에 같은 자리를 다시 누르면 두 번 누르기 */
 const DOUBLE_TAP_MS = 400
+/** 펜슬 터치 이벤트로 긋는 획의 activePointer(포인터 id는 0 이상이라 겹치지 않는다) */
+const STYLUS_POINTER = -1
+
+type InkTool = 'pen' | 'highlighter' | 'paint'
+const inkTool = (tool: ToolKind): tool is InkTool => tool === 'pen' || tool === 'highlighter' || tool === 'paint'
+type PressureSample = { pressure: number; pointerType: string; timeStamp: number }
 
 export type PointerTool = {
   /** 이 도구가 포인터를 직접 처리하면 true를 돌려준다. */
@@ -569,7 +575,7 @@ export function PageView({
   }
 
   /** 점의 필압 값. 필압을 끄면 고정값, 만년필을 필압 없는 입력으로 쓰면 속도로 만든다. */
-  function pressure(e: { pressure: number; pointerType: string; timeStamp: number }, q: Point): number {
+  function pressure(e: PressureSample, q: Point): number {
     const real = e.pointerType !== 'mouse' && e.pressure !== 0
     let value = 0.5
     if (!pressureOn) value = 0.5
@@ -837,27 +843,10 @@ export function PageView({
       paintLive()
       return
     }
-    if (tool === 'pen' || tool === 'highlighter' || tool === 'paint') {
+    if (inkTool(tool)) {
       if (!canDrawHere()) return
       e.currentTarget.setPointerCapture(e.pointerId)
-      activePointer.current = e.pointerId
-      lastSample.current = null
-      straight.current = null
-      const firstPressure = pressure(e, p)
-      drawing.current = {
-        id: newId(),
-        tool,
-        color: ink,
-        width: tool === 'paint' ? paintWidth : strokeWidth(tool, widthLevel, customWidth),
-        points: [round(p.x), round(p.y), firstPressure],
-        author,
-        createdAt: Date.now(),
-        ...(tool === 'pen' && brush ? { brush } : {}),
-        ...(tool === 'pen' && !pressureOn ? { steady: true } : {}),
-        ...(tool === 'paint' ? { opacity: paintAlpha, ...(paintSoft ? { soft: true } : {}) } : {}),
-        ...(layer ? { layer } : {}),
-      }
-      paintLive()
+      startInk(tool, p, e.pointerId, e)
       e.preventDefault()
       return
     }
@@ -913,26 +902,104 @@ export function PageView({
     }
     const s = drawing.current
     if (s) {
-      // Shift를 누르면(그리는 도중이라도) 시작점에서 지금 위치까지 직선으로 바꾸고, 손을 뗄 때까지 직선으로 둔다.
-      if (e.shiftKey || straight.current) {
-        straight.current ??= { x: s.points[0], y: s.points[1], p: s.points[2] }
-        const start = straight.current
-        s.points = straightPoints(start, p, start.p)
-        paintLive()
-        return
-      }
-      const events = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent]
-      const rect = frameRef.current!.getBoundingClientRect()
-      for (const ev of events.length ? events : [e.nativeEvent]) {
-        const q = clampToPage(toPagePoint(ev.clientX, ev.clientY, rect, scale))
-        s.points.push(round(q.x), round(q.y), pressure(ev, q))
-      }
-      paintLive()
+      const events = e.nativeEvent.getCoalescedEvents?.() ?? []
+      extendInk(s, p, e.shiftKey, events.length ? events : [e.nativeEvent])
       return
     }
     if (activePointer.current === null) updateHover(p)
     else pointerTool?.move?.(p, e)
   }
+
+  /** 펜·형광펜·채색 획을 시작한다. id는 이 획을 맡은 포인터(펜슬 터치로 긋는 획은 STYLUS_POINTER). */
+  function startInk(tool: InkTool, p: Point, id: number, sample: PressureSample) {
+    activePointer.current = id
+    lastSample.current = null
+    straight.current = null
+    drawing.current = {
+      id: newId(),
+      tool,
+      color: ink,
+      width: tool === 'paint' ? paintWidth : strokeWidth(tool, widthLevel, customWidth),
+      points: [round(p.x), round(p.y), pressure(sample, p)],
+      author,
+      createdAt: Date.now(),
+      ...(tool === 'pen' && brush ? { brush } : {}),
+      ...(tool === 'pen' && !pressureOn ? { steady: true } : {}),
+      ...(tool === 'paint' ? { opacity: paintAlpha, ...(paintSoft ? { soft: true } : {}) } : {}),
+      ...(layer ? { layer } : {}),
+    }
+    paintLive()
+  }
+
+  /** 긋던 획에 점을 잇는다. p는 마지막 표본의 장 좌표. */
+  function extendInk(s: Stroke, p: Point, shift: boolean, samples: (PressureSample & ClientPoint)[]) {
+    // Shift를 누르면(그리는 도중이라도) 시작점에서 지금 위치까지 직선으로 바꾸고, 손을 뗄 때까지 직선으로 둔다.
+    if (shift || straight.current) {
+      straight.current ??= { x: s.points[0], y: s.points[1], p: s.points[2] }
+      const start = straight.current
+      s.points = straightPoints(start, p, start.p)
+      paintLive()
+      return
+    }
+    const rect = frameRef.current!.getBoundingClientRect()
+    for (const ev of samples) {
+      const q = clampToPage(toPagePoint(ev.clientX, ev.clientY, rect, scale))
+      s.points.push(round(q.x), round(q.y), pressure(ev, q))
+    }
+    paintLive()
+  }
+
+  // 펜슬 터치로 획 긋기. iPadOS Safari는 펜슬로 빠르게 이어 그으면 다음 획의 pointerdown을 빠뜨린다(터치 이벤트는 온다).
+  // 포인터 이벤트가 그 획을 아직 받지 않았을 때만 터치 이벤트로 긋는다. 터치가 먼저 잡으면 그 획의 포인터 이벤트는
+  // activePointer가 달라 쉰다(어느 쪽이 먼저 와도 한 획은 한 길로만 그어진다).
+  const stylusTouch = useRef<number | null>(null)
+  function stylusPoint(t: Touch): Point {
+    return clampToPage(toPagePoint(t.clientX, t.clientY, frameRef.current!.getBoundingClientRect(), scale))
+  }
+  function stylusSample(t: Touch, e: TouchEvent): PressureSample & ClientPoint {
+    return { clientX: t.clientX, clientY: t.clientY, pressure: t.force, pointerType: 'pen', timeStamp: e.timeStamp }
+  }
+  function onStylusStart(e: TouchEvent) {
+    if (readOnly || picking || !inkTool(tool) || activePointer.current !== null) return
+    const t = Array.from(e.changedTouches ?? []).find((t) => (t as Touch & { touchType?: string }).touchType === 'stylus')
+    // 글 상자 같은 DOM 위에서 누른 건 그 요소가 처리한다
+    if (!t || (e.target instanceof Element && e.target.closest('[data-page-ui]'))) return
+    if (!canDrawHere()) return
+    if (!penSeen.current) {
+      penSeen.current = true
+      onPenSeen?.()
+    }
+    lastClient.current = { x: t.clientX, y: t.clientY }
+    const p = stylusPoint(t)
+    placeRing(p)
+    onGestureStart?.()
+    stylusTouch.current = t.identifier
+    startInk(tool, p, STYLUS_POINTER, stylusSample(t, e))
+  }
+  function onStylusMove(e: TouchEvent) {
+    const t = Array.from(e.changedTouches ?? []).find((t) => t.identifier === stylusTouch.current)
+    const s = drawing.current
+    if (!t || !s || activePointer.current !== STYLUS_POINTER) return
+    lastClient.current = { x: t.clientX, y: t.clientY }
+    const p = stylusPoint(t)
+    onPointerMove?.(p)
+    placeRing(p)
+    extendInk(s, p, e.shiftKey, [stylusSample(t, e)])
+  }
+  function onStylusEnd(e: TouchEvent) {
+    if (!Array.from(e.changedTouches ?? []).some((t) => t.identifier === stylusTouch.current)) return
+    stylusTouch.current = null
+    // 그사이 두 번째 손가락 등으로 거뒀으면 남길 것이 없다
+    if (activePointer.current !== STYLUS_POINTER) return
+    activePointer.current = null
+    const s = drawing.current
+    drawing.current = null
+    if (s) addStroke(doc, s, origin)
+    paintLive()
+  }
+  // 최신 함수를 터치 리스너에서 부르기 위해 둔다
+  const stylusActions = useRef({ onStylusStart, onStylusMove, onStylusEnd })
+  stylusActions.current = { onStylusStart, onStylusMove, onStylusEnd }
 
   /** 올려 둔 위치의 커서를 도구에게 묻는다. 바뀔 때만 다시 그린다. */
   function updateHover(p: Point | null) {
@@ -1029,6 +1096,24 @@ export function PageView({
       el.removeEventListener('touchstart', blockTouch)
     }
   }, [readOnly, tool])
+
+  useEffect(() => {
+    const el = frameRef.current
+    if (!el) return
+    const start = (e: TouchEvent) => stylusActions.current.onStylusStart(e)
+    const move = (e: TouchEvent) => stylusActions.current.onStylusMove(e)
+    const end = (e: TouchEvent) => stylusActions.current.onStylusEnd(e)
+    el.addEventListener('touchstart', start, { passive: true })
+    el.addEventListener('touchmove', move, { passive: true })
+    el.addEventListener('touchend', end)
+    el.addEventListener('touchcancel', end)
+    return () => {
+      el.removeEventListener('touchstart', start)
+      el.removeEventListener('touchmove', move)
+      el.removeEventListener('touchend', end)
+      el.removeEventListener('touchcancel', end)
+    }
+  }, [])
 
   return (
     <div ref={viewportRef} className="page-viewport">
