@@ -137,6 +137,8 @@ export function NotePage({ initial }: Props) {
   const [penOnly, setPenOnly] = useState<PenOnlyMode>(prefs.penOnly);
   // 선택·이동이 내가 그린 획만 고르게(남의 획을 잘못 옮기지 않게). 브라우저에 기억한다.
   const [selectMine, setSelectMine] = useState(prefs.selectMine);
+  // 선택·이동이 빈 곳에서 끌 때 상자 대신 올가미로 두르기. 브라우저에 기억한다.
+  const [selectLasso, setSelectLasso] = useState(prefs.selectLasso);
   // 집중 모드: 머리글·아래 칩을 숨기고 툴바만 종이 위에 띄운다. 되는 기기에서는 브라우저 전체 화면까지.
   const [focus, setFocus] = useState(false);
   const toggleFocus = useCallback((on: boolean) => {
@@ -201,6 +203,7 @@ export function NotePage({ initial }: Props) {
         paintSoft,
         recentInks,
         selectMine,
+        selectLasso,
       }),
     [
       tool,
@@ -221,6 +224,7 @@ export function NotePage({ initial }: Props) {
       paintSoft,
       recentInks,
       selectMine,
+      selectLasso,
     ],
   );
   const [scale, setScale] = useState(0.5);
@@ -301,6 +305,7 @@ export function NotePage({ initial }: Props) {
     currentLayer,
     eraserR,
     selectMine ? note.me.nickname : null,
+    selectLasso,
   );
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
@@ -735,6 +740,8 @@ export function NotePage({ initial }: Props) {
           onPenOnly={setPenOnly}
           selectMine={selectMine}
           onSelectMine={setSelectMine}
+          selectLasso={selectLasso}
+          onSelectLasso={setSelectLasso}
           noteColors={note.colors}
           onAddColor={addColor}
           onRemoveColor={(c) => void removeColor(c)}

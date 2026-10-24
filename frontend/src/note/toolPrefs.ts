@@ -43,6 +43,8 @@ export type ToolPrefs = {
   recentInks: string[]
   /** 선택·이동이 내가 그린 획만 고르게(남의 획을 잘못 옮기지 않게) */
   selectMine: boolean
+  /** 선택·이동이 빈 곳에서 끌 때 상자 대신 올가미(지나간 길)로 두르기 */
+  selectLasso: boolean
 }
 
 export const DEFAULT_TOOL_PREFS: ToolPrefs = {
@@ -64,6 +66,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   paintSoft: false,
   recentInks: [],
   selectMine: false,
+  selectLasso: false,
 }
 
 const KEY = 'daypage:tool-prefs'
@@ -113,6 +116,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     paintSoft: typeof raw.paintSoft === 'boolean' ? raw.paintSoft : d.paintSoft,
     recentInks: Array.isArray(raw.recentInks) ? raw.recentInks.filter(isHexColor).slice(0, RECENT_INKS_MAX) : [],
     selectMine: typeof raw.selectMine === 'boolean' ? raw.selectMine : d.selectMine,
+    selectLasso: typeof raw.selectLasso === 'boolean' ? raw.selectLasso : d.selectLasso,
   }
 }
 

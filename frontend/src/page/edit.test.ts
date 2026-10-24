@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { addStroke, createPageDoc, moveStrokes, readStrokes, type Stroke } from './doc'
-import { strokeBounds, strokesHitBy, strokesInRect, topStrokeAt } from './hit'
+import { strokeBounds, strokesHitBy, strokesInLasso, strokesInRect, topStrokeAt } from './hit'
 import { createUndoManager } from './undo'
 
 function line(id: string, x1: number, y1: number, x2: number, y2: number, extra: Partial<Stroke> = {}): Stroke {
@@ -73,5 +73,33 @@ describe('되돌리기', () => {
     expect(readStrokes(doc)[0].points).toEqual([5, 7, 0.5, 15, 7, 0.5])
     undo.undo()
     expect(readStrokes(doc)[0].points).toEqual([0, 0, 0.5, 10, 0, 0.5])
+  })
+})
+
+describe('올가미 히트 테스트', () => {
+  // ㄷ자 올가미: 위·아래 획은 감싸고 가운데 오른쪽은 비운다
+  const lasso = [
+    { x: 0, y: 0 },
+    { x: 200, y: 0 },
+    { x: 200, y: 60 },
+    { x: 60, y: 60 },
+    { x: 60, y: 140 },
+    { x: 200, y: 140 },
+    { x: 200, y: 200 },
+    { x: 0, y: 200 },
+  ]
+
+  test('올가미 안에 점이 있는 획을 고르고, 상자로는 잡혔을 오목한 자리의 획은 빼놓는다', () => {
+    const strokes = [line('top', 20, 30, 180, 30), line('bottom', 20, 170, 180, 170), line('notch', 100, 100, 180, 100)]
+    expect(strokesInLasso(strokes, lasso).sort()).toEqual(['bottom', 'top'])
+    expect(strokesInRect(strokes, { x: 0, y: 0, width: 200, height: 200 }).sort()).toEqual(['bottom', 'notch', 'top'])
+  })
+
+  test('점이 모두 밖이어도 올가미 안을 가로지르면 고른다', () => {
+    expect(strokesInLasso([line('cross', -50, 30, 300, 30)], lasso)).toEqual(['cross'])
+  })
+
+  test('점이 셋보다 적으면 아무것도 고르지 않는다', () => {
+    expect(strokesInLasso([line('top', 20, 30, 180, 30)], lasso.slice(0, 2))).toEqual([])
   })
 })

@@ -24,8 +24,19 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-24-select-lasso',
+    date: '10월 24일 밤 -2',
+    items: [
+      {
+        kind: 'new',
+        title: '올가미로 고르기',
+        text: '선택·이동 버튼을 다시 누르면 열리는 창에서 ‘빈 곳에서 끌면’을 올가미로 바꿔 두면, 네모 상자 대신 손으로 그은 길로 둘러 원하는 획만 골라요. 이 브라우저에만 기억해요. 건의해 주셔서 고마워요!',
+      },
+    ],
+  },
+  {
     id: '2026-10-24-shortcuts',
-    date: '10월 24일 밤',
+    date: '10월 24일 밤 -1',
     items: [
       {
         kind: 'new',

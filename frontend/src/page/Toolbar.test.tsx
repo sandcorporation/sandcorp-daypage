@@ -396,6 +396,15 @@ describe('선택·이동 설정(내가 그린 획만 고르기)', () => {
     expect(screen.queryByRole('checkbox', { name: '내가 그린 획만 고르기' })).not.toBeInTheDocument()
   })
 
+  test('고르는 모양을 상자·올가미 중에 고르면 알린다', async () => {
+    const onSelectLasso = vi.fn()
+    setup({ tool: 'select', onSelectMine: vi.fn(), selectLasso: false, onSelectLasso })
+    await userEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
+    expect(screen.getByRole('radio', { name: /^상자/ })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(screen.getByRole('radio', { name: /^올가미/ }))
+    expect(onSelectLasso).toHaveBeenCalledWith(true)
+  })
+
   test('설정을 받지 않으면 창이 없다', async () => {
     setup({ tool: 'select' })
     await userEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))

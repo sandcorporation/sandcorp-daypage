@@ -81,6 +81,9 @@ type Props = {
   /** 선택·이동: 내가 그린 획만 고르기. onSelectMine이 없으면 선택 버튼에 창을 두지 않는다 */
   selectMine?: boolean
   onSelectMine?: (on: boolean) => void
+  /** 선택·이동: 빈 곳에서 끌 때 상자 대신 올가미로 두르기. onSelectLasso가 없으면 고르는 모양을 보이지 않는다 */
+  selectLasso?: boolean
+  onSelectLasso?: (on: boolean) => void
   /** 집중 모드(머리글·칩을 숨기고 종이만). 없으면 버튼을 보이지 않는다 */
   focus?: boolean
   onFocus?: (on: boolean) => void
@@ -203,7 +206,7 @@ export function Toolbar(props: Props) {
   const shapeInfo = SHAPES.find((s) => s.id === shape) ?? SHAPES[0]
   const [layersOpen, setLayersOpen] = useState(false)
   const layersRef = useRef<HTMLButtonElement>(null)
-  // 선택·이동 버튼을 다시 누르면 여는 창: 내가 그린 획만 고르기
+  // 선택·이동 버튼을 다시 누르면 여는 창: 고르는 모양(상자·올가미), 내가 그린 획만 고르기
   const [selectOpen, setSelectOpen] = useState(false)
   const selectRef = useRef<HTMLButtonElement>(null)
   const [brushOpen, setBrushOpen] = useState(false)
@@ -404,7 +407,7 @@ export function Toolbar(props: Props) {
               type="button"
               className="tool-btn"
               aria-label={props.selectMine ? '선택·이동 (내 획만)' : '선택·이동'}
-              title={`선택·이동${props.selectMine ? ' (내가 그린 획만)' : ''}${keyHint(keymap, 'select')} · 다시 누르면 설정`}
+              title={`선택·이동${props.selectLasso ? ' · 올가미' : ''}${props.selectMine ? ' (내가 그린 획만)' : ''}${keyHint(keymap, 'select')} · 다시 누르면 설정`}
               aria-pressed={tool === 'select'}
               aria-haspopup="dialog"
               aria-expanded={selectOpen}
@@ -417,7 +420,32 @@ export function Toolbar(props: Props) {
             </button>
             {selectOpen && (
               <ToolPopover title="선택·이동" anchor={selectRef} onClose={() => setSelectOpen(false)}>
-                <p className="tool-pop-caption">획을 누르거나 상자로 둘러 고른 뒤 끌어서 옮기고, 손잡이로 키우거나 돌려요.</p>
+                <p className="tool-pop-caption">
+                  획을 누르거나 {props.selectLasso ? '올가미' : '상자'}로 둘러 고른 뒤 끌어서 옮기고, 손잡이로 키우거나 돌려요.
+                </p>
+                {props.onSelectLasso && (
+                  <div className="pen-only" role="radiogroup" aria-label="고르는 모양">
+                    <p className="tool-pop-caption pen-only-title">빈 곳에서 끌면</p>
+                    <div className="pen-only-options">
+                      {[
+                        { lasso: false, name: '상자', desc: '네모 상자로 둘러 고르기' },
+                        { lasso: true, name: '올가미', desc: '지나간 길로 둘러 고르기' },
+                      ].map((m) => (
+                        <button
+                          key={m.name}
+                          type="button"
+                          role="radio"
+                          aria-checked={(props.selectLasso ?? false) === m.lasso}
+                          aria-label={`${m.name}: ${m.desc}`}
+                          className="pen-only-option"
+                          onClick={() => props.onSelectLasso?.(m.lasso)}
+                        >
+                          {m.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <label className="pressure-toggle">
                   내가 그린 획만 고르기
                   <input type="checkbox" checked={props.selectMine ?? false} onChange={(e) => props.onSelectMine?.(e.target.checked)} />

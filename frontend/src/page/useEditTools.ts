@@ -3,7 +3,17 @@ import * as Y from 'yjs'
 import { deleteStrokes, readStroke, readStrokes, strokesMap, transformStrokes, type Stroke } from './doc'
 import type { Point } from './geometry'
 import { editableStrokes, erasableStrokes, grabIds, readLayers } from './layers'
-import { normalizeRect, pathBounds, strokeBounds, strokesHitBy, strokesInRect, topStrokeAt, unionRect, type Rect } from './hit'
+import {
+  normalizeRect,
+  pathBounds,
+  strokeBounds,
+  strokesHitBy,
+  strokesInLasso,
+  strokesInRect,
+  topStrokeAt,
+  unionRect,
+  type Rect,
+} from './hit'
 import { useStrokeIndex } from './strokeIndex'
 import type { PointerTool } from './PageView'
 import type { ToolKind } from './tools'
@@ -40,6 +50,7 @@ type Drag =
   | { kind: 'scale'; ids: string[]; bounds: Rect; anchor: Point; corner: Point; m: Matrix }
   | { kind: 'rotate'; ids: string[]; bounds: Rect; center: Point; start: Point; m: Matrix }
   | { kind: 'band'; start: Point; end: Point }
+  | { kind: 'lasso'; path: Point[] }
   | { kind: 'erase'; last: Point; ids: Set<string> }
 
 /** 끄는 모서리가 어느 손잡이인지 */
@@ -60,6 +71,7 @@ function fitted(bounds: Rect, m: Matrix): Matrix {
  * 잠긴 레이어와 내가 숨긴 레이어의 획은 지우거나 고를 수 없고, 지우개는 지금 그리는 레이어의 획만 지운다.
  * 고른 묶음은 끌어서 옮기고, 모서리 손잡이로 키우거나 줄이고, 위쪽 손잡이로 돌린다(놓을 때 한 번 저장).
  * onlyAuthor를 주면 선택·이동은 그 사람(나)이 그린 획만 다룬다. 남의 획은 눌러도 고르지 않고 상자로 둘러도 빠진다.
+ * lasso면 빈 곳에서 끌 때 상자 대신 지나간 길(올가미)로 둘러 고른다.
  */
 export function useEditTools(
   doc: Y.Doc,
@@ -73,6 +85,8 @@ export function useEditTools(
   eraserRadius = ERASER_RADIUS,
   /** 있으면 선택·이동은 이 닉네임이 그린 획만 고른다('내가 그린 획만 고르기') */
   onlyAuthor?: string | null,
+  /** 빈 곳에서 끌면 상자 대신 올가미로 고른다 */
+  lasso = false,
 ) {
   const [selected, setSelected] = useState<string[]>([])
   const [version, setVersion] = useState(0)
@@ -212,7 +226,7 @@ export function useEditTools(
             drag.current = { kind: 'move', ids, start: p, bounds, m: IDENTITY }
           } else {
             setSelected([])
-            drag.current = { kind: 'band', start: p, end: p }
+            drag.current = lasso ? { kind: 'lasso', path: [p] } : { kind: 'band', start: p, end: p }
           }
           return true
         },
@@ -221,6 +235,11 @@ export function useEditTools(
           if (!d) return
           if (d.kind === 'band') {
             d.end = p
+            bump()
+            return
+          }
+          if (d.kind === 'lasso') {
+            d.path.push(p)
             bump()
             return
           }
@@ -242,8 +261,13 @@ export function useEditTools(
             setSelected(grabIds(strokesInRect(pickableNear(rect), rect), pickable(), readLayers(doc)))
             bump()
           }
+          if (d?.kind === 'lasso') {
+            const ids = d.path.length >= 3 ? strokesInLasso(pickableNear(pathBounds(d.path, 0)), d.path) : []
+            setSelected(grabIds(ids, pickable(), readLayers(doc)))
+            bump()
+          }
         },
-        // 끌던 것을 결과 없이 거둔다: 옮기던 묶음은 원래 자리로, 그리던 선택 상자는 사라진다
+        // 끌던 것을 결과 없이 거둔다: 옮기던 묶음은 원래 자리로, 그리던 선택 상자·올가미는 사라진다
         cancel() {
           drag.current = null
           setPreview(null)
@@ -252,7 +276,7 @@ export function useEditTools(
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets, strokeIndex, onlyAuthor])
+  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets, strokeIndex, onlyAuthor, lasso])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)
@@ -271,6 +295,17 @@ export function useEditTools(
         ctx.setLineDash([8 / scale, 6 / scale])
         ctx.fillRect(r.x, r.y, r.width, r.height)
         ctx.strokeRect(r.x, r.y, r.width, r.height)
+        ctx.restore()
+        return
+      }
+      if (d?.kind === 'lasso') {
+        // 지나간 길을 점선으로, 처음 점까지 닫아 안을 옅게 칠한다
+        ctx.setLineDash([8 / scale, 6 / scale])
+        ctx.beginPath()
+        d.path.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)))
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
         ctx.restore()
         return
       }

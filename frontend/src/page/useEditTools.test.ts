@@ -153,3 +153,44 @@ describe('내가 그린 획만 고르기', () => {
     expect(hook.result.current.selected).toEqual(['theirs'])
   })
 })
+
+describe('올가미로 고르기', () => {
+  function setupLasso() {
+    const doc = new Y.Doc()
+    addStroke(doc, line('top', 120, 130, 280, 130))
+    addStroke(doc, line('notch', 200, 200, 280, 200))
+    const hook = renderHook(() => useEditTools(doc, 'select', 'me', undefined, 1, undefined, undefined, null, true))
+    return { doc, hook, t: () => hook.result.current.pointerTool }
+  }
+
+  test('빈 곳에서 끌면 지나간 길로 두른 안의 획만 고른다', () => {
+    const { hook, t } = setupLasso()
+    // 위 획만 두르는 ㄱ자 길. 두 획을 모두 덮는 상자 안이지만 notch는 길 밖이다
+    act(() => void t()?.down?.({ x: 100, y: 100 }, {} as never))
+    for (const p of [{ x: 300, y: 100 }, { x: 300, y: 160 }, { x: 160, y: 160 }, { x: 160, y: 240 }, { x: 100, y: 240 }])
+      act(() => void t()?.move?.(p))
+    act(() => void t()?.up?.({ x: 100, y: 240 }, {} as never))
+    expect(hook.result.current.selected).toEqual(['top'])
+  })
+
+  test('고른 묶음은 평소처럼 끌어 옮긴다', () => {
+    const { doc, hook, t } = setupLasso()
+    act(() => void t()?.down?.({ x: 100, y: 100 }, {} as never))
+    for (const p of [{ x: 300, y: 100 }, { x: 300, y: 260 }, { x: 100, y: 260 }]) act(() => void t()?.move?.(p))
+    act(() => void t()?.up?.({ x: 100, y: 260 }, {} as never))
+    expect(hook.result.current.selected.sort()).toEqual(['notch', 'top'])
+    act(() => void t()?.down?.({ x: 200, y: 132 }, {} as never))
+    act(() => void t()?.move?.({ x: 210, y: 142 }))
+    act(() => void t()?.up?.({ x: 210, y: 142 }, {} as never))
+    expect(readStrokes(doc).find((s) => s.id === 'top')?.points).toEqual([130, 140, 0.5, 290, 140, 0.5])
+  })
+
+  test('끌다 취소하면 아무것도 고르지 않는다', () => {
+    const { hook, t } = setupLasso()
+    act(() => void t()?.down?.({ x: 100, y: 100 }, {} as never))
+    for (const p of [{ x: 300, y: 100 }, { x: 300, y: 260 }]) act(() => void t()?.move?.(p))
+    act(() => void t()?.cancel?.())
+    act(() => void t()?.up?.({ x: 100, y: 260 }, {} as never))
+    expect(hook.result.current.selected).toEqual([])
+  })
+})

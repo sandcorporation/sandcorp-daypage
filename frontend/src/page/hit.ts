@@ -98,6 +98,30 @@ export function strokesInRect(strokes: Stroke[], rect: Rect): string[] {
   return strokes.filter((s) => rectsOverlap(strokeBounds(s), rect)).map((s) => s.id)
 }
 
+/** 점이 다각형(꼭짓점 배열, 끝과 처음을 잇는다) 안에 있는지. 반직선이 변을 몇 번 건너는지로 본다. */
+function insidePolygon(p: Point, poly: Point[]): boolean {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]
+    const b = poly[j]
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
+/** 올가미(끈 길을 처음 점으로 닫은 도형)가 두른 획의 id. 점 하나라도 안에 있거나 올가미 선을 가로지르면 고른다. */
+export function strokesInLasso(strokes: Stroke[], path: Point[]): string[] {
+  if (path.length < 3) return []
+  const edges = path.map((p, i) => [p, path[(i + 1) % path.length]] as [Point, Point])
+  return strokes
+    .filter((s) =>
+      strokeSegments(s).some(
+        ([a, b]) => insidePolygon(a, path) || insidePolygon(b, path) || edges.some(([c, d]) => segmentsIntersect(a, b, c, d)),
+      ),
+    )
+    .map((s) => s.id)
+}
+
 /** 묶음 경계가 장 밖으로 나가지 않게 이동량을 줄인다. */
 export function clampMoveDelta(bounds: Rect, dx: number, dy: number): { dx: number; dy: number } {
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))

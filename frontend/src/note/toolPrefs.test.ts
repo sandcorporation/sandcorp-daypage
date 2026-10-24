@@ -12,7 +12,7 @@ function memoryStorage(initial: Record<string, string> = {}) {
 
 test('저장한 도구 설정을 다시 읽는다', () => {
   const storage = memoryStorage()
-  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', shapeFill: 0.3, pressure: false, penOnly: 'on', eraserLevel: 0, eraserWidth: 30, paintLevel: 1, paintWidth: null, paintOpacity: 0.6, paintSoft: false, recentInks: ['#123456'], selectMine: true } satisfies ToolPrefs
+  const prefs = { tool: 'shape', ink: '#E0603A', widthLevel: 2, customWidth: 18, font: 'myeongjo', brush: 'brushpen', shape: 'curve', shapeFill: 0.3, pressure: false, penOnly: 'on', eraserLevel: 0, eraserWidth: 30, paintLevel: 1, paintWidth: null, paintOpacity: 0.6, paintSoft: false, recentInks: ['#123456'], selectMine: true, selectLasso: true } satisfies ToolPrefs
   saveToolPrefs(prefs, storage)
   expect(loadToolPrefs(storage)).toEqual(prefs)
 })
@@ -79,4 +79,12 @@ test('선택·이동의 ‘내가 그린 획만 고르기’를 기억하고, �
   expect(loadToolPrefs(storage).selectMine).toBe(true)
   expect(DEFAULT_TOOL_PREFS.selectMine).toBe(false)
   expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ selectMine: 'yes' }) })).selectMine).toBe(false)
+})
+
+test('선택·이동의 올가미로 고르기를 기억하고, 불리언이 아니면 상자로 본다', () => {
+  const storage = memoryStorage()
+  saveToolPrefs({ ...DEFAULT_TOOL_PREFS, selectLasso: true }, storage)
+  expect(loadToolPrefs(storage).selectLasso).toBe(true)
+  expect(DEFAULT_TOOL_PREFS.selectLasso).toBe(false)
+  expect(loadToolPrefs(memoryStorage({ 'daypage:tool-prefs': JSON.stringify({ selectLasso: 1 }) })).selectLasso).toBe(false)
 })
