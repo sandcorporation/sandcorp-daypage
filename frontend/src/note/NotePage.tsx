@@ -5,6 +5,7 @@ import * as Y from "yjs";
 import { PageView, type PointerTool } from "../page/PageView";
 import { TextLayer } from "../page/TextLayer";
 import { PhotoControls, PhotoImages, type PhotoDrag } from "../page/PhotoLayer";
+import { PhotoPanel } from "../page/PhotoPanel";
 import { photoBase } from "../page/photos";
 import { usePhotoPicker } from "../page/usePhotoPicker";
 import { createTextBoxAt, removeLeftoverEmptyBoxes } from "../page/textbox";
@@ -243,6 +244,18 @@ export function NotePage({ initial }: Props) {
   const history = useUndo(doc, origin);
   // 사진: 끄는 동안의 자리(놓을 때 한 번만 문서에 쓴다)
   const [photoDrag, setPhotoDrag] = useState<PhotoDrag | null>(null);
+  // 사진 패널: 내 화면에서만 숨긴 사진(저장하지 않는다), 패널에서 올려 둔 사진
+  const [hiddenPhotos, setHiddenPhotos] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [highlightPhoto, setHighlightPhoto] = useState<string | null>(null);
+  const toggleHiddenPhoto = useCallback((id: string) => {
+    setHiddenPhotos((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }, []);
   const photoPicker = usePhotoPicker({
     doc,
     noteId: note.id,
@@ -761,8 +774,20 @@ export function NotePage({ initial }: Props) {
           noteColors={note.colors}
           onAddColor={addColor}
           onRemoveColor={(c) => void removeColor(c)}
-          onPhoto={photoPicker.enabled ? photoPicker.open : undefined}
-          photoBlocked={photoPicker.blocked}
+          photoPanel={
+            photoPicker.enabled ? (
+              <PhotoPanel
+                doc={doc}
+                origin={origin}
+                base={photoBase(note.id)}
+                hidden={hiddenPhotos}
+                onToggleHidden={toggleHiddenPhoto}
+                onHighlight={setHighlightPhoto}
+                onAdd={photoPicker.open}
+                addBlocked={photoPicker.blocked}
+              />
+            ) : undefined
+          }
           layerPanel={
             <LayerPanel
               doc={doc}
@@ -823,6 +848,8 @@ export function NotePage({ initial }: Props) {
               doc={doc}
               base={photoBase(note.id)}
               preview={photoDrag}
+              hidden={hiddenPhotos}
+              highlight={highlightPhoto}
             />
           }
         >
@@ -845,6 +872,7 @@ export function NotePage({ initial }: Props) {
               scale={scale}
               origin={origin}
               onPreview={setPhotoDrag}
+              hidden={hiddenPhotos}
             />
           )}
           <Cursors peers={presence.peers} scale={scale} />

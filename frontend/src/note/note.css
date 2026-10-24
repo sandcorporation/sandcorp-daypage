@@ -2410,3 +2410,19 @@
   border: 2px solid var(--accent);
   cursor: nwse-resize;
 }
+.page-layer.photos .photo.is-highlighted {
+  outline: 6px solid var(--accent);
+  outline-offset: 4px;
+}
+.photo-thumb {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--paper-dark);
+}
+.photo-empty {
+  padding: 8px 4px;
+}

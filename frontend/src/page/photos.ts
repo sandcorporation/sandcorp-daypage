@@ -7,7 +7,9 @@ import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
  * (Oracle Object Storage)에 두고, 장 문서에는 사진 id(src)와 자리만 남는다(backend/daypage/photos.py).
  * 종이 위·채색과 잉크 아래에 놓여, 사진 위에 펜으로 쓸 수 있다. 레이어에 속하지 않는다.
  *
- * photos: Y.Map<photoId, Y.Map{ x, y, width, height, src, author, createdAt }>
+ * photos: Y.Map<photoId, Y.Map{ x, y, width, height, src, author, createdAt, order? }>
+ *
+ * 어느 사진이 보이는지는 넣은 순(createdAt)으로 정하고, 보이는 사진끼리 겹치는 순서는 order로 정한다(사진 패널에서 바꾼다).
  *
  * 서버 비용 때문에 한 장에 PHOTO_LIMIT장, 한 장당 PHOTO_MAX_BYTES까지. 동시에 붙여 한도를 넘은 사진은 보이지 않고,
  * 봉인할 때 서버가 문서와 저장소에서 지운다(같은 규칙: visible_photo_ids).
@@ -32,6 +34,8 @@ export type Photo = {
   src: string
   author: string
   createdAt: number
+  /** 겹치는 순서(클수록 앞). 없으면 넣은 순 */
+  order?: number
 }
 
 export function photosMap(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
@@ -50,10 +54,11 @@ export function readPhoto(id: string, m: Y.Map<unknown>): Photo | null {
     src,
     author: m.get('author') as string,
     createdAt: (m.get('createdAt') as number | undefined) ?? 0,
+    ...(typeof m.get('order') === 'number' ? { order: m.get('order') as number } : {}),
   }
 }
 
-/** 보이는 사진: 넣은 순으로 한도 안의 것만. 아래 것부터 그린다. */
+/** 보이는 사진: 넣은 순으로 한도 안의 것만 골라, 겹치는 순서(아래 것부터)로 돌려준다. */
 export function readPhotos(doc: Y.Doc): Photo[] {
   const all: Photo[] = []
   for (const [id, m] of photosMap(doc).entries()) {
@@ -61,7 +66,35 @@ export function readPhotos(doc: Y.Doc): Photo[] {
     if (p) all.push(p)
   }
   all.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
-  return all.slice(0, PHOTO_LIMIT)
+  const visible = all.slice(0, PHOTO_LIMIT)
+  // order가 없는 사진은 넣은 순서 자리(index)를 order로 본다
+  const key = (p: Photo, i: number) => p.order ?? i
+  return visible
+    .map((p, i) => ({ p, k: key(p, i), i }))
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map(({ p }) => p)
+}
+
+/** 새로 붙이는 사진의 순서: 맨 앞 */
+export function nextPhotoOrder(doc: Y.Doc): number {
+  return readPhotos(doc).reduce((top, p, i) => Math.max(top, p.order ?? i), -1) + 1
+}
+
+/** 사진을 겹치는 순서의 to번째(0이 맨 아래)로 옮긴다. 보이는 사진 모두에 순서를 다시 매긴다(많아야 PHOTO_LIMIT장). */
+export function movePhoto(doc: Y.Doc, id: string, to: number, origin?: unknown): void {
+  const photos = readPhotos(doc)
+  const from = photos.findIndex((p) => p.id === id)
+  if (from < 0) return
+  const target = Math.min(Math.max(0, to), photos.length - 1)
+  if (target === from) return
+  const [moved] = photos.splice(from, 1)
+  photos.splice(target, 0, moved)
+  doc.transact(() => {
+    photos.forEach((p, i) => {
+      const m = photosMap(doc).get(p.id)
+      if (m && m.get('order') !== i) m.set('order', i)
+    })
+  }, origin)
 }
 
 /** 이 장에 사진을 더 붙일 수 있는지 */
@@ -79,6 +112,7 @@ export function addPhoto(doc: Y.Doc, photo: Photo, origin?: unknown): void {
     m.set('src', photo.src)
     m.set('author', photo.author)
     m.set('createdAt', photo.createdAt)
+    if (typeof photo.order === 'number') m.set('order', photo.order)
     photosMap(doc).set(photo.id, m)
   }, origin)
 }

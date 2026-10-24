@@ -6,6 +6,7 @@ import { newId } from './doc'
 import { usePhotos } from './PhotoLayer'
 import {
   addPhoto,
+  nextPhotoOrder,
   PHOTO_ACCEPT,
   PHOTO_LIMIT,
   PhotoTooBig,
@@ -14,6 +15,9 @@ import {
   shrinkPhoto,
   uploadPhoto,
 } from './photos'
+
+/** 새 사진을 이미 붙은 장 수만큼 비켜 붙이는 거리(장 좌표) */
+const PHOTO_CASCADE = 60
 
 type Options = {
   doc: Y.Doc
@@ -68,10 +72,14 @@ export function usePhotoPicker({ doc, noteId, author, origin, scale, onPlaced, s
     try {
       const shrunk = await shrinkPhoto(file)
       const src = await uploadPhoto(noteId, shrunk.data, shrunk.mime)
+      // 이미 붙은 사진과 꼭 겹치지 않게 장 수만큼 조금씩 비켜 붙인다
       const c = visibleCenter(scale)
+      const shift = PHOTO_CASCADE * count
+      c.x += shift
+      c.y += shift
       addPhoto(
         doc,
-        { id: newId(), src, author, createdAt: Date.now(), ...placePhoto(shrunk.width, shrunk.height, c.x, c.y) },
+        { id: newId(), src, author, createdAt: Date.now(), order: nextPhotoOrder(doc), ...placePhoto(shrunk.width, shrunk.height, c.x, c.y) },
         origin,
       )
       onPlaced?.()

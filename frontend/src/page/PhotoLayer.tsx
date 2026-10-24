@@ -17,17 +17,29 @@ export function usePhotos(doc: Y.Doc): Photo[] {
   return photos
 }
 
-/** 종이 위·채색 아래에 깔리는 사진들(PageView의 underlay). 포인터는 받지 않는다. base는 photoBase */
-export function PhotoImages({ doc, base, preview }: { doc: Y.Doc; base: string; preview?: PhotoDrag | null }) {
+type ImagesProps = {
+  doc: Y.Doc
+  /** 사진 주소 앞부분(photoBase) */
+  base: string
+  preview?: PhotoDrag | null
+  /** 내 화면에서만 숨긴 사진 */
+  hidden?: ReadonlySet<string>
+  /** 사진 패널에서 올려 둔 사진: 테두리로 표시 */
+  highlight?: string | null
+}
+
+/** 종이 위·채색 아래에 깔리는 사진들(PageView의 underlay). 포인터는 받지 않는다. */
+export function PhotoImages({ doc, base, preview, hidden, highlight }: ImagesProps) {
   const photos = usePhotos(doc)
   return (
     <>
-      {photos.map((p) => {
+      {photos.filter((p) => !hidden?.has(p.id)).map((p) => {
         const r = preview?.id === p.id ? preview : p
         return (
           <img
             key={p.id}
-            className="photo"
+            data-photo-id={p.id}
+            className={`photo${highlight === p.id ? ' is-highlighted' : ''}`}
             src={photoUrl(base, p.src)}
             alt=""
             draggable={false}
@@ -47,6 +59,8 @@ type ControlsProps = {
   origin: unknown
   /** 끄는 동안의 자리(놓을 때 한 번만 문서에 쓴다) */
   onPreview: (drag: PhotoDrag | null) => void
+  /** 내 화면에서만 숨긴 사진(손잡이도 숨긴다) */
+  hidden?: ReadonlySet<string>
 }
 
 /** 끄는 결과: 옮기면 장 안에, 키우면 가로세로 비율을 지키며 장 안에 */
@@ -73,11 +87,11 @@ export function dragResult(kind: 'move' | 'resize', p: Photo, dx: number, dy: nu
  * 선택·이동 도구일 때 사진마다 옮기기 손잡이·크기 손잡이·빼기 단추를 보인다(장 맨 위 레이어).
  * 사진 몸통은 누르지 않아 사진 위에 쓴 획을 그대로 고를 수 있다.
  */
-export function PhotoControls({ doc, scale, origin, onPreview }: ControlsProps) {
+export function PhotoControls({ doc, scale, origin, onPreview, hidden }: ControlsProps) {
   const photos = usePhotos(doc)
   return (
     <>
-      {photos.map((p) => (
+      {photos.filter((p) => !hidden?.has(p.id)).map((p) => (
         <PhotoControl key={p.id} photo={p} doc={doc} scale={scale} origin={origin} onPreview={onPreview} />
       ))}
     </>

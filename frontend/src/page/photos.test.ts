@@ -93,3 +93,26 @@ describe('사진 크기·자리', () => {
     expect(photoUrl(photoBase('n1', true), 'abc')).toBe('/api/admin/notes/n1/photos/abc')
   })
 })
+
+describe('겹치는 순서', () => {
+  it('새 사진은 맨 앞이고, 옮기면 모두의 순서가 바뀐다', async () => {
+    const { movePhoto, nextPhotoOrder } = await import('./photos')
+    const doc = new Y.Doc()
+    addPhoto(doc, photo('a', 1, { order: nextPhotoOrder(doc) }))
+    addPhoto(doc, photo('b', 2, { order: nextPhotoOrder(doc) }))
+    addPhoto(doc, photo('c', 3, { order: nextPhotoOrder(doc) }))
+    expect(readPhotos(doc).map((p) => p.id)).toEqual(['a', 'b', 'c'])
+    movePhoto(doc, 'c', 0)
+    expect(readPhotos(doc).map((p) => p.id)).toEqual(['c', 'a', 'b'])
+    // 순서를 바꿔도 보이는 사진(넣은 순 한도)은 그대로
+    addPhoto(doc, photo('d', 4, { order: 99 }))
+    expect(readPhotos(doc).map((p) => p.id).sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('order가 없는 옛 사진은 넣은 순서로 겹친다', () => {
+    const doc = new Y.Doc()
+    addPhoto(doc, photo('b', 2))
+    addPhoto(doc, photo('a', 1))
+    expect(readPhotos(doc).map((p) => p.id)).toEqual(['a', 'b'])
+  })
+})

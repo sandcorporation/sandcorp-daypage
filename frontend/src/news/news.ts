@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-24-photo-panel',
+    date: '10월 24일 밤 -4',
+    items: [
+      {
+        kind: 'new',
+        title: '사진 패널',
+        text: '도구 막대의 사진 버튼을 누르면 레이어 패널처럼 사진 패널이 열려요. 이 페이지에 붙은 사진을 미리보기로 한눈에 보고, 새로 붙이고, 빼고, 끌어서 겹치는 순서를 바꾸고, 내 화면에서만 숨길 수 있어요. 줄을 누르면 그 사진이 있는 자리로 옮겨 가요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-24-photos',
     date: '10월 24일 밤 -3',
     items: [
