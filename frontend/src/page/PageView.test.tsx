@@ -249,3 +249,55 @@ describe('스포이트', () => {
     expect(doc.getMap('strokes').size).toBe(0)
   })
 })
+
+// iPadOS Safari는 펜슬로 빠르게 이어 그으면 다음 획의 pointerdown을 빠뜨린다. 그 획은 터치 이벤트로 긋는다.
+describe('포인터 이벤트가 빠진 펜슬 획은 터치 이벤트로 긋는다', () => {
+  beforeEach(() => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+  })
+
+  function stylus(type: string, el: Element, x: number, y: number, touchType = 'stylus') {
+    const e = new Event(type, { bubbles: true, cancelable: true })
+    const t = { identifier: 7, clientX: x, clientY: y, force: 0.5, touchType }
+    Object.assign(e, { changedTouches: [t], touches: type === 'touchend' ? [] : [t] })
+    el.dispatchEvent(e)
+  }
+
+  function penFrame() {
+    const doc = new Y.Doc()
+    const { container } = render(<PageView doc={doc} tool="pen" ink="#000" widthLevel={1} author="나" />)
+    return { doc, el: container.querySelector('.page-frame') as HTMLElement }
+  }
+  const strokeCount = (doc: Y.Doc) => doc.getMap('strokes').size
+
+  test('pointerdown 없이 온 펜슬 터치로 획 하나를 남긴다', () => {
+    const { doc, el } = penFrame()
+    stylus('touchstart', el, 10, 10)
+    stylus('touchmove', el, 30, 30)
+    stylus('touchmove', el, 50, 40)
+    stylus('touchend', el, 50, 40)
+    expect(strokeCount(doc)).toBe(1)
+    const [stroke] = [...doc.getMap<Y.Map<unknown>>('strokes').values()]
+    expect(stroke.get('tool')).toBe('pen')
+  })
+
+  test('포인터 이벤트가 받은 획은 터치 이벤트로 한 번 더 긋지 않는다', () => {
+    const { doc, el } = penFrame()
+    fireEvent.pointerDown(el, { pointerId: 3, pointerType: 'pen', clientX: 10, clientY: 10, button: 0, buttons: 1, pressure: 0.5 })
+    stylus('touchstart', el, 10, 10)
+    fireEvent.pointerMove(el, { pointerId: 3, pointerType: 'pen', clientX: 40, clientY: 40, buttons: 1, pressure: 0.5 })
+    stylus('touchmove', el, 40, 40)
+    fireEvent.pointerUp(el, { pointerId: 3, pointerType: 'pen', clientX: 40, clientY: 40 })
+    stylus('touchend', el, 40, 40)
+    expect(strokeCount(doc)).toBe(1)
+  })
+
+  test('손가락 터치는 이 길로 긋지 않는다', () => {
+    const { doc, el } = penFrame()
+    stylus('touchstart', el, 10, 10, 'direct')
+    stylus('touchmove', el, 40, 40, 'direct')
+    stylus('touchend', el, 40, 40, 'direct')
+    expect(strokeCount(doc)).toBe(0)
+  })
+})
