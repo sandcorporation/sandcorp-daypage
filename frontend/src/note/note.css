@@ -2321,6 +2321,11 @@
 .keys-small:hover {
   background: var(--paper-dark);
 }
+.keys-error {
+  margin: 0;
+  font-size: 13px;
+  color: #b91c1c;
+}
 .keys-notice {
   flex: 1 0 100%;
   margin: 0 0 6px;

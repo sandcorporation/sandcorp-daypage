@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from 'react'
+import { api } from '../api/client'
 import type { ToolKind } from './tools'
 
 /**
- * 단축키(키 조합 → 동작). 사람마다·기기마다 다른 편의 설정이라 브라우저에만 둔다(toolPrefs처럼).
+ * 단축키(키 조합 → 동작). 사람마다 바꿀 수 있고, 바꾼 것은 계정에 저장해 어느 기기에서든 같다(아래 setKeymap).
  *
  * 키 조합은 'Mod+Shift+Z'처럼 쓴다. Mod는 Ctrl(맥은 ⌘), 끝은 눌린 자판 자리(KeyboardEvent.code)다:
  * 글자는 'P', 숫자는 '0', 나머지는 code 그대로('Equal', 'Delete'). 한글 입력 중에도 같은 자리를 누르면
@@ -205,21 +206,15 @@ function defaultStorage(): StorageLike | null {
 }
 
 /**
- * 저장된 단축키를 읽는다. 바꾼 동작만 저장되어 있고 나머지는 기본값이다.
- * 바꾼 조합이 (나중에 생긴) 기본값과 겹치면 바꾼 쪽이 이긴다.
+ * 바꾼 동작만 담은 값({동작: [키 조합]}) → 단축키 표. 나머지는 기본값이다.
+ * 바꾼 조합이 (나중에 생긴) 기본값과 겹치면 바꾼 쪽이 이긴다. 모르는 동작·망가진 조합은 버린다.
  */
-export function loadKeymap(storage: StorageLike | null = defaultStorage()): Keymap {
-  let raw: Record<string, unknown> = {}
-  try {
-    const text = storage?.getItem(KEY)
-    if (text) raw = JSON.parse(text)
-  } catch {
-    return DEFAULT_KEYMAP
-  }
-  if (!raw || typeof raw !== 'object') return DEFAULT_KEYMAP
+export function keymapFrom(raw: unknown): Keymap {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return DEFAULT_KEYMAP
+  const obj = raw as Record<string, unknown>
   const changed = new Map<ShortcutAction, string[]>()
   for (const a of SHORTCUT_ACTIONS) {
-    const v = raw[a]
+    const v = obj[a]
     if (Array.isArray(v)) changed.set(a, [...new Set(v.filter((c): c is string => typeof c === 'string' && COMBO.test(c) && !isReserved(c)))])
   }
   const used = new Set([...changed.values()].flat())
@@ -230,28 +225,84 @@ export function loadKeymap(storage: StorageLike | null = defaultStorage()): Keym
   return keymap
 }
 
-export function saveKeymap(keymap: Keymap, storage: StorageLike | null = defaultStorage()): void {
+/** 단축키 표 → 바꾼 동작만 담은 값(저장하는 모양) */
+export function changesOf(keymap: Keymap): Partial<Keymap> {
   const changed: Partial<Keymap> = {}
   for (const a of SHORTCUT_ACTIONS) if (!isDefault(keymap, a)) changed[a] = keymap[a]
+  return changed
+}
+
+/** 이 브라우저에 둔 사본을 읽는다. 계정 값을 받기 전에 바로 쓰려고 둔다. */
+export function loadKeymap(storage: StorageLike | null = defaultStorage()): Keymap {
   try {
-    storage?.setItem(KEY, JSON.stringify(changed))
+    const text = storage?.getItem(KEY)
+    return text ? keymapFrom(JSON.parse(text)) : DEFAULT_KEYMAP
   } catch {
-    // 저장할 수 없으면(시크릿 창, 저장소 차단) 이번 방문 동안만 기억한다.
+    return DEFAULT_KEYMAP
   }
 }
 
-// 단축키를 쓰는 곳(노트 화면·도구 막대 힌트·끌기 취소)이 여럿이라 한곳에 두고 구독한다.
+export function saveKeymap(keymap: Keymap, storage: StorageLike | null = defaultStorage()): void {
+  try {
+    storage?.setItem(KEY, JSON.stringify(changesOf(keymap)))
+  } catch {
+    // 저장할 수 없으면(시크릿 창, 저장소 차단) 계정 값만 쓴다.
+  }
+}
+
+/*
+ * 단축키를 쓰는 곳(노트 화면·도구 막대 힌트·끌기 취소)이 여럿이라 한곳에 두고 구독한다.
+ * 진짜 값은 계정(/api/me/shortcuts)에 있어 어느 기기에서든 같다. 브라우저 사본은 계정 값이 오기 전까지 쓴다.
+ */
 let current: Keymap | null = null
+// 이번 방문에서 사용자가 바꿨으면 늦게 온 계정 값으로 덮지 않는다
+let changedHere = false
+let fetched = false
+// 저장 요청을 차례로 보낸다(늦게 보낸 것이 먼저 닿아 옛 값으로 덮이지 않게)
+let saving: Promise<unknown> = Promise.resolve()
 const listeners = new Set<() => void>()
+
+function publish(next: Keymap) {
+  current = next
+  saveKeymap(next)
+  listeners.forEach((l) => l())
+}
 
 export function getKeymap(): Keymap {
   return (current ??= loadKeymap())
 }
 
-export function setKeymap(next: Keymap): void {
-  current = next
-  saveKeymap(next)
-  listeners.forEach((l) => l())
+/** 단축키를 바꾸고 계정에 저장한다. 계정에 저장하지 못하면 false(이 브라우저에는 남는다). */
+export function setKeymap(next: Keymap): Promise<boolean> {
+  changedHere = true
+  publish(next)
+  const body = JSON.stringify(changesOf(next))
+  const done = saving.then(() => api('/api/me/shortcuts', { method: 'PUT', body })).then(
+    () => true,
+    () => false,
+  )
+  saving = done
+  return done
+}
+
+/** 계정에 둔 단축키를 한 번 받아 온다(노트를 열 때). 실패하면 브라우저 사본을 그대로 쓴다. */
+export async function fetchKeymap(): Promise<void> {
+  if (fetched) return
+  fetched = true
+  try {
+    const raw = await api<unknown>('/api/me/shortcuts')
+    if (!changedHere) publish(keymapFrom(raw))
+  } catch {
+    fetched = false
+  }
+}
+
+/** 시험용: 모듈 상태를 처음으로 */
+export function resetKeymapStore(): void {
+  current = null
+  changedHere = false
+  fetched = false
+  saving = Promise.resolve()
 }
 
 function subscribe(listener: () => void) {

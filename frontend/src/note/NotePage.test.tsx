@@ -1,10 +1,10 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { FakeProvider } from '../test/fakeProvider'
 import { NotePage } from './NotePage'
 import type { NoteDetail } from './types'
-import { DEFAULT_KEYMAP, setKeymap } from '../page/shortcuts'
+import { DEFAULT_KEYMAP, resetKeymapStore, setKeymap } from '../page/shortcuts'
 
 vi.mock('y-websocket', async () => ({ WebsocketProvider: (await import('../test/fakeProvider')).FakeProvider }))
 
@@ -160,7 +160,30 @@ test('참여자에게는 새 페이지 시각 버튼이 없다', () => {
 })
 
 describe('단축키', () => {
-  afterEach(() => setKeymap(DEFAULT_KEYMAP))
+  // 계정 단축키(/api/me/shortcuts). 시험마다 서버가 줄 값과 받은 요청을 둔다.
+  let account: unknown
+  let saveOk: boolean
+  let puts: unknown[]
+  beforeEach(() => {
+    resetKeymapStore()
+    localStorage.clear()
+    account = {}
+    saveOk = true
+    puts = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const json = (body: unknown, status = 200) =>
+          new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+        if (url === '/api/me/shortcuts' && init?.method === 'PUT') {
+          puts.push(JSON.parse(init.body as string))
+          return saveOk ? json(puts[puts.length - 1]) : json({ detail: 'x' }, 500)
+        }
+        if (url === '/api/me/shortcuts') return json(account)
+        return json({}, 404)
+      }),
+    )
+  })
 
   test('글자 키로 도구를 바꾸고, 글을 쓰는 중에는 단축키가 쉰다', async () => {
     renderNote()
@@ -206,5 +229,29 @@ describe('단축키', () => {
     expect(screen.getByRole('button', { name: '되돌리기' })).toHaveAttribute('title', '되돌리기 (U)')
     expect(screen.getByRole('button', { name: '글씨' })).toHaveAttribute('title', '글씨 (T)')
     expect(screen.getByRole('button', { name: '지우개' })).toHaveAttribute('title', '지우개')
+  })
+
+  test('다른 기기에서 바꿔 계정에 저장된 단축키를 노트를 열 때 받아 쓴다', async () => {
+    account = { eraser: ['P'], pen: [] }
+    renderNote()
+    await waitFor(() => expect(screen.getByRole('button', { name: '지우개' })).toHaveAttribute('title', '지우개 (P)'))
+    await userEvent.keyboard('p')
+    expect(screen.getByRole('button', { name: '지우개' })).toHaveAttribute('aria-pressed', 'true')
+    // 이 브라우저에도 사본을 둔다
+    expect(JSON.parse(localStorage.getItem('daypage:shortcuts')!)).toEqual({ eraser: ['P'], pen: [] })
+  })
+
+  test('바꾼 단축키는 계정에 저장하고, 저장하지 못하면 알린다', async () => {
+    renderNote()
+    await userEvent.keyboard('{Shift>}[Slash]{/Shift}')
+    await userEvent.click(screen.getByRole('button', { name: '집중 모드 단축키 바꾸기: F' }))
+    await userEvent.keyboard('g')
+    await waitFor(() => expect(puts).toEqual([{ focus: ['G'] }]))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    saveOk = false
+    await userEvent.click(screen.getByRole('button', { name: '집중 모드 기본값으로' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('계정에 저장하지 못했어요')
+    expect(puts).toEqual([{ focus: ['G'] }, {}])
   })
 })

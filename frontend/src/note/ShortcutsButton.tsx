@@ -8,9 +8,10 @@ import {
   isDefault,
   isReserved,
   resetAction,
-  setKeymap,
+  setKeymap as saveKeymapToAccount,
   SHORTCUT_GROUPS,
   useKeymap,
+  type Keymap,
   type ShortcutAction,
 } from '../page/shortcuts'
 
@@ -41,7 +42,13 @@ export function ShortcutsButton({ open, onOpen }: Props) {
   const ref = useRef<HTMLButtonElement>(null)
   const [recording, setRecording] = useState<ShortcutAction | null>(null)
   // 키를 옮겼거나 못 쓰는 키일 때 그 줄 바로 밑에 띄우는 알림(창이 길어 맨 위·아래에 두면 안 보인다)
+  const [saveFailed, setSaveFailed] = useState(false)
   const [notice, setNotice] = useState<{ at: ShortcutAction; text: string } | null>(null)
+
+  // 계정에 저장한다. 실패해도 이 브라우저에는 남으니 알리기만 한다.
+  function setKeymap(next: Keymap) {
+    void saveKeymapToAccount(next).then((ok) => setSaveFailed(!ok))
+  }
 
   function close() {
     onOpen(false)
@@ -98,7 +105,14 @@ export function ShortcutsButton({ open, onOpen }: Props) {
       </button>
       {open && (
         <ToolPopover title="단축키" anchor={ref} align="bottom" className="keys-pop" onClose={close}>
-          <p className="tool-pop-caption">바꿀 단축키를 누른 뒤 새 키를 누르세요. 글 상자에 쓰는 동안에는 단축키가 쉬어요.</p>
+          <p className="tool-pop-caption">
+            바꿀 단축키를 누른 뒤 새 키를 누르세요. 바꾼 키는 내 계정에 저장돼 다른 기기에서도 같아요. 글 상자에 쓰는 동안에는 단축키가 쉬어요.
+          </p>
+          {saveFailed && (
+            <p className="keys-error" role="alert">
+              계정에 저장하지 못했어요. 이 브라우저에는 기억해 두고, 다음에 바꿀 때 다시 저장할게요.
+            </p>
+          )}
           {SHORTCUT_GROUPS.map((g) => (
             <section key={g.name} className="keys-group" aria-label={g.name}>
               <h3>{g.name}</h3>

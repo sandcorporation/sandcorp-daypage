@@ -44,7 +44,12 @@ import {
   type ToolbarDock,
 } from "../page/toolbarDock";
 import { stepZoom, ZoomControl, type Zoom } from "./ZoomControl";
-import { actionFor, comboOf, useKeymap } from "../page/shortcuts";
+import {
+  actionFor,
+  comboOf,
+  fetchKeymap,
+  useKeymap,
+} from "../page/shortcuts";
 import { ShortcutsButton } from "./ShortcutsButton";
 import { uniquePeople, usePresence } from "./usePresence";
 import { useNewVersion } from "./useNewVersion";
@@ -452,6 +457,10 @@ export function NotePage({ initial }: Props) {
 
   // 단축키(page/shortcuts.ts). 사용자가 바꿀 수 있어 키를 직접 보지 않고 지금 단축키 표에서 동작을 찾는다.
   const keymap = useKeymap();
+  // 계정에 둔 단축키를 받아 온다(그 전에는 이 브라우저의 사본)
+  useEffect(() => {
+    void fetchKeymap();
+  }, []);
   const [keysOpen, setKeysOpen] = useState(false);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
