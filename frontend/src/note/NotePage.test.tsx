@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { FakeProvider } from '../test/fakeProvider'
 import { NotePage } from './NotePage'
 import type { NoteDetail } from './types'
+import { DEFAULT_KEYMAP, setKeymap } from '../page/shortcuts'
 
 vi.mock('y-websocket', async () => ({ WebsocketProvider: (await import('../test/fakeProvider')).FakeProvider }))
 
@@ -156,4 +157,54 @@ test('참여자에게는 새 페이지 시각 버튼이 없다', () => {
   renderNote()
   act(() => latest().emit('sync', [true]))
   expect(screen.queryByRole('button', { name: /^새 페이지 d/ })).not.toBeInTheDocument()
+})
+
+describe('단축키', () => {
+  afterEach(() => setKeymap(DEFAULT_KEYMAP))
+
+  test('글자 키로 도구를 바꾸고, 글을 쓰는 중에는 단축키가 쉰다', async () => {
+    renderNote()
+    await userEvent.keyboard('e')
+    expect(screen.getByRole('button', { name: '지우개' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.keyboard('p')
+    expect(screen.getByRole('button', { name: /^펜/ })).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: '기능 건의' }))
+    await userEvent.type(screen.getByRole('textbox', { name: '건의 내용' }), 'e')
+    expect(screen.getByRole('button', { name: /^펜/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('단축키 창에서 키를 바꾸면 새 키로 동작하고, 다른 동작이 쓰던 키는 옮겨 왔다고 알린다', async () => {
+    renderNote()
+    await userEvent.keyboard('{Shift>}[Slash]{/Shift}')
+    expect(screen.getByRole('dialog', { name: '단축키' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '지우개 단축키 바꾸기: E' }))
+    expect(screen.getByText('새 키를 누르세요')).toBeInTheDocument()
+    await userEvent.keyboard('p')
+    expect(screen.getByText('P를 ‘펜’에서 빼서 ‘지우개’에 붙였어요.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '펜 단축키 바꾸기: 없음' })).toBeInTheDocument()
+    // 이 브라우저에 기억한다
+    expect(JSON.parse(localStorage.getItem('daypage:shortcuts')!)).toEqual({ eraser: ['P'], pen: [] })
+
+    // Esc는 새 키 받기를 그만두기만 하고 창은 닫지 않는다
+    await userEvent.click(screen.getByRole('button', { name: '펜 단축키 바꾸기: 없음' }))
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: '단축키' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: '단축키' })).not.toBeInTheDocument()
+
+    await userEvent.keyboard('p')
+    expect(screen.getByRole('button', { name: '지우개' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.keyboard('e')
+    expect(screen.getByRole('button', { name: '지우개' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('도구 막대 풍선 도움말에 지금 단축키가 보인다', async () => {
+    setKeymap({ ...DEFAULT_KEYMAP, undo: ['U'], eraser: [] })
+    renderNote()
+    expect(screen.getByRole('button', { name: '되돌리기' })).toHaveAttribute('title', '되돌리기 (U)')
+    expect(screen.getByRole('button', { name: '글씨' })).toHaveAttribute('title', '글씨 (T)')
+    expect(screen.getByRole('button', { name: '지우개' })).toHaveAttribute('title', '지우개')
+  })
 })

@@ -7,6 +7,7 @@ import { strokeBounds, unionRect } from './hit'
 import { canvasPixelRatio, fillPath, paintColorStrokes, paintLayers, paintOpacity, paintStroke, paintStrokes, softRadius } from './render'
 import { appendPlan, paintedAfter, type Painted } from './inkCache'
 import { matrixScale, transformPoints, type Matrix } from './transform'
+import { getKeymap, matches } from './shortcuts'
 import { DEFAULT_PAINT_OPACITY, fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { PAN_START_EVENT, TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
@@ -720,14 +721,14 @@ export function PageView({
     if (curve.current) curveActions.current.finishCurve(false)
   }, [tool, shape])
 
-  // 끌던 중 Esc·Ctrl+Z: 되돌리기나 집중 모드 나가기 대신 지금 하던 것(지우개·옮기기·긋던 획)을 거둔다.
+  // 끌던 중 Esc·되돌리기 단축키: 되돌리기나 집중 모드 나가기 대신 지금 하던 것(지우개·옮기기·긋던 획)을 거둔다.
   // 캡처 단계에서 잡아 전파를 끊으므로 NotePage의 되돌리기·Esc 처리는 끌던 중에는 돌지 않는다. 곡선은 제 처리(Enter·Esc)가 있다.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (activePointer.current === null || curve.current) return
       const el = e.target instanceof Element ? e.target : null
       if (el?.closest('input, textarea, [contenteditable="true"]')) return
-      const undoKey = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z'
+      const undoKey = matches(getKeymap(), 'undo', e)
       if (e.key !== 'Escape' && !undoKey) return
       e.preventDefault()
       e.stopPropagation()

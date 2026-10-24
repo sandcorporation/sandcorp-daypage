@@ -2234,3 +2234,102 @@
 .page-frame[data-picking] {
   cursor: crosshair;
 }
+
+/* 단축키 */
+.tool-pop-popover.keys-pop {
+  width: min(400px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 96px));
+}
+.keys-group h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted-2);
+}
+.keys-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.keys-group li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+.keys-group li:last-child {
+  border-bottom: 0;
+}
+.keys-label {
+  flex: 1 1 auto;
+  font-size: 14px;
+}
+.keys-combo,
+.keys-fixed,
+.keys-recording {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.keys-combo {
+  min-height: 30px;
+  padding: 2px 4px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.keys-combo:hover,
+.keys-combo:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+.keys-group kbd {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border: 1.5px solid var(--line);
+  border-bottom-width: 2.5px;
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.keys-none {
+  font-size: 12px;
+  color: var(--muted-2);
+}
+.keys-recording {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.keys-small {
+  padding: 3px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.keys-small:hover {
+  background: var(--paper-dark);
+}
+.keys-notice {
+  flex: 1 0 100%;
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--accent);
+}
+@media (max-width: 720px) {
+  /* 휴대폰에는 자판이 없다 */
+  .keys-anchor {
+    display: none;
+  }
+}

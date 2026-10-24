@@ -43,7 +43,9 @@ import {
   saveToolbarDock,
   type ToolbarDock,
 } from "../page/toolbarDock";
-import { ZoomControl, type Zoom } from "./ZoomControl";
+import { stepZoom, ZoomControl, type Zoom } from "./ZoomControl";
+import { actionFor, comboOf, useKeymap } from "../page/shortcuts";
+import { ShortcutsButton } from "./ShortcutsButton";
 import { uniquePeople, usePresence } from "./usePresence";
 import { useNewVersion } from "./useNewVersion";
 import { useRealtime, type FatalReason } from "./useRealtime";
@@ -448,28 +450,58 @@ export function NotePage({ initial }: Props) {
     [doc, ink, note.me.nickname, origin, font],
   );
 
+  // 단축키(page/shortcuts.ts). 사용자가 바꿀 수 있어 키를 직접 보지 않고 지금 단축키 표에서 동작을 찾는다.
+  const keymap = useKeymap();
+  const [keysOpen, setKeysOpen] = useState(false);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (isTypingTarget(e.target)) return;
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) redo();
-        else undo();
-      } else if (mod && e.key.toLowerCase() === "y") {
-        e.preventDefault();
-        redo();
-      } else if (
-        (e.key === "Delete" || e.key === "Backspace") &&
-        edit.selected.length
-      ) {
-        e.preventDefault();
-        edit.deleteSelected();
+      if (isTypingTarget(e.target) || e.isComposing) return;
+      const combo = comboOf(e);
+      const action = combo && actionFor(keymap, combo);
+      if (!action) return;
+      // 누르고 있으면 되풀이되는 것은 되돌리기·다시 하기·확대·축소만
+      if (e.repeat && !["undo", "redo", "zoomIn", "zoomOut"].includes(action))
+        return;
+      switch (action) {
+        case "undo":
+          undo();
+          break;
+        case "redo":
+          redo();
+          break;
+        case "delete":
+          // 고른 것이 없으면 키를 그대로 둔다
+          if (!edit.selected.length) return;
+          edit.deleteSelected();
+          break;
+        case "zoomIn":
+          setZoom(stepZoom(scale, 1));
+          break;
+        case "zoomOut":
+          setZoom(stepZoom(scale, -1));
+          break;
+        case "zoomFit":
+          setZoom("fit");
+          break;
+        case "focus":
+          toggleFocus(!focus);
+          break;
+        case "eyedropper":
+          setPicking(true);
+          break;
+        case "help":
+          // 집중 모드에서는 단축키 버튼이 없다
+          if (focus) return;
+          setKeysOpen((v) => !v);
+          break;
+        default:
+          setTool(action);
       }
+      e.preventDefault();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, edit]);
+  }, [keymap, undo, redo, edit, scale, focus, toggleFocus]);
 
   const rename = useCallback(
     async (name: string) => {
@@ -778,6 +810,7 @@ export function NotePage({ initial }: Props) {
           />
           <NewsButton />
           <SuggestButton noteId={note.id} />
+          <ShortcutsButton open={keysOpen} onOpen={setKeysOpen} />
         </div>
       )}
       <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />

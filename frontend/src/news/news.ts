@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-24-shortcuts',
+    date: '10월 24일 밤',
+    items: [
+      {
+        kind: 'new',
+        title: '단축키',
+        text: '자판으로 도구를 바로 바꿀 수 있어요. 펜 P, 지우개 E, 선택·이동 V, 글씨 T, 확대·축소 = -, 되돌리기 Ctrl+Z 같은 식이에요. 아래 왼쪽 ‘단축키’ 버튼(또는 ?)을 누르면 전체 목록이 나오고, 단축키를 눌러 원하는 키로 바꿀 수 있어요. 바꾼 키는 이 브라우저에만 기억해요. 건의해 주셔서 고마워요!',
+      },
+    ],
+  },
+  {
     id: '2026-10-24-mobile-heat',
     date: '10월 24일 오후',
     items: [
