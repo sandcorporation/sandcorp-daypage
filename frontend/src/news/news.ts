@@ -24,6 +24,22 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-25-finger-lock',
+    date: '10월 25일 밤',
+    items: [
+      {
+        kind: 'new',
+        title: '두 손가락으로 되돌리기',
+        text: '휴대폰·태블릿에서 두 손가락으로 지면을 톡 치면 되돌리고, 세 손가락으로 톡 치면 다시 해요.',
+      },
+      {
+        kind: 'new',
+        title: '손 버튼·화면 고정',
+        text: '터치 화면에서는 오른쪽 아래 확대·축소 위에 두 버튼이 생겼어요. 손 버튼을 켜면 한 손가락으로 화면을 옮기고, 자물쇠 버튼을 켜면 그리다가 손가락이 닿아도 화면이 움직이거나 확대되지 않아요. 고정 중에도 확대·축소 버튼은 그대로 써요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-24-photo-panel',
     date: '10월 24일 밤 -4',
     items: [

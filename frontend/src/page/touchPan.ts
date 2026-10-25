@@ -25,6 +25,11 @@ export const PINCH_DEADBAND = 0.025
  */
 export const PAN_START_EVENT = 'daypage:pan-start'
 
+/** 손가락 탭: 첫 손가락이 닿고 마지막 손가락이 떨어질 때까지 이 시간(ms) 안이어야 한다 */
+export const TAP_MS = 350
+/** 손가락 탭: 손가락마다 닿은 자리에서 이만큼(px) 넘게 움직이면 탭이 아니다 */
+export const TAP_SLOP = 12
+
 type Sample = { t: number; d: number; cx: number; cy: number }
 
 export class TouchPan {
@@ -37,12 +42,19 @@ export class TouchPan {
   private pinching = false
   private engageDistance = 0
   private applied = 1
+  /** 이번 터치 묶음(첫 손가락이 닿고 모두 떨어질 때까지)이 탭인지 보는 기록 */
+  private tap: { start: number; fingers: number; moved: boolean; origin: Map<number, { x: number; y: number }> } | null = null
 
   /**
    * 손가락이 닿았다. 이 손가락으로 스크롤이 시작되면 true(진행 중인 그리기는 취소해야 한다).
    * solo면 한 손가락만으로도 스크롤이다(펜 전용 모드: 손가락은 그리지 않는다).
    */
   down(id: number, x: number, y: number, solo = false, t = now()): boolean {
+    if (this.touches.size === 0) this.tap = { start: t, fingers: 0, moved: false, origin: new Map() }
+    if (this.tap) {
+      this.tap.origin.set(id, { x, y })
+      this.tap.fingers = Math.max(this.tap.fingers, this.touches.size + 1)
+    }
     this.touches.set(id, { x, y })
     if (this.touches.size === 2) {
       this.history = [this.sample(t)]
@@ -59,6 +71,8 @@ export class TouchPan {
     if (!prev) return null
     const before = this.center()
     this.touches.set(id, { x, y })
+    const o = this.tap?.origin.get(id)
+    if (this.tap && o && Math.hypot(x - o.x, y - o.y) > TAP_SLOP) this.tap.moved = true
     if (!this.active) return null
     const after = this.center()
     if (this.touches.size >= 2) {
@@ -68,13 +82,25 @@ export class TouchPan {
     return { dx: after.x - before.x, dy: after.y - before.y, cx: after.x, cy: after.y }
   }
 
-  up(id: number): void {
+  /**
+   * 손가락이 떨어졌다. 마지막 손가락이 떨어지며 여러 손가락 탭(움직이지 않고 짧게 톡)이 끝났으면 손가락 수를 돌려준다.
+   * cancelled(pointercancel)면 탭으로 보지 않는다.
+   */
+  up(id: number, t = now(), cancelled = false): number | null {
     this.touches.delete(id)
+    if (cancelled && this.tap) this.tap.moved = true
+    let tapped: number | null = null
+    if (this.touches.size === 0 && this.tap) {
+      const { start, fingers, moved } = this.tap
+      if (!moved && fingers >= 2 && t - start <= TAP_MS) tapped = fingers
+      this.tap = null
+    }
     if (this.touches.size < 2) {
       this.pinching = false
       this.history = []
     }
     if (this.touches.size === 0) this.active = false
+    return tapped
   }
 
   has(id: number): boolean {

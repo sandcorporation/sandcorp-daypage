@@ -64,6 +64,10 @@ type Props = {
   fingerScrolls?: boolean
   /** 펜(스타일러스) 입력을 처음 봤을 때 */
   onPenSeen?: () => void
+  /** 화면 고정: 손가락 스크롤·핀치와 휠 확대로 화면이 움직이지 않는다(확대·축소 버튼과 단축키는 그대로) */
+  viewLocked?: boolean
+  /** 여러 손가락으로 짧게 톡(2: 되돌리기, 3: 다시하기에 쓴다) */
+  onFingerTap?: (fingers: number) => void
   /** 지우개 반지름(장 좌표). 주면 포인터 자리에 그 크기의 동그라미를 보인다(판타블렛처럼 커서가 없어도 지울 자리가 보이게) */
   eraserRadius?: number
   /** 곡선을 찍는 동안 찍은 점 수가 바뀔 때(0이면 곡선이 끝났다). 되돌리기 버튼을 켜고 끄는 데 쓴다 */
@@ -127,6 +131,8 @@ export function PageView({
   paper = DEFAULT_PAPER,
   fingerScrolls = false,
   onPenSeen,
+  viewLocked = false,
+  onFingerTap,
   onCurveChange,
   curveControl,
   pressureOn = true,
@@ -204,6 +210,8 @@ export function PageView({
   const restore = useRef<ZoomAnchor | null>(null)
   const scaleRef = useRef(scale)
   scaleRef.current = scale
+  const lockedRef = useRef(viewLocked)
+  lockedRef.current = viewLocked
 
   useLayoutEffect(() => {
     const el = viewportRef.current
@@ -307,6 +315,7 @@ export function PageView({
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return
       e.preventDefault()
+      if (lockedRef.current) return
       const acc = wheelAcc.current
       if (acc) {
         acc.delta += e.deltaY
@@ -797,7 +806,7 @@ export function PageView({
         // 첫 손가락을 잡은 글 상자 등이 끌기를 거두게 한다(그 요소는 stopPropagation 없이 손가락을 우리에게도 알렸다)
         frame?.dispatchEvent(new Event(PAN_START_EVENT))
       }
-      if (pan.active && vp && frame && !pinch.current) {
+      if (pan.active && vp && frame && !pinch.current && !viewLocked) {
         const r = frame.getBoundingClientRect()
         pinch.current = {
           scale: scaleRef.current,
@@ -872,6 +881,7 @@ export function PageView({
     if (e.pointerType === 'touch') {
       const d = touchPan.current.move(e.pointerId, e.clientX, e.clientY)
       if (touchPan.current.active) {
+        if (viewLocked) return
         if (d) panBy(-d.dx, -d.dy)
         // 거리 판정은 프레임마다 한 번(previewPinch에서, 두 손가락이 모두 갱신된 뒤)
         const pz = pinch.current
@@ -1014,8 +1024,9 @@ export function PageView({
       return
     }
     if (e.pointerType === 'touch') {
-      touchPan.current.up(e.pointerId)
+      const fingers = touchPan.current.up(e.pointerId, undefined, e.type === 'pointercancel')
       if (pinch.current) commitPinch()
+      if (fingers) onFingerTap?.(fingers)
     }
     if (e.pointerId !== activePointer.current) return
     activePointer.current = null
@@ -1116,7 +1127,7 @@ export function PageView({
   }, [])
 
   return (
-    <div ref={viewportRef} className="page-viewport">
+    <div ref={viewportRef} className="page-viewport" style={viewLocked ? { overflow: 'hidden' } : undefined}>
       <div
         ref={frameRef}
         className="page-frame"

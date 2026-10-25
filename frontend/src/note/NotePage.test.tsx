@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { FakeProvider } from '../test/fakeProvider'
@@ -136,6 +136,56 @@ test('집중 모드를 켜면 머리글·아래 칩이 숨고 전체 화면을 �
   expect(screen.getByRole('button', { name: '확대' })).toBeInTheDocument()
   await userEvent.keyboard('{Escape}')
   expect(screen.getByRole('button', { name: '링크 공유' })).toBeInTheDocument()
+})
+
+describe('손가락·화면 고정', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+  })
+  const frame = () => document.querySelector('.page-frame') as HTMLElement
+  const touch = (type: 'pointerDown' | 'pointerUp', id: number, x: number) =>
+    fireEvent[type](frame(), { pointerId: id, pointerType: 'touch', clientX: x, clientY: 100, button: 0, buttons: 1 })
+
+  test('두 손가락 탭은 되돌리기, 세 손가락 탭은 다시하기', async () => {
+    renderNote()
+    act(() => latest().emit('sync', [true]))
+    const strokes = () => latest().awareness.doc.getMap('strokes').size
+    fireEvent.pointerDown(frame(), { pointerId: 9, pointerType: 'mouse', clientX: 50, clientY: 50, button: 0, buttons: 1 })
+    fireEvent.pointerMove(frame(), { pointerId: 9, pointerType: 'mouse', clientX: 90, clientY: 90, buttons: 1 })
+    fireEvent.pointerUp(frame(), { pointerId: 9, pointerType: 'mouse', clientX: 90, clientY: 90 })
+    expect(strokes()).toBe(1)
+
+    touch('pointerDown', 1, 100)
+    touch('pointerDown', 2, 200)
+    touch('pointerUp', 1, 100)
+    touch('pointerUp', 2, 200)
+    expect(strokes()).toBe(0)
+
+    touch('pointerDown', 1, 100)
+    touch('pointerDown', 2, 200)
+    touch('pointerDown', 3, 300)
+    touch('pointerUp', 1, 100)
+    touch('pointerUp', 2, 200)
+    touch('pointerUp', 3, 300)
+    expect(strokes()).toBe(1)
+  })
+
+  test('화면 고정·손 버튼은 누르면 켜지고 알리며, 이 브라우저에 기억한다', async () => {
+    renderNote()
+    const lock = screen.getByRole('button', { name: '화면 고정' })
+    expect(lock).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(lock)
+    expect(lock).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText(/화면을 고정했어요/)).toBeInTheDocument()
+    expect(document.querySelector<HTMLElement>('.page-viewport')!.style.overflow).toBe('hidden')
+
+    const hand = screen.getByRole('button', { name: '손가락으로 화면 옮기기' })
+    await userEvent.click(hand)
+    expect(hand).toHaveAttribute('aria-pressed', 'true')
+    expect(JSON.parse(localStorage.getItem('daypage:tool-prefs')!)).toMatchObject({ viewLock: true, penOnly: 'on' })
+  })
 })
 
 test('만든 사람에게만 새 페이지 시각 버튼이 보이고, 봉인 예정이 바뀌었다는 알림에 카운트다운이 바뀐다', () => {
