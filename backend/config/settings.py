@@ -70,10 +70,19 @@ DATABASES = {
         "PASSWORD": env("POSTGRES_PASSWORD", "daypage"),
         "HOST": env("POSTGRES_HOST", "127.0.0.1"),
         "PORT": env("POSTGRES_PORT", "5432"),
-        # 연결을 재사용한다. 0(기본값)이면 웹소켓의 DB 작업마다 연결을 새로 열어
-        # Postgres가 연결마다 프로세스를 띄우느라 CPU를 다 쓴다.
-        "CONN_MAX_AGE": int(env("DB_CONN_MAX_AGE", "60")),
-        "CONN_HEALTH_CHECKS": True,
+        # 연결은 프로세스마다 풀로 재사용한다. 풀 없이 열고 닫으면 웹소켓의 DB 작업마다 연결을 새로 열어
+        # Postgres가 연결마다 프로세스를 띄우느라 CPU를 다 쓴다. 그렇다고 CONN_MAX_AGE로 붙잡으면 ASGI에서는
+        # HTTP 요청마다 새 스레드라 끝난 스레드의 연결이 닫히지 않고 쌓여 max_connections(100)에 닿고 500이 난다.
+        # 풀은 CONN_MAX_AGE 0과 함께 쓴다. 백엔드 2 + 워커·비트 프로세스마다 max_size라 합이 100 아래여야 한다.
+        "CONN_MAX_AGE": 0,
+        "OPTIONS": {
+            "pool": {
+                "min_size": int(env("DB_POOL_MIN", "1")),
+                "max_size": int(env("DB_POOL_MAX", "12")),
+                # 풀이 다 차 있으면 이만큼(초) 기다린 뒤 오류를 낸다
+                "timeout": 10,
+            },
+        },
     }
 }
 
