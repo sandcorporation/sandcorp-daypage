@@ -13,6 +13,7 @@ import { getKeymap, matches } from './shortcuts'
 import { DEFAULT_PAINT_OPACITY, fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { PAN_START_EVENT, TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
+import { smoothPoints, smoothTailFrom } from './inkSmooth'
 import { DEFAULT_SHAPE, closedShape, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
 import { DEFAULT_PAPER, paperPalette, paperStyle, type Paper } from './paper'
 import { anchorAt, fitScaleIn, isPanButton, pinchZoom, scrollAfterZoom, wheelZoom, type ClientPoint, type ZoomAnchor } from './viewport'
@@ -178,6 +179,8 @@ export function PageView({
   const lastSample = useRef<{ x: number; y: number; t: number; p: number } | null>(null)
   /** Shift 직선의 시작점(직선으로 바뀐 획만). 손을 떼면 비운다. */
   const straight = useRef<{ x: number; y: number; p: number } | null>(null)
+  // 긋는 중인 획의 받은 그대로의 점. 획에는 이것을 고른 점을 둔다(inkSmooth.ts).
+  const rawInk = useRef<number[]>([])
   /** 도형 도구: 끌기 시작한 곳 */
   const shapeStart = useRef<Point | null>(null)
   /** n점 곡선: 찍은 점들과 마지막으로 찍은 점(두 번 눌러 끝내기 판정용) */
@@ -1129,6 +1132,7 @@ export function PageView({
     activePointer.current = id
     lastSample.current = null
     straight.current = null
+    rawInk.current = []
     drawing.current = {
       id: newId(),
       tool,
@@ -1142,6 +1146,7 @@ export function PageView({
       ...(tool === 'paint' ? { opacity: paintAlpha, ...(paintSoft ? { soft: true } : {}) } : {}),
       ...(layer ? { layer } : {}),
     }
+    rawInk.current = drawing.current.points.slice()
     paintLive()
   }
 
@@ -1156,11 +1161,34 @@ export function PageView({
       return
     }
     const rect = frameRef.current!.getBoundingClientRect()
+    const raw = rawInk.current
+    const before = raw.length
     for (const ev of samples) {
       const q = clampToPage(toPagePoint(ev.clientX, ev.clientY, rect, scale))
-      s.points.push(round(q.x), round(q.y), pressure(ev, q))
+      raw.push(round(q.x), round(q.y), pressure(ev, q))
+    }
+    // 화면 정수 픽셀로 잘린 좌표의 계단을 편다(inkSmooth.ts). 새 점 근처의 끝부분만 다시 고른다.
+    const from = Math.min(smoothTailFrom(raw, 1 / scale), before / 3)
+    const smooth = smoothPoints(raw, 1 / scale, from)
+    s.points.length = raw.length
+    for (let i = from * 3; i < raw.length; i += 3) {
+      s.points[i] = round(smooth[i])
+      s.points[i + 1] = round(smooth[i + 1])
+      s.points[i + 2] = raw[i + 2]
     }
     paintLive()
+  }
+
+  /** 다 그은 획을 문서에 남기기 전에 점 전체를 한 번 고른다(직선은 그대로) */
+  function finishInk(s: Stroke) {
+    const raw = rawInk.current
+    rawInk.current = []
+    if (straight.current || raw.length !== s.points.length) return
+    const smooth = smoothPoints(raw, 1 / scale)
+    for (let i = 0; i < raw.length; i += 3) {
+      s.points[i] = round(smooth[i])
+      s.points[i + 1] = round(smooth[i + 1])
+    }
   }
 
   // 펜슬 터치로 획 긋기. iPadOS Safari는 펜슬로 빠르게 이어 그으면 다음 획의 pointerdown을 빠뜨린다(터치 이벤트는 온다).
@@ -1208,7 +1236,10 @@ export function PageView({
     activePointer.current = null
     const s = drawing.current
     drawing.current = null
-    if (s) addStroke(doc, s, origin)
+    if (s) {
+      finishInk(s)
+      addStroke(doc, s, origin)
+    }
     paintLive()
   }
   // 최신 함수를 터치 리스너에서 부르기 위해 둔다
@@ -1251,6 +1282,7 @@ export function PageView({
     const s = drawing.current
     if (s) {
       drawing.current = null
+      finishInk(s)
       addStroke(doc, s, origin)
       paintLive()
       return
