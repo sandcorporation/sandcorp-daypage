@@ -31,6 +31,8 @@ export type ToolPrefs = {
   pressure: boolean
   /** 펜 전용 모드(penOnly.ts): 펜을 쓰면 손가락은 스크롤만 */
   penOnly: PenOnlyMode
+  /** 화면 고정: 손가락·휠로 화면이 움직이거나 확대되지 않는다 */
+  viewLock: boolean
   /** 지우개 크기 단계와 직접 정한 지름(px). 있으면 단계 대신 쓴다 */
   eraserLevel: WidthLevel
   eraserWidth: number | null
@@ -58,6 +60,7 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   shapeFill: 0,
   pressure: true,
   penOnly: DEFAULT_PEN_ONLY,
+  viewLock: false,
   eraserLevel: 1,
   eraserWidth: null,
   paintLevel: 1,
@@ -108,6 +111,7 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     shapeFill: isShapeFill(raw.shapeFill) ? raw.shapeFill : d.shapeFill,
     pressure: typeof raw.pressure === 'boolean' ? raw.pressure : d.pressure,
     penOnly: isPenOnlyMode(raw.penOnly) ? raw.penOnly : d.penOnly,
+    viewLock: typeof raw.viewLock === 'boolean' ? raw.viewLock : d.viewLock,
     eraserLevel: [0, 1, 2].includes(raw.eraserLevel as number) ? (raw.eraserLevel as WidthLevel) : d.eraserLevel,
     eraserWidth: typeof raw.eraserWidth === 'number' ? clampCustomWidth(raw.eraserWidth) : null,
     paintLevel: [0, 1, 2].includes(raw.paintLevel as number) ? (raw.paintLevel as WidthLevel) : d.paintLevel,

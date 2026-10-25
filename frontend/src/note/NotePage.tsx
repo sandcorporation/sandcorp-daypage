@@ -48,6 +48,7 @@ import {
   type ToolbarDock,
 } from "../page/toolbarDock";
 import { stepZoom, ZoomControl, type Zoom } from "./ZoomControl";
+import { ViewControl } from "./ViewControl";
 import {
   actionFor,
   comboOf,
@@ -139,6 +140,8 @@ export function NotePage({ initial }: Props) {
   const [brush, setBrush] = useState<Brush>(prefs.brush);
   const [pressureOn, setPressureOn] = useState(prefs.pressure);
   const [penOnly, setPenOnly] = useState<PenOnlyMode>(prefs.penOnly);
+  // 화면 고정: 손가락·휠로 화면이 움직이지 않게. 기기마다 쓰는 법이 달라 브라우저에 기억한다.
+  const [viewLock, setViewLock] = useState(prefs.viewLock);
   // 선택·이동이 내가 그린 획만 고르게(남의 획을 잘못 옮기지 않게). 브라우저에 기억한다.
   const [selectMine, setSelectMine] = useState(prefs.selectMine);
   // 선택·이동이 빈 곳에서 끌 때 상자 대신 올가미로 두르기. 브라우저에 기억한다.
@@ -179,9 +182,32 @@ export function NotePage({ initial }: Props) {
     setPenSeen(true);
     if (penOnly === "auto")
       show(
-        "펜이 감지돼 손가락은 스크롤만 해요. 펜 창의 ‘손가락’에서 바꿀 수 있어요.",
+        "펜이 감지돼 손가락은 화면만 옮겨요. 오른쪽 아래 손 버튼으로 바꿀 수 있어요.",
       );
   }, [penOnly, show]);
+  const fingerMoves = fingerScrollsOnly(penOnly, penSeen);
+  const chooseFingerMoves = useCallback(
+    (on: boolean) => {
+      setPenOnly(on ? "on" : "off");
+      show(
+        on
+          ? "손가락은 화면을 옮겨요. 펜이나 마우스로는 그대로 그려요."
+          : "손가락으로 그려요. 화면은 두 손가락으로 옮겨요.",
+      );
+    },
+    [show],
+  );
+  const chooseViewLock = useCallback(
+    (on: boolean) => {
+      setViewLock(on);
+      show(
+        on
+          ? "화면을 고정했어요. 확대·축소 버튼은 그대로 쓸 수 있어요."
+          : "화면 고정을 풀었어요.",
+      );
+    },
+    [show],
+  );
   const [shape, setShape] = useState<ShapeKind>(prefs.shape);
   const [shapeFill, setShapeFill] = useState<ShapeFill>(prefs.shapeFill);
   // 고른 노트 색이 노트에서 빠졌으면 기본 잉크로 돌아간다.
@@ -199,6 +225,7 @@ export function NotePage({ initial }: Props) {
         shapeFill,
         pressure: pressureOn,
         penOnly,
+        viewLock,
         eraserLevel,
         eraserWidth,
         paintLevel,
@@ -220,6 +247,7 @@ export function NotePage({ initial }: Props) {
       shapeFill,
       pressureOn,
       penOnly,
+      viewLock,
       eraserLevel,
       eraserWidth,
       paintLevel,
@@ -278,6 +306,20 @@ export function NotePage({ initial }: Props) {
   const redo = useCallback(() => {
     if (curvePoints === 0) history.redo();
   }, [curvePoints, history]);
+
+  // 두 손가락으로 톡: 되돌리기, 세 손가락: 다시하기(Procreate·GoodNotes 방식)
+  const onFingerTap = useCallback(
+    (fingers: number) => {
+      if (fingers === 2) {
+        if (history.canUndo || curvePoints > 0) undo();
+        else show("되돌릴 것이 없어요.");
+      } else if (fingers === 3) {
+        if (history.canRedo && curvePoints === 0) redo();
+        else show("다시 할 것이 없어요.");
+      }
+    },
+    [history.canUndo, history.canRedo, curvePoints, undo, redo, show],
+  );
 
   // 레이어: 지금 그리는 레이어는 연결마다 따로다. 고른 레이어가 사라지면 맨 위 레이어로.
   const { layers } = useLayers(doc);
@@ -819,8 +861,10 @@ export function NotePage({ initial }: Props) {
           onCurveChange={setCurvePoints}
           curveControl={curveControl}
           pressureOn={pressureOn}
-          fingerScrolls={fingerScrollsOnly(penOnly, penSeen)}
+          fingerScrolls={fingerMoves}
           onPenSeen={onPenSeen}
+          viewLocked={viewLock}
+          onFingerTap={onFingerTap}
           layer={currentLayer}
           hiddenLayers={hiddenLayers}
           highlightLayer={highlightLayer}
@@ -890,6 +934,12 @@ export function NotePage({ initial }: Props) {
           <ShortcutsButton open={keysOpen} onOpen={setKeysOpen} />
         </div>
       )}
+      <ViewControl
+        fingerMoves={fingerMoves}
+        onFingerMoves={chooseFingerMoves}
+        locked={viewLock}
+        onLocked={chooseViewLock}
+      />
       <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
       {confirmDelete && (
         <ConfirmDialog

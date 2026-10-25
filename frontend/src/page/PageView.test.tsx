@@ -301,3 +301,62 @@ describe('포인터 이벤트가 빠진 펜슬 획은 터치 이벤트로 긋는
     expect(strokeCount(doc)).toBe(0)
   })
 })
+
+describe('여러 손가락 탭과 화면 고정', () => {
+  beforeEach(() => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+  })
+  const touch = (type: 'pointerDown' | 'pointerMove' | 'pointerUp', el: Element, id: number, x: number, y: number) =>
+    fireEvent[type](el, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, button: 0, buttons: 1 })
+
+  test('두 손가락 탭은 onFingerTap(2)를 부르고, 첫 손가락이 긋기 시작한 획은 남기지 않는다', () => {
+    const doc = new Y.Doc()
+    const onFingerTap = vi.fn()
+    const { container } = render(<PageView doc={doc} tool="pen" ink="#000" widthLevel={1} author="나" onFingerTap={onFingerTap} />)
+    const el = container.querySelector('.page-frame') as HTMLElement
+    touch('pointerDown', el, 1, 100, 100)
+    touch('pointerDown', el, 2, 200, 100)
+    touch('pointerUp', el, 1, 100, 100)
+    expect(onFingerTap).not.toHaveBeenCalled()
+    touch('pointerUp', el, 2, 200, 100)
+    expect(onFingerTap).toHaveBeenCalledWith(2)
+    expect(doc.getMap('strokes').size).toBe(0)
+  })
+
+  test('화면 고정이면 두 손가락으로 끌어도 화면이 움직이지 않고, Ctrl+휠 확대도 하지 않는다', () => {
+    const onZoom = vi.fn()
+    const { container } = render(
+      <PageView doc={new Y.Doc()} tool="pen" ink="#000" widthLevel={1} author="나" viewLocked onZoom={onZoom} />,
+    )
+    const vp = container.querySelector('.page-viewport') as HTMLElement
+    const el = container.querySelector('.page-frame') as HTMLElement
+    expect(vp.style.overflow).toBe('hidden')
+    // jsdom에는 배치가 없어 손가락 스크롤은 문서를 옮긴다
+    const page = document.scrollingElement ?? document.documentElement
+    page.scrollTop = 50
+    touch('pointerDown', el, 1, 100, 100)
+    touch('pointerDown', el, 2, 200, 100)
+    touch('pointerMove', el, 1, 100, 40)
+    touch('pointerMove', el, 2, 200, 40)
+    touch('pointerUp', el, 1, 100, 40)
+    touch('pointerUp', el, 2, 200, 40)
+    expect(page.scrollTop).toBe(50)
+    const wheel = new WheelEvent('wheel', { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true })
+    vp.dispatchEvent(wheel)
+    expect(wheel.defaultPrevented).toBe(true)
+    expect(onZoom).not.toHaveBeenCalled()
+  })
+
+  test('고정하지 않으면 두 손가락으로 끌어 화면을 옮긴다', () => {
+    const { container } = render(<PageView doc={new Y.Doc()} tool="pen" ink="#000" widthLevel={1} author="나" />)
+    const el = container.querySelector('.page-frame') as HTMLElement
+    const page = document.scrollingElement ?? document.documentElement
+    page.scrollTop = 50
+    touch('pointerDown', el, 1, 100, 100)
+    touch('pointerDown', el, 2, 200, 100)
+    touch('pointerMove', el, 1, 100, 80)
+    touch('pointerMove', el, 2, 200, 80)
+    expect(page.scrollTop).not.toBe(50)
+  })
+})

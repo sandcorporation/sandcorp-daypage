@@ -149,3 +149,59 @@ describe('두 손가락 끌기: 거리가 흔들려도 핀치가 아니다', () 
     expect(pan.pinchRatio()).toBeGreaterThan(1.1)
   })
 })
+
+describe('여러 손가락 탭', () => {
+  it('두 손가락으로 짧게 톡 치면 마지막 손가락이 떨어질 때 2를 돌려준다', () => {
+    const pan = new TouchPan()
+    pan.down(1, 100, 100, false, 0)
+    pan.down(2, 200, 100, false, 20)
+    expect(pan.up(1, 120)).toBeNull()
+    expect(pan.up(2, 150)).toBe(2)
+  })
+
+  it('세 손가락이면 3', () => {
+    const pan = new TouchPan()
+    pan.down(1, 100, 100, false, 0)
+    pan.down(2, 150, 100, false, 10)
+    pan.down(3, 200, 100, false, 20)
+    pan.up(1, 100)
+    pan.up(2, 110)
+    expect(pan.up(3, 120)).toBe(3)
+  })
+
+  it('한 손가락 탭, 움직인 손가락, 오래 누른 것, 취소된 것은 탭이 아니다', () => {
+    const one = new TouchPan()
+    one.down(1, 0, 0, false, 0)
+    expect(one.up(1, 50)).toBeNull()
+
+    const moved = new TouchPan()
+    moved.down(1, 0, 0, false, 0)
+    moved.down(2, 100, 0, false, 10)
+    moved.move(2, 100, 30, 50)
+    moved.up(1, 100)
+    expect(moved.up(2, 110)).toBeNull()
+
+    const slow = new TouchPan()
+    slow.down(1, 0, 0, false, 0)
+    slow.down(2, 100, 0, false, 10)
+    slow.up(1, 400)
+    expect(slow.up(2, 410)).toBeNull()
+
+    const cancelled = new TouchPan()
+    cancelled.down(1, 0, 0, false, 0)
+    cancelled.down(2, 100, 0, false, 10)
+    cancelled.up(1, 50, true)
+    expect(cancelled.up(2, 60)).toBeNull()
+  })
+
+  it('조금 흔들린 것(TAP_SLOP 안)은 탭이고, 탭이 끝나면 다음 묶음은 새로 센다', () => {
+    const pan = new TouchPan()
+    pan.down(1, 0, 0, false, 0)
+    pan.down(2, 100, 0, false, 10)
+    pan.move(1, 5, 5, 50)
+    pan.up(1, 100)
+    expect(pan.up(2, 110)).toBe(2)
+    pan.down(1, 0, 0, false, 1000)
+    expect(pan.up(1, 1050)).toBeNull()
+  })
+})
