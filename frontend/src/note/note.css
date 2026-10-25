@@ -1237,6 +1237,34 @@
 .layer-row.dragging {
   opacity: 0.5;
 }
+/* 놓을 자리: 끄는 줄이 들어갈 쪽에 선 */
+.layer-row.drop-above {
+  box-shadow: 0 -3px 0 var(--accent);
+}
+.layer-row.drop-below {
+  box-shadow: 0 3px 0 var(--accent);
+}
+/* 순서 바꾸기 손잡이: 손가락으로 끌어도 목록이 스크롤되지 않게 */
+.layer-grip {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.layer-grip:active {
+  cursor: grabbing;
+}
 .layer-row.hidden-layer .layer-pick {
   opacity: 0.55;
 }
