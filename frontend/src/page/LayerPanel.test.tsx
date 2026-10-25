@@ -122,17 +122,61 @@ describe('이름·순서·숨기기·불투명도', () => {
     expect(readLayers(doc)[0].opacity).toBe(0.4)
   })
 
-  test('끌어서 놓으면 순서가 바뀐다', () => {
+  // jsdom에는 배치가 없어 줄마다 세로 자리를 정해 둔다(위에서부터 50px씩)
+  function layoutRows() {
+    rows().forEach((li, i) => {
+      li.getBoundingClientRect = () => ({ top: i * 50, bottom: i * 50 + 50, left: 0, right: 300, width: 300, height: 50, x: 0, y: i * 50, toJSON() {} })
+    })
+  }
+  const pointer = (type: 'pointerDown' | 'pointerMove' | 'pointerUp', target: Element | Window, clientY: number, pointerType = 'touch') =>
+    fireEvent[type](target, { pointerId: 7, pointerType, clientX: 10, clientY, button: 0, buttons: 1 })
+
+  test('아이패드: 손잡이를 손가락으로 끌어 놓으면 순서가 바뀌고, 끄는 동안 놓을 자리가 보인다', () => {
     const doc = createPageDoc('2026-10-16')
     const top = addLayer(doc)!
     setup(doc)
+    layoutRows()
     const [topRow, baseRow] = rows()
-    act(() => {
-      fireEvent.dragStart(baseRow)
-      fireEvent.dragOver(topRow)
-      fireEvent.drop(topRow)
-    })
+    act(() => void pointer('pointerDown', within(baseRow).getByRole('button', { name: '레이어 1 순서 바꾸기' }), 75))
+    act(() => void pointer('pointerMove', window, 20))
+    expect(topRow).toHaveClass('drop-above')
+    expect(baseRow).toHaveClass('dragging')
+    act(() => void pointer('pointerUp', window, 20))
     expect(readLayers(doc).map((l) => l.id)).toEqual([top, BASE_LAYER_ID])
+    expect(topRow).not.toHaveClass('drop-above')
+  })
+
+  test('마우스는 줄 어디서든 끌 수 있고, 끈 뒤에는 줄을 고르지 않는다. 조금만 움직이면 그냥 누르기다', () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    const props = setup(doc)
+    layoutRows()
+    const basePick = () => within(rows()[1]).getByRole('button', { name: pick('레이어 1') })
+    act(() => void pointer('pointerDown', basePick(), 75, 'mouse'))
+    act(() => void pointer('pointerMove', window, 20, 'mouse'))
+    act(() => void pointer('pointerUp', window, 20, 'mouse'))
+    fireEvent.click(rows()[0].querySelector('.layer-pick')!)
+    expect(readLayers(doc).map((l) => l.id)).toEqual([top, BASE_LAYER_ID])
+    expect(props.onCurrent).not.toHaveBeenCalled()
+
+    layoutRows()
+    const row = rows()[1]
+    act(() => void pointer('pointerDown', row.querySelector('.layer-pick')!, 75, 'mouse'))
+    act(() => void pointer('pointerMove', window, 78, 'mouse'))
+    act(() => void pointer('pointerUp', window, 78, 'mouse'))
+    fireEvent.click(row.querySelector('.layer-pick')!)
+    expect(props.onCurrent).toHaveBeenCalledTimes(1)
+  })
+
+  test('손가락으로 줄을 끌면 순서를 바꾸지 않는다(목록 스크롤)', () => {
+    const doc = createPageDoc('2026-10-16')
+    const top = addLayer(doc)!
+    setup(doc)
+    layoutRows()
+    act(() => void pointer('pointerDown', rows()[1].querySelector('.layer-pick')!, 75))
+    act(() => void pointer('pointerMove', window, 20))
+    act(() => void pointer('pointerUp', window, 20))
+    expect(readLayers(doc).map((l) => l.id)).toEqual([BASE_LAYER_ID, top])
   })
 
   test('키보드로 위·아래로 옮긴다(Alt+화살표)', async () => {

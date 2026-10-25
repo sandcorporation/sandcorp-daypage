@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useReorder } from './useReorder'
 import * as Y from 'yjs'
 import { usePhotos } from './PhotoLayer'
 import { deletePhoto, movePhoto, PHOTO_LIMIT, photoUrl, type Photo } from './photos'
@@ -6,6 +7,8 @@ import { deletePhoto, movePhoto, PHOTO_LIMIT, photoUrl, type Photo } from './pho
 const EYE = 'M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z'
 const EYE_OFF = 'M2 10s3-6 8-6c2 0 3.6.8 4.9 1.8M18 10s-3 6-8 6c-2 0-3.6-.8-4.9-1.8M3 17L17 3'
 const TRASH = 'M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11'
+// 순서 바꾸기 손잡이(점 여섯 개)
+const GRIP = 'M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01'
 
 function Icon({ d, children }: { d: string; children?: ReactNode }) {
   return (
@@ -51,9 +54,9 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
   useEffect(() => () => highlightRef.current?.(null), [])
   const photos = usePhotos(doc)
   const label = names(photos)
-  const [dragging, setDragging] = useState<string | null>(null)
-  const dragRef = useRef<string | null>(null)
   const indexOf = (id: string) => photos.findIndex((p) => p.id === id)
+  // 끌어서 순서 바꾸기(손가락은 손잡이로). 놓은 자리의 순서로 옮긴다.
+  const reorder = useReorder((from, to) => movePhoto(doc, from, indexOf(to), origin))
 
   function onPickKey(e: KeyboardEvent, p: Photo) {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
@@ -75,29 +78,12 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
           {[...photos].reverse().map((p) => {
             const name = label.get(p.id) ?? '사진'
             const isHidden = hidden.has(p.id)
-            const rowClass = ['layer-row', isHidden && 'hidden-layer', dragging === p.id && 'dragging'].filter(Boolean).join(' ')
+            const rowClass = ['layer-row', isHidden && 'hidden-layer', reorder.rowClass(p.id)].filter(Boolean).join(' ')
             return (
               <li
                 key={p.id}
                 className={rowClass}
-                draggable
-                onDragStart={(e) => {
-                  dragRef.current = p.id
-                  setDragging(p.id)
-                  e.dataTransfer?.setData('text/plain', p.id)
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  const from = dragRef.current
-                  if (from && from !== p.id) movePhoto(doc, from, indexOf(p.id), origin)
-                  dragRef.current = null
-                  setDragging(null)
-                }}
-                onDragEnd={() => {
-                  dragRef.current = null
-                  setDragging(null)
-                }}
+                {...reorder.rowProps(p.id)}
                 onPointerEnter={() => onHighlight?.(p.id)}
                 onPointerLeave={() => onHighlight?.(null)}
                 onFocus={() => onHighlight?.(p.id)}
@@ -105,9 +91,19 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
               >
                 <button
                   type="button"
+                  className="layer-grip"
+                  aria-label={`${name} 순서 바꾸기`}
+                  title="끌어서 순서 바꾸기(Alt+↑/↓)"
+                  {...reorder.handleProps(p.id)}
+                  onKeyDown={(e) => onPickKey(e, p)}
+                >
+                  <Icon d={GRIP} />
+                </button>
+                <button
+                  type="button"
                   className="layer-pick"
                   aria-label={`${name}, 붙인 사람 ${p.author}`}
-                  title="눌러서 사진 자리로 · 끌거나 Alt+↑/↓로 순서 바꾸기"
+                  title="눌러서 사진 자리로 · 손잡이를 끌거나 Alt+↑/↓로 순서 바꾸기"
                   onClick={() => reveal(p.id)}
                   onKeyDown={(e) => onPickKey(e, p)}
                 >

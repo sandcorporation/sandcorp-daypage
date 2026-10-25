@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useReorder } from './useReorder'
 import * as Y from 'yjs'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { readStrokes } from './doc'
@@ -39,6 +40,8 @@ const EYE = 'M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z'
 const EYE_OFF = 'M2 10s3-6 8-6c2 0 3.6.8 4.9 1.8M18 10s-3 6-8 6c-2 0-3.6-.8-4.9-1.8M3 17L17 3'
 const PENCIL = 'M4 16l1-4 8-8 3 3-8 8z'
 const TRASH = 'M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11'
+// 순서 바꾸기 손잡이(점 여섯 개)
+const GRIP = 'M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01'
 const LOCK ='M5 9h10v8H5zM7 9V6a3 3 0 016 0v3'
 const UNLOCK = 'M5 9h10v8H5zM7 9V6a3 3 0 015.6-1.5'
 
@@ -74,15 +77,14 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
   const { layers, stats, version } = useLayers(doc)
   const full = layers.length >= MAX_LAYERS
   const [editing, setEditing] = useState<string | null>(null)
-  const [dragging, setDragging] = useState<string | null>(null)
-  // 놓을 때는 렌더를 기다리지 않고 바로 읽는다
-  const dragRef = useRef<string | null>(null)
   const active = layers.find((l) => l.id === current)
   const [deleting, setDeleting] = useState<string | null>(null)
   const doomed = layers.find((l) => l.id === deleting)
   const doomedStats = doomed ? (stats.get(doomed.id) ?? { count: 0, authors: [] }) : null
 
   const indexOf = (id: string) => layers.findIndex((l) => l.id === id)
+  // 끌어서 순서 바꾸기(손가락은 손잡이로). 놓은 자리의 순서로 옮긴다.
+  const reorder = useReorder((from, to) => moveLayer(doc, from, indexOf(to), origin))
 
   function onPickKey(e: KeyboardEvent, layer: Layer) {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
@@ -98,36 +100,29 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
           const st = stats.get(layer.id) ?? { count: 0, authors: [] }
           const isActive = layer.id === current
           const isHidden = hidden.has(layer.id)
-          const rowClass = ['layer-row', isActive && 'active', isHidden && 'hidden-layer', dragging === layer.id && 'dragging']
+          const rowClass = ['layer-row', isActive && 'active', isHidden && 'hidden-layer', reorder.rowClass(layer.id)]
             .filter(Boolean)
             .join(' ')
           return (
             <li
               key={layer.id}
               className={rowClass}
-              draggable={editing === null}
-              onDragStart={(e) => {
-                dragRef.current = layer.id
-                setDragging(layer.id)
-                e.dataTransfer?.setData('text/plain', layer.id)
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault()
-                const from = dragRef.current
-                if (from && from !== layer.id) moveLayer(doc, from, indexOf(layer.id), origin)
-                dragRef.current = null
-                setDragging(null)
-              }}
+              {...reorder.rowProps(layer.id)}
               onPointerEnter={() => onHighlight?.(layer.id)}
               onPointerLeave={() => onHighlight?.(null)}
               onFocus={() => onHighlight?.(layer.id)}
               onBlur={() => onHighlight?.(null)}
-              onDragEnd={() => {
-                dragRef.current = null
-                setDragging(null)
-              }}
             >
+              <button
+                type="button"
+                className="layer-grip"
+                aria-label={`${layer.name} 순서 바꾸기`}
+                title="끌어서 순서 바꾸기(Alt+↑/↓)"
+                {...reorder.handleProps(layer.id)}
+                onKeyDown={(e) => onPickKey(e, layer)}
+              >
+                <Icon d={GRIP} />
+              </button>
               {editing === layer.id ? (
                 <span className="layer-pick">
                   <Thumbnail doc={doc} layer={layer} version={version} />
@@ -161,7 +156,7 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
                   className="layer-pick"
                   aria-pressed={isActive}
                   aria-label={`${layer.name}${isActive ? ' (지금 그리는 레이어)' : ''}`}
-                  title="끌거나 Alt+↑/↓로 순서 바꾸기"
+                  title="손잡이를 끌거나 Alt+↑/↓로 순서 바꾸기"
                   onClick={() => onCurrent(layer.id)}
                   onKeyDown={(e) => onPickKey(e, layer)}
                 >
