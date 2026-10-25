@@ -61,4 +61,18 @@ describe('문서를 따라가는 색인', () => {
     expect(at(710, 710)).toEqual([])
     expect(hook.result.current().size).toBe(1)
   })
+  test('한꺼번에 많이 바뀌면(처음 받아 올 때) 하나씩 고치지 않고 다음에 쓸 때 새로 만든다', () => {
+    const doc = new Y.Doc()
+    const hook = renderHook(() => useStrokeIndex(doc))
+    const first = hook.result.current()
+    act(() =>
+      doc.transact(() => {
+        for (let i = 0; i < 600; i++) addStroke(doc, line(`s${i}`, i * 2, 10, i * 2 + 1, 12))
+      }),
+    )
+    const next = hook.result.current()
+    expect(next).not.toBe(first)
+    expect(next.size).toBe(600)
+    expect(next.near({ x: 400, y: 10, width: 1, height: 1 })).toContain('s200')
+  })
 })

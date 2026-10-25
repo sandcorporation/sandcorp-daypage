@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-25-big-notes',
+    date: '10월 25일 밤 -2',
+    items: [
+      {
+        kind: 'fix',
+        title: '획이 많은 노트가 가벼워졌어요',
+        text: '획이 수천 개 쌓인 노트에서도 선을 긋고, 되돌리고, 지우개를 대고, 고른 것을 옮기는 동안 화면이 멈추지 않아요. 바뀐 자리만 다시 그리고, 확대하거나 처음 열 때도 보이는 곳부터 조금씩 그려요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-25-finger-lock',
     date: '10월 25일 밤',
     items: [

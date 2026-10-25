@@ -66,6 +66,9 @@ export class StrokeIndex {
   }
 }
 
+/** 한 번에 이보다 많은 획이 바뀌면 고치지 않고 다음에 쓸 때 새로 만든다 */
+const REBUILD_OVER = 500
+
 export function buildStrokeIndex(strokes: Stroke[], cell = INDEX_CELL): StrokeIndex {
   const index = new StrokeIndex(cell)
   for (const s of strokes) index.set(s)
@@ -90,7 +93,14 @@ export function useStrokeIndex(doc: Y.Doc): () => StrokeIndex {
       else index.remove(id)
     }
     const onChange = (events: Y.YEvent<Y.Map<unknown>>[]) => {
-      const index = get()
+      // 아직 쓴 적이 없으면 처음 쓸 때 만든다. 한꺼번에 많이 바뀌었으면(처음 받아 올 때 등) 버리고 다음에 새로 만든다
+      // (1만 획을 받는 동안 하나씩 고치면 그만큼 화면이 멈춘다).
+      if (ref.current?.doc !== doc) return
+      if (events.reduce((n, ev) => n + (ev.target === map ? ev.changes.keys.size : 1), 0) > REBUILD_OVER) {
+        ref.current = null
+        return
+      }
+      const index = ref.current.index
       for (const ev of events) {
         if (ev.target === map) {
           for (const [id, change] of ev.changes.keys) change.action === 'delete' ? index.remove(id) : upsert(index, id)
