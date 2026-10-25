@@ -12,7 +12,7 @@ import { createTextBoxAt, removeLeftoverEmptyBoxes } from "../page/textbox";
 import { updateTextBox } from "../page/doc";
 import { fontOf } from "../page/fonts";
 import { LayerPanel } from "../page/LayerPanel";
-import { useLayers } from "../page/useLayers";
+import { useLayerList } from "../page/useLayers";
 import { loadHiddenLayers, saveHiddenLayers } from "./hiddenLayers";
 import { Toolbar } from "../page/Toolbar";
 import {
@@ -322,7 +322,7 @@ export function NotePage({ initial }: Props) {
   );
 
   // 레이어: 지금 그리는 레이어는 연결마다 따로다. 고른 레이어가 사라지면 맨 위 레이어로.
-  const { layers } = useLayers(doc);
+  const layers = useLayerList(doc);
   const [chosenLayer, setChosenLayer] = useState<string | null>(null);
   // 레이어 탭에서 올리거나 고른 레이어를 화면에 표시한다. 고르면 잠깐(폰처럼 올릴 수 없을 때도 보이게).
   const [highlightLayer, setHighlightLayer] = useState<string | null>(null);
@@ -883,9 +883,7 @@ export function NotePage({ initial }: Props) {
           onZoom={setZoom}
           onPointerMove={presence.setCursor}
           overlay={edit.overlay}
-          overlayVersion={edit.overlayVersion}
-          preview={edit.preview}
-          eraseTargets={edit.eraseTargets}
+          editPreview={edit.live}
           onGestureStart={history.stopCapturing}
           underlay={
             <PhotoImages

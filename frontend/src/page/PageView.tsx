@@ -2,11 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Mutable
 import * as Y from 'yjs'
 import { addStroke, newId, readStroke, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
-import { canDrawOn, DIM, highlightPlan, layerOf, layerPlan, layersMap, readLayers } from './layers'
-import { strokeBounds, unionRect } from './hit'
-import { canvasPixelRatio, fillPath, paintColorStrokes, paintLayers, paintOpacity, paintStroke, paintStrokes, softRadius } from './render'
-import { appendPlan, paintedAfter, type Painted } from './inkCache'
-import { matrixScale, transformPoints, type Matrix } from './transform'
+import { canDrawOn, DIM, highlightPlan, layerOf, layerPlan, layersMap, readLayers, type Layer } from './layers'
+import { strokeBounds, unionRect, type Rect } from './hit'
+import { fromPixelRect, PaintedStrokes, toPixelRect, union } from './inkScene'
+import { canvasPixelRatio, fillPath, MAX_CANVAS_PIXELS, paintColorStrokes, paintLayers, paintOpacity, paintStroke, paintStrokes, softRadius, type PixelRect } from './render'
+import { appendPlan, paintedOf, type Painted } from './inkCache'
+import type { EditPreview } from './useEditTools'
+import { transformPoints, type Matrix } from './transform'
 import { getKeymap, matches } from './shortcuts'
 import { DEFAULT_PAINT_OPACITY, fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
 import { PAN_START_EVENT, TouchPan, scrollNearest } from './touchPan'
@@ -21,6 +23,13 @@ const CURVE_SNAP_PX = 22
 const DOUBLE_TAP_MS = 400
 /** 펜슬 터치 이벤트로 긋는 획의 activePointer(포인터 id는 0 이상이라 겹치지 않는다) */
 const STYLUS_POINTER = -1
+/** 전체 다시 그리기를 나누는 칸(캔버스 픽셀)과, 한 프레임에 칸을 그리는 데 쓸 시간 */
+const TILE_PX = 256
+const TILE_BUDGET_MS = 10
+/** 한 프레임에 이보다 많은 획이 바뀌면 전체 다시 그리기로 */
+const BULK_CHANGES = 300
+
+const isColorStroke = (s: Stroke) => s.tool === 'paint' || typeof s.fill === 'number'
 
 type InkTool = 'pen' | 'highlighter' | 'paint'
 const inkTool = (tool: ToolKind): tool is InkTool => tool === 'pen' || tool === 'highlighter' || tool === 'paint'
@@ -106,11 +115,11 @@ type Props = {
   underlay?: ReactNode
   /** 선택 표시 등 획 위에 겹쳐 그리는 오버레이 */
   overlay?: (ctx: CanvasRenderingContext2D) => void
-  overlayVersion?: number
-  /** 끄는 중인 획을 문서에 쓰기 전에 옮겨 보여 준다(놓을 때 한 번만 저장) */
-  preview?: { ids: string[]; m: Matrix } | null
-  /** 지우개를 올려 둔 자리에서 지워질 획 id. 흐리게 그리고 점선 상자로 감싼다(화면에만) */
-  eraseTargets?: string[]
+  /**
+   * 끄는 동안의 미리보기(useEditTools): 옮기는 획은 문서에 쓰기 전에 옮겨 보여 주고(놓을 때 한 번만 저장),
+   * 지우개를 올려 둔 자리에서 지워질 획은 흐리게 그리고 점선 상자로 감싼다(화면에만). 바뀌면 overlay도 다시 그린다.
+   */
+  editPreview?: EditPreview
 }
 
 export function PageView({
@@ -153,9 +162,7 @@ export function PageView({
   children,
   underlay,
   overlay,
-  overlayVersion,
-  preview,
-  eraseTargets,
+  editPreview,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -369,136 +376,276 @@ export function PageView({
     }
   }, [readOnly, onZoom])
 
-  // 잉크 캔버스에 무엇까지 그려져 있는지(inkCache.ts). null이면 덧그릴 수 없어 다음 변화 때 전체를 다시 그린다.
+  // 캔버스에 그려 둔 획과 그 범위(inkScene.ts). 지우기·옮기기·미리보기가 바뀌면 그 자리만 다시 그린다.
+  const scene = useRef(new PaintedStrokes())
+  // 잉크 캔버스에 무엇까지 그려져 있는지(inkCache.ts). null이면 새 획을 덧그리지 못해 그 자리를 다시 그린다.
   const painted = useRef<Painted | null>(null)
+  // 옮기는 중인 획: 잉크·색 캔버스에서 빼 두고, 한 장 그림(moveSprite)으로 만들어 위 캔버스에 변환만 걸어 그린다.
+  // 그래서 끄는 동안에는 획 수와 상관없이 그림 한 장만 옮긴다.
+  const shownMove = useRef<{ ids: Set<string>; m: Matrix } | null>(null)
+  const moveSprite = useRef<{ canvas: HTMLCanvasElement; rect: Rect } | null>(null)
+  // 지우개를 올려 둔 자리에서 지워질 획(흐리게 그린다)
+  const shownDoomed = useRef<Set<string> | null>(null)
+  // 다음 프레임에 할 일: 전체 다시 그리기, 바뀐 획(더함·고침·지움), 위 캔버스(선택 상자 등) 다시 그리기,
+  // 아직 못 그린 칸(전체 다시 그리기는 칸으로 나눠 보이는 곳부터 프레임마다 조금씩 그린다)
+  // rescan: 그려 둔 획 목록(scene)을 문서에서 새로 읽어야 하는지(배율·숨김만 바뀌었으면 획은 그대로다)
+  const pending = useRef({
+    full: true,
+    rescan: true,
+    changes: new Map<string, 'add' | 'update' | 'delete'>(),
+    top: true,
+    frame: 0,
+    tiles: [] as PixelRect[],
+  })
+  // 그리기 함수들이 읽는 최신 값(프레임 콜백은 렌더 사이에 돈다)
+  const canvasW = Math.round(PAGE_WIDTH * scale * dpr)
+  const canvasH = Math.round(PAGE_HEIGHT * scale * dpr)
+  const latest = useRef({ doc, pixelScale, scale, hiddenLayers, highlightLayer, editPreview, overlay, eraserRadius, canvasW, canvasH })
+  latest.current = { doc, pixelScale, scale, hiddenLayers, highlightLayer, editPreview, overlay, eraserRadius, canvasW, canvasH }
 
-  const repaint = useCallback(() => {
-    painted.current = null
-    const canvas = inkCanvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!canvas || !ctx) return
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    let strokes = readStrokes(doc)
-    if (preview) {
-      const moving = new Set(preview.ids)
-      const k = matrixScale(preview.m)
-      strokes = strokes.map((st) =>
-        moving.has(st.id) ? { ...st, points: transformPoints(st.points, preview.m), width: st.width * k } : st,
-      )
-    }
-    const layers = readLayers(doc)
-    // 지우개를 올려 둔 자리에서 지워질 획은 따로 흐리게 그리고 점선 상자로 감싼다
-    const doomedIds = eraseTargets?.length ? new Set(eraseTargets) : null
-    const kept = doomedIds ? strokes.filter((s) => !doomedIds.has(s.id)) : strokes
-    // 색 캔버스: 채색 획 전부(숨긴 레이어 0, 레이어 불투명도·강조 흐림·지우개 미리보기만 반영)
+  /**
+   * 잉크·색 캔버스의 region(픽셀 사각형)만 지우고 그 자리에 걸치는 획만 같은 순서로 다시 그린다(그 자리의 결과는
+   * 전체를 다시 그린 것과 같다). 옮기는 중인 획은 빼고, 지워질 획은 흐리게 그린다.
+   */
+  const paintScene = (region: PixelRect) => {
+    const { doc, pixelScale, hiddenLayers, highlightLayer } = latest.current
+    const ink = inkCanvasRef.current?.getContext('2d')
+    if (!ink) return
     const color = colorCanvasRef.current?.getContext('2d')
+    const layers = readLayers(doc)
+    const moved = shownMove.current
+    const doomed = shownDoomed.current
+    const inRegion = scene.current.within(fromPixelRect(region, pixelScale))
+    const strokes = moved ? inRegion.filter((s) => !moved.ids.has(s.id)) : inRegion
+    for (const c of color ? [ink, color] : [ink]) {
+      c.save()
+      c.setTransform(1, 0, 0, 1, 0, 0)
+      c.beginPath()
+      c.rect(region.x, region.y, region.width, region.height)
+      c.clip()
+      c.clearRect(region.x, region.y, region.width, region.height)
+    }
+    // 색 캔버스: 채색 획(숨긴 레이어 0, 레이어 불투명도·강조 흐림·지우개 미리보기만 반영)
     if (color) {
-      color.setTransform(1, 0, 0, 1, 0, 0)
-      color.clearRect(0, 0, color.canvas.width, color.canvas.height)
-      paintColorStrokes(color, strokes, pixelScale, (s) => {
-        const id = layerOf(s, layers)
-        if (hiddenLayers?.has(id)) return 0
-        let a = layers.find((l) => l.id === id)?.opacity ?? 1
-        if (highlightLayer && id !== highlightLayer) a *= DIM
-        if (doomedIds?.has(s.id)) a *= ERASE_PREVIEW_ALPHA
-        return a
+      paintColorStrokes(color, strokes.filter(isColorStroke), pixelScale, (s) => {
+        const a = layerAlpha(s, layers)
+        return doomed?.has(s.id) ? a * ERASE_PREVIEW_ALPHA : a
       })
+      color.restore()
     }
-    const plan = layerPlan(kept, layers, hiddenLayers)
-    paintLayers(ctx, highlightPlan(plan, highlightLayer), pixelScale)
-    if (doomedIds) {
-      const doomed = strokes.filter((s) => doomedIds.has(s.id))
-      const faded = layerPlan(doomed, layers, hiddenLayers).map((item) => ({
-        ...item,
-        layer: { ...item.layer, opacity: item.layer.opacity * ERASE_PREVIEW_ALPHA },
-      }))
-      paintLayers(ctx, faded, pixelScale)
-      ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
-      paintEraseOutlines(ctx, doomed, scale, pixelScale, eraserRadius ?? 10)
+    // 지우개를 올려 둔 자리에서 지워질 획은 따로 흐리게 그린다(점선 상자는 위 캔버스에)
+    const kept = doomed ? strokes.filter((s) => !doomed.has(s.id)) : strokes
+    paintLayers(ink, highlightPlan(layerPlan(kept, layers, hiddenLayers), highlightLayer), pixelScale, { region })
+    if (doomed) {
+      const faded = layerPlan(
+        strokes.filter((s) => doomed.has(s.id)),
+        layers,
+        hiddenLayers,
+      ).map((item) => ({ ...item, layer: { ...item.layer, opacity: item.layer.opacity * ERASE_PREVIEW_ALPHA } }))
+      paintLayers(ink, faded, pixelScale, { region })
     }
-    const target = highlightLayer ? layers.find((l) => l.id === highlightLayer) : undefined
-    if (target) {
-      const box = unionRect(strokes.filter((s) => layerOf(s, layers) === target.id).map(strokeBounds))
-      ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
-      paintLayerTag(ctx, box, target.name, scale)
-    }
-    if (overlay) {
-      ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
-      overlay(ctx)
-    }
-    // 획 위에 다른 것(미리보기·지우개 표시·강조·선택 상자)이 없을 때만 새 획을 덧그릴 수 있다
-    painted.current = preview || doomedIds || highlightLayer || overlay ? null : paintedAfter(plan, layers)
-  }, [doc, pixelScale, overlay, preview, hiddenLayers, highlightLayer, scale, eraseTargets, eraserRadius])
+    ink.restore()
+  }
 
-  // 문서가 바뀌면 다음 프레임에 한 번만 그린다. 획이 더해지기만 했으면 그 획만 덧그리고(1만 획이어도 1ms),
-  // 지우거나 옮기거나 레이어가 바뀌면 전체를 다시 그린다.
-  useEffect(() => {
-    let frame = 0
-    let added: string[] = []
-    let dirty = true
-    const run = () => {
-      frame = 0
-      const ids = added
-      const full = dirty || painted.current === null || ids.length === 0
-      added = []
-      dirty = false
-      if (full) {
-        repaint()
-        return
+  /** 레이어 불투명도·숨김·강조 흐림을 반영한 채색 획의 알파 */
+  const layerAlpha = (s: Stroke, layers: Layer[]) => {
+    const { hiddenLayers, highlightLayer } = latest.current
+    const id = layerOf(s, layers)
+    if (hiddenLayers?.has(id)) return 0
+    const a = layers.find((l) => l.id === id)?.opacity ?? 1
+    return highlightLayer && id !== highlightLayer ? a * DIM : a
+  }
+
+  /** 옮길 획들을 한 장 그림으로(획 범위 크기, 너무 크면 해상도를 낮춘다) */
+  const buildSprite = (ids: Set<string>) => {
+    const { doc, pixelScale, hiddenLayers, highlightLayer } = latest.current
+    const rect = scene.current.boundsOf(ids)
+    if (!rect) return null
+    const k = Math.min(pixelScale, Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, rect.width * rect.height)))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.ceil(rect.width * k))
+    canvas.height = Math.max(1, Math.ceil(rect.height * k))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    const layers = readLayers(doc)
+    // 그림 왼쪽 위가 원점이 되게 점을 옮겨 그린다(끌기를 시작할 때 한 번)
+    const shift: Matrix = [1, 0, 0, 1, -rect.x, -rect.y]
+    const strokes = [...ids].flatMap((id) => {
+      const st = scene.current.get(id)
+      return st ? [{ ...st, points: transformPoints(st.points, shift) }] : []
+    })
+    paintColorStrokes(ctx, strokes.filter(isColorStroke), k, (s) => layerAlpha(s, layers))
+    paintLayers(ctx, highlightPlan(layerPlan(strokes, layers, hiddenLayers), highlightLayer), k)
+    return { canvas, rect }
+  }
+
+  /** 지금 보이는 곳에 가까운 칸부터 그리도록 캔버스를 칸으로 나눈다 */
+  const tilesOf = (w: number, h: number): PixelRect[] => {
+    const frame = frameRef.current?.getBoundingClientRect()
+    const view = viewportRef.current?.getBoundingClientRect()
+    const k = frame && frame.width ? w / frame.width : 1
+    const cx = frame && view ? ((view.left + view.right) / 2 - frame.left) * k : w / 2
+    const cy = frame && view ? ((view.top + view.bottom) / 2 - frame.top) * k : h / 2
+    const tiles: PixelRect[] = []
+    for (let y = 0; y < h; y += TILE_PX)
+      for (let x = 0; x < w; x += TILE_PX) tiles.push({ x, y, width: Math.min(TILE_PX, w - x), height: Math.min(TILE_PX, h - y) })
+    const dist = (t: PixelRect) => Math.hypot(t.x + t.width / 2 - cx, t.y + t.height / 2 - cy)
+    return tiles.sort((a, b) => dist(a) - dist(b))
+  }
+
+  /**
+   * 전체 다시 그리기를 시작한다. 캔버스 크기가 바뀌었으면 전 그림을 늘려 깔아 두고(빈 화면이 번쩍이지 않게),
+   * 모든 칸을 다시 그릴 차례에 넣는다. 칸은 프레임마다 시간 안에서 그려 화면이 멈추지 않는다.
+   */
+  const startFull = (rescan: boolean) => {
+    const { doc, canvasW, canvasH, editPreview } = latest.current
+    const preview = editPreview?.move
+    const eraseTargets = editPreview?.eraseTargets
+    if (rescan) scene.current.reset(readStrokes(doc))
+    shownMove.current = preview ? { ids: new Set(preview.ids), m: preview.m } : null
+    moveSprite.current = shownMove.current ? buildSprite(shownMove.current.ids) : null
+    shownDoomed.current = eraseTargets?.length ? new Set(eraseTargets) : null
+    for (const c of [inkCanvasRef.current, colorCanvasRef.current]) {
+      if (!c || (c.width === canvasW && c.height === canvasH)) continue
+      const old = c.width > 0 && c.height > 0 ? document.createElement('canvas') : null
+      if (old) {
+        old.width = c.width
+        old.height = c.height
+        old.getContext('2d')?.drawImage(c, 0, 0)
       }
+      c.width = canvasW
+      c.height = canvasH
+      if (old) c.getContext('2d')?.drawImage(old, 0, 0, canvasW, canvasH)
+    }
+    pending.current.tiles = tilesOf(canvasW, canvasH)
+    painted.current = null
+  }
+
+  /** 문서·미리보기 변화를 모아 한 프레임에 한 번 그린다 */
+  const flush = () => {
+    const job = pending.current
+    job.frame = 0
+    const { doc, pixelScale, editPreview, hiddenLayers, highlightLayer } = latest.current
+    const preview = editPreview?.move
+    const eraseTargets = editPreview?.eraseTargets
+    const changes = job.changes
+    job.changes = new Map()
+    const canvas = inkCanvasRef.current
+    if (!canvas) return
+    // 한꺼번에 많이 바뀌었으면(처음 받아 올 때 등) 하나씩 덧그리지 않고 전체를 칸으로 나눠 그린다
+    if (job.full || changes.size > BULK_CHANGES) {
+      startFull(job.rescan || changes.size > 0)
+      job.full = false
+      job.rescan = false
+      job.top = true
+    } else {
+      const nextMove = preview ? { ids: new Set(preview.ids), m: preview.m } : null
+      const nextDoomed = eraseTargets?.length ? new Set(eraseTargets) : null
       const map = strokesMap(doc)
-      const strokes = ids.flatMap((id) => {
-        const m = map.get(id)
-        return m ? [readStroke(id, m)] : []
-      })
-      const layers = readLayers(doc)
-      // 채색 획은 색 캔버스에 덧그리기만 하면 된다(multiply는 순서와 무관). painted가 있다는 건 미리보기·지우개
-      // 표시·강조가 없다는 뜻이라 덧그린 결과가 전체 다시 그리기와 같다.
-      const color = colorCanvasRef.current?.getContext('2d')
-      const paints = strokes.filter((s) => s.tool === 'paint' || typeof s.fill === 'number')
-      if (paints.length && !color) {
-        repaint()
-        return
+      let dirty: Rect | null = null
+      const added: Stroke[] = []
+      // 바뀐 획: 지우거나 고친 획은 전 자리와 새 자리를 다시 그린다. 더한 획은 덧그릴 수 있으면 덧그린다.
+      for (const [id, kind] of changes) {
+        dirty = union(dirty, scene.current.boundsOf([id]))
+        const m = kind === 'delete' ? undefined : map.get(id)
+        if (!m) {
+          scene.current.delete(id)
+          continue
+        }
+        const st = readStroke(id, m)
+        scene.current.set(st)
+        if (kind === 'add') added.push(st)
+        else dirty = union(dirty, scene.current.boundsOf([id]))
       }
-      if (color) {
-        paintColorStrokes(color, paints, pixelScale, (s) => {
-          const id = layerOf(s, layers)
-          return hiddenLayers?.has(id) ? 0 : (layers.find((l) => l.id === id)?.opacity ?? 1)
-        })
+      // 옮기기: 시작하면 원래 자리에서 빼고 그림 한 장으로, 끝나면 원래 자리에 되돌린다(놓았으면 문서 변화가 새 자리를 그린다).
+      // 끄는 동안에는 위 캔버스의 그림만 옮긴다.
+      const prevMove = shownMove.current
+      if (prevMove !== nextMove) {
+        const sameIds = !!prevMove && !!nextMove && prevMove.ids.size === nextMove.ids.size && [...nextMove.ids].every((id) => prevMove.ids.has(id))
+        shownMove.current = nextMove
+        if (!sameIds) {
+          if (prevMove) dirty = union(dirty, scene.current.boundsOf(prevMove.ids))
+          if (nextMove) dirty = union(dirty, scene.current.boundsOf(nextMove.ids))
+          moveSprite.current = nextMove ? buildSprite(nextMove.ids) : null
+        }
+        job.top = true
       }
-      const pens = strokes.filter((s) => s.tool !== 'paint')
-      if (pens.length === 0) return
-      const plan = appendPlan(painted.current!, pens, layers, hiddenLayers)
-      const ctx = inkCanvasRef.current?.getContext('2d')
-      if (!plan || !ctx) {
-        repaint()
-        return
+      const prevDoomed = shownDoomed.current
+      if ((prevDoomed?.size ?? 0) !== (nextDoomed?.size ?? 0) || [...(nextDoomed ?? [])].some((id) => !prevDoomed?.has(id))) {
+        dirty = union(dirty, scene.current.boundsOf([...(prevDoomed ?? []), ...(nextDoomed ?? [])]))
+        job.top = true
       }
-      paintStrokes(ctx, plan.strokes, pixelScale)
-      painted.current = plan.painted
+      shownDoomed.current = nextDoomed
+      // 새 획 덧그리기: 미리보기·강조가 없고, 맨 위 순서의 불투명한 펜이면 잉크 캔버스에, 채색은 색 캔버스에 그대로 얹는다
+      const quiet = !shownMove.current && !shownDoomed.current && !highlightLayer
+      if (added.length) {
+        const layers = readLayers(doc)
+        const color = colorCanvasRef.current?.getContext('2d')
+        const paints = added.filter(isColorStroke)
+        const pens = added.filter((s) => s.tool !== 'paint')
+        if (paints.length && quiet && color) paintColorStrokes(color, paints, pixelScale, (s) => layerAlpha(s, layers))
+        else dirty = union(dirty, scene.current.boundsOf(paints.map((s) => s.id)))
+        const plan = quiet && painted.current && pens.length ? appendPlan(painted.current, pens, layers, hiddenLayers) : null
+        const ink = canvas.getContext('2d')
+        if (plan && ink) {
+          paintStrokes(ink, plan.strokes, pixelScale)
+          painted.current = plan.painted
+        } else if (pens.length) dirty = union(dirty, scene.current.boundsOf(pens.map((s) => s.id)))
+      }
+      const region = dirty && toPixelRect(dirty, pixelScale, canvas.width, canvas.height)
+      if (region) paintScene(region)
+      if (changes.size) job.top = true
     }
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(run)
+    // 덧그릴 수 있게 맨 위 획 기록을 둔다(미리보기·강조 중에는 덧그리지 않는다)
+    const quiet = !shownMove.current && !shownDoomed.current && !highlightLayer
+    if (!quiet) painted.current = null
+    else if (!painted.current) painted.current = paintedOf(scene.current.all(), readLayers(doc), hiddenLayers)
+    // 전체 다시 그리기의 남은 칸: 이번 프레임에 시간 안에서 그린다(적어도 한 칸)
+    if (job.tiles.length) {
+      const start = performance.now()
+      do paintScene(job.tiles.shift()!)
+      while (job.tiles.length && performance.now() - start < TILE_BUDGET_MS)
+      if (job.tiles.length) schedule()
     }
-    schedule()
+    if (job.top) {
+      job.top = false
+      paintTop()
+    }
+  }
+  const flushRef = useRef(flush)
+  flushRef.current = flush
+  const schedule = useCallback(() => {
+    const job = pending.current
+    if (!job.frame) job.frame = requestAnimationFrame(() => flushRef.current())
+  }, [])
+
+  // 문서 변화: 바뀐 획만 적어 두고 다음 프레임에 그 자리만 그린다. 레이어가 바뀌면 전체.
+  useEffect(() => {
     const strokes = strokesMap(doc)
     const layers = layersMap(doc)
+    const job = pending.current
+    job.full = true
+    job.rescan = true
+    schedule()
     const onStrokes = (events: Y.YEvent<Y.Map<unknown>>[]) => {
       for (const ev of events) {
         if (ev.target !== strokes) {
-          dirty = true
+          // 획 하나의 값이 바뀌었다(옮기기·크기 바꾸기 등)
+          const id = ev.path[0]
+          if (typeof id === 'string' && job.changes.get(id) !== 'add') job.changes.set(id, 'update')
           continue
         }
         for (const [id, change] of ev.changes.keys) {
-          if (change.action === 'add') added.push(id)
-          else dirty = true
+          const before = job.changes.get(id)
+          if (change.action === 'delete') job.changes.set(id, 'delete')
+          else if (change.action === 'add') job.changes.set(id, before === 'delete' ? 'update' : 'add')
+          else if (before !== 'add') job.changes.set(id, 'update')
         }
       }
       schedule()
     }
     const onLayers = () => {
-      dirty = true
+      job.full = true
       schedule()
     }
     strokes.observeDeep(onStrokes)
@@ -506,19 +653,73 @@ export function PageView({
     return () => {
       strokes.unobserveDeep(onStrokes)
       layers.unobserve(onLayers)
-      cancelAnimationFrame(frame)
+      cancelAnimationFrame(job.frame)
+      job.frame = 0
     }
-  }, [doc, repaint, overlayVersion, hiddenLayers, pixelScale])
+  }, [doc, schedule])
 
-  const paintLive = useCallback(() => {
+  // 배율(캔버스 크기)·숨긴 레이어·강조가 바뀌면 전체를 다시 그린다
+  useEffect(() => {
+    pending.current.full = true
+    schedule()
+  }, [pixelScale, hiddenLayers, highlightLayer, schedule])
+
+  // 미리보기(옮기는 중·지워질 획·선택 상자)가 바뀌면 그 자리와 위 캔버스만
+  useEffect(() => {
+    if (!editPreview) return
+    return editPreview.subscribe(() => {
+      pending.current.top = true
+      schedule()
+    })
+  }, [editPreview, schedule])
+
+  // 선택 상자·손잡이 등은 위 캔버스에만 그린다
+  useEffect(() => {
+    pending.current.top = true
+    schedule()
+  }, [overlay, scale, eraserRadius, schedule])
+
+  /**
+   * 위(라이브) 캔버스: 지워질 획의 점선 상자, 강조한 레이어 이름표, 선택 상자·손잡이(overlay), 긋는 중인 획.
+   * 잉크 캔버스와 따로 두어 이것들이 바뀌어도 획 1만 개를 다시 그리지 않는다.
+   */
+  const paintTop = () => {
     const canvas = liveCanvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
+    const { pixelScale, scale, highlightLayer, overlay, eraserRadius, doc } = latest.current
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+    const doomed = shownDoomed.current
+    if (doomed) {
+      const strokes = [...doomed].flatMap((id) => scene.current.get(id) ?? [])
+      paintEraseOutlines(ctx, strokes, scale, pixelScale, eraserRadius ?? 10)
+      ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+    }
+    if (highlightLayer) {
+      const layers = readLayers(doc)
+      const target = layers.find((l) => l.id === highlightLayer)
+      if (target) {
+        const box = unionRect(scene.current.all().filter((s) => layerOf(s, layers) === target.id).map(strokeBounds))
+        paintLayerTag(ctx, box, target.name, scale)
+        ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+      }
+    }
+    const sprite = moveSprite.current
+    const moving = shownMove.current
+    if (sprite && moving) {
+      ctx.save()
+      ctx.transform(...moving.m)
+      ctx.drawImage(sprite.canvas, sprite.rect.x, sprite.rect.y, sprite.rect.width, sprite.rect.height)
+      ctx.restore()
+    }
+    if (overlay) {
+      overlay(ctx)
+      ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+    }
     const s = drawing.current
     if (!s) return
-    ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
     // 닫힌 도형을 그리는 중이면 채움도 미리 보인다(라이브 캔버스는 보통 합성이라 대략의 모양)
     if (tool === 'shape' && shapeFill > 0 && closedShape(shape) && !curve.current) {
       ctx.globalAlpha = shapeFill * 0.9
@@ -538,7 +739,10 @@ export function PageView({
     ctx.globalAlpha = 1
     const c = curve.current
     if (c) paintCurveMarks(ctx, c.controls, curveNearFirst.current, scale)
-  }, [pixelScale, scale, tool, shape, shapeFill])
+  }
+  const paintTopRef = useRef(paintTop)
+  paintTopRef.current = paintTop
+  const paintLive = useCallback(() => paintTopRef.current(), [])
 
   /** 지우개 동그라미를 장 좌표 p(없으면 숨김)에 둔다. 화면에서 너무 작아지지 않게 최소 크기를 둔다. */
   function placeRing(p: Point | null) {
@@ -1156,15 +1360,11 @@ export function PageView({
         <canvas
           ref={colorCanvasRef}
           className="color-canvas"
-          width={Math.round(width * dpr)}
-          height={Math.round(height * dpr)}
           style={{ width, height }}
           aria-hidden="true"
         />
         <canvas
           ref={inkCanvasRef}
-          width={Math.round(width * dpr)}
-          height={Math.round(height * dpr)}
           style={{ width, height }}
           aria-hidden="true"
         />
@@ -1253,12 +1453,25 @@ function paintEraseOutlines(
   pixelScale: number,
   eraserRadius: number,
 ) {
+  const gap = 3 / scale
+  const ring = 2 / scale
+  // 테두리를 그릴 임시 캔버스는 지워질 획들을 감싸는 크기만(지면 전체 크기면 올려 둘 때마다 수백 ms)
+  const box = unionRect(strokes.map(strokeBounds))
+  if (!box) return
+  const pad = gap + ring + 2
+  const region = toPixelRect(
+    { x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 },
+    pixelScale,
+    ctx.canvas.width,
+    ctx.canvas.height,
+  )
+  if (!region) return
   const off = document.createElement('canvas')
-  off.width = ctx.canvas.width
-  off.height = ctx.canvas.height
+  off.width = region.width
+  off.height = region.height
   const o = off.getContext('2d')
   if (!o) return
-  o.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+  o.setTransform(pixelScale, 0, 0, pixelScale, -region.x, -region.y)
   o.lineCap = 'round'
   o.lineJoin = 'round'
   o.strokeStyle = ERASE_COLOR
@@ -1270,8 +1483,6 @@ function paintEraseOutlines(
     }
     if (s.points.length <= 3) o.lineTo(s.points[0] + 0.01, s.points[1])
   }
-  const gap = 3 / scale
-  const ring = 2 / scale
   for (const s of strokes) {
     trace(s)
     o.lineWidth = s.width + (gap + ring) * 2
@@ -1285,7 +1496,7 @@ function paintEraseOutlines(
   }
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.drawImage(off, 0, 0)
+  ctx.drawImage(off, region.x, region.y)
   ctx.restore()
 
   const small = strokes.map(strokeBounds).filter((b) => Math.max(b.width, b.height) * scale < ERASE_SMALL_PX)

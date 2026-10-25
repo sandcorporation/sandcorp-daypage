@@ -31,6 +31,22 @@ export function paintedAfter(plan: LayerPlanItem[], layers: Layer[]): Painted {
 }
 
 /**
+ * 전체를 그린 뒤의 기록을 정렬 없이 구한다(paintedAfter(layerPlan(strokes, layers, hidden), layers)와 같다).
+ * 1만 획을 정렬하지 않으려고 한 번 훑으며 가장 위 레이어와 그 안의 마지막 순서 획을 찾는다.
+ */
+export function paintedOf(strokes: Iterable<Stroke>, layers: Layer[], hidden?: ReadonlySet<string>): Painted {
+  const index = new Map(layers.map((l, i) => [l.id, i]))
+  let best: Painted = NOTHING_PAINTED
+  for (const s of strokes) {
+    const id = layerOf(s, layers)
+    if (hidden?.has(id)) continue
+    const li = index.get(id) ?? 0
+    if (li > best.layerIndex || (li === best.layerIndex && (!best.last || compareStrokes(s, best.last) > 0))) best = { layerIndex: li, last: s }
+  }
+  return best
+}
+
+/**
  * 더해진 획들을 덧그려도 되면 그릴 순서와 그 뒤의 기록을, 아니면 null(전체를 다시 그려야 한다).
  * 숨긴 레이어의 획은 그리지 않고 건너뛴다.
  */

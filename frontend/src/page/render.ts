@@ -72,8 +72,28 @@ function outlineOptions(stroke: Stroke, triples: [number, number, number][]): St
   }
 }
 
-/** perfect-freehand 외곽선(펜) 또는 굵은 선(형광펜·채색)을 Path2D로. */
+/**
+ * 획 모양(Path2D) 기억. 펜 외곽선(perfect-freehand)이 다시 그리기의 대부분이라, 점 배열이 같고 모양을 바꾸는 값
+ * (도구·굵기·펜 종류·필압 끔)이 같으면 전에 만든 것을 쓴다. 점 배열은 문서가 바뀌면 새 배열이 되고(바이너리 점은
+ * 디코드 기억, 옮기면 새 배열), 긋는 중인 획은 제자리에 점이 늘어 점 수로 가린다.
+ */
+const pathCache = new WeakMap<number[], { key: string; path: Path2D }>()
+
+function pathKey(stroke: Stroke): string {
+  return `${stroke.points.length}|${stroke.tool}|${stroke.width}|${brushOf(stroke)}|${stroke.steady ? 1 : 0}`
+}
+
+/** perfect-freehand 외곽선(펜) 또는 굵은 선(형광펜·채색)을 Path2D로. 같은 획이면 기억해 둔 것을 돌려준다. */
 export function strokePath(stroke: Stroke): Path2D {
+  const key = pathKey(stroke)
+  const hit = pathCache.get(stroke.points)
+  if (hit && hit.key === key) return hit.path
+  const path = buildStrokePath(stroke)
+  pathCache.set(stroke.points, { key, path })
+  return path
+}
+
+function buildStrokePath(stroke: Stroke): Path2D {
   const triples = toTriples(stroke.points)
   const path = new Path2D()
   if (stroke.tool === 'highlighter' || stroke.tool === 'paint') {
@@ -114,29 +134,55 @@ export function paintStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void
   ctx.fill(path)
 }
 
+/** 캔버스 픽셀 단위의 사각형(정수). 일부만 다시 그릴 때 그 자리. */
+export type PixelRect = { x: number; y: number; width: number; height: number }
+
+export type PaintOptions = {
+  /** 이 픽셀 사각형만 그린다(부른 쪽이 잘라 두고 지운다). 임시 캔버스도 이 크기로 만든다. */
+  region?: PixelRect
+  /** ctx 캔버스의 왼쪽 위가 전체 캔버스에서 어느 픽셀인지(일부 크기 임시 캔버스에 그릴 때). 없으면 0, 0 */
+  offset?: { x: number; y: number }
+}
+
+/**
+ * 따로 그린 뒤 alpha로 합칠 임시 캔버스. region이 있으면 그 크기, 없으면 ctx 캔버스 크기이고,
+ * 돌려주는 offset은 임시 캔버스 왼쪽 위의 전체 캔버스 픽셀 자리다.
+ */
+function scratchCanvas(ctx: CanvasRenderingContext2D, opts: PaintOptions) {
+  const off = document.createElement('canvas')
+  off.width = opts.region?.width ?? ctx.canvas.width
+  off.height = opts.region?.height ?? ctx.canvas.height
+  const offset = opts.region ? { x: opts.region.x, y: opts.region.y } : (opts.offset ?? { x: 0, y: 0 })
+  return { off, octx: off.getContext('2d'), offset }
+}
+
+/** 임시 캔버스를 제자리에 alpha로 합친다 */
+function blitScratch(ctx: CanvasRenderingContext2D, off: HTMLCanvasElement, at: { x: number; y: number }, alpha: number, opts: PaintOptions) {
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.globalAlpha = alpha
+  ctx.drawImage(off, at.x - (opts.offset?.x ?? 0), at.y - (opts.offset?.y ?? 0))
+  ctx.restore()
+}
+
 /**
  * 획을 두 층으로 그린다. 형광펜은 따로 불투명하게 모아 그린 뒤 반투명으로 합쳐
  * 겹친 곳이 진해지지 않게 하고, 그 위에 펜을 그린다.
  */
-export function paintStrokes(ctx: CanvasRenderingContext2D, strokes: Stroke[], pixelScale: number): void {
+export function paintStrokes(ctx: CanvasRenderingContext2D, strokes: Stroke[], pixelScale: number, opts: PaintOptions = {}): void {
   const ordered = orderStrokes(strokes)
   const highlights = ordered.filter((s) => s.tool === 'highlighter')
   const pens = ordered.filter((s) => s.tool === 'pen')
+  const base = (c: CanvasRenderingContext2D, o: { x: number; y: number } = opts.offset ?? { x: 0, y: 0 }) =>
+    c.setTransform(pixelScale, 0, 0, pixelScale, -o.x, -o.y)
 
-  ctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
+  base(ctx)
   if (highlights.length) {
-    const layer = document.createElement('canvas')
-    layer.width = ctx.canvas.width
-    layer.height = ctx.canvas.height
-    const lctx = layer.getContext('2d')
-    if (lctx) {
-      lctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0)
-      for (const s of highlights) paintStroke(lctx, s)
-      ctx.save()
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.globalAlpha = HIGHLIGHTER_ALPHA
-      ctx.drawImage(layer, 0, 0)
-      ctx.restore()
+    const { off, octx, offset } = scratchCanvas(ctx, opts)
+    if (octx) {
+      base(octx, offset)
+      for (const s of highlights) paintStroke(octx, s)
+      blitScratch(ctx, off, offset, HIGHLIGHTER_ALPHA, opts)
     }
   }
   for (const s of pens) paintStroke(ctx, s)
@@ -261,23 +307,16 @@ export function paintPaper(ctx: CanvasRenderingContext2D, pixelScale: number, pa
  * 레이어 순서대로 그린다(plan은 layers.ts의 layerPlan). 불투명한 레이어는 바로 그리고,
  * 불투명도가 1보다 작은 레이어만 따로 그려 그만큼 흐리게 합친다(겹친 획이 진해지지 않게).
  */
-export function paintLayers(ctx: CanvasRenderingContext2D, plan: LayerPlanItem[], pixelScale: number): void {
+export function paintLayers(ctx: CanvasRenderingContext2D, plan: LayerPlanItem[], pixelScale: number, opts: PaintOptions = {}): void {
   for (const { layer, strokes } of plan) {
     if (strokes.length === 0) continue
     if (layer.opacity >= 1) {
-      paintStrokes(ctx, strokes, pixelScale)
+      paintStrokes(ctx, strokes, pixelScale, opts)
       continue
     }
-    const off = document.createElement('canvas')
-    off.width = ctx.canvas.width
-    off.height = ctx.canvas.height
-    const octx = off.getContext('2d')
+    const { off, octx, offset } = scratchCanvas(ctx, opts)
     if (!octx) continue
-    paintStrokes(octx, strokes, pixelScale)
-    ctx.save()
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.globalAlpha = layer.opacity
-    ctx.drawImage(off, 0, 0)
-    ctx.restore()
+    paintStrokes(octx, strokes, pixelScale, { ...opts, offset })
+    blitScratch(ctx, off, offset, layer.opacity, opts)
   }
 }

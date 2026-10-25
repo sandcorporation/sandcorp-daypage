@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { Stroke } from './doc'
 import { BASE_LAYER_ID, layerPlan, type Layer } from './layers'
-import { appendPlan, NOTHING_PAINTED, paintedAfter } from './inkCache'
+import { appendPlan, NOTHING_PAINTED, paintedAfter, paintedOf } from './inkCache'
 
 const base: Layer = { id: BASE_LAYER_ID, name: '레이어 1', order: 0, locked: false, opacity: 1 }
 const upper: Layer = { id: 'L2', name: '레이어 2', order: 1, locked: false, opacity: 1 }
@@ -20,6 +20,22 @@ describe('전체를 그린 뒤의 기록', () => {
 
   test('아무것도 없으면 NOTHING_PAINTED', () => {
     expect(paintedAfter(layerPlan([], [base]), [base])).toEqual(NOTHING_PAINTED)
+    expect(paintedOf([], [base])).toEqual(NOTHING_PAINTED)
+  })
+
+  test('정렬 없이 구한 기록(paintedOf)이 전체 순서로 구한 것과 같다: 레이어·형광펜·같은 시각·숨긴 레이어', () => {
+    const layers = [base, upper, faint]
+    const strokes = [
+      stroke('a', 5),
+      stroke('h', 9, { tool: 'highlighter' }),
+      stroke('b', 3, { layer: 'L2' }),
+      stroke('c', 3, { layer: 'L2' }),
+      stroke('d', 1, { layer: 'L2', tool: 'highlighter' }),
+      stroke('e', 7, { layer: 'L3' }),
+    ]
+    for (const hidden of [undefined, new Set(['L3']), new Set(['L3', 'L2']), new Set([BASE_LAYER_ID, 'L2', 'L3'])]) {
+      expect(paintedOf(strokes, layers, hidden)).toEqual(paintedAfter(layerPlan(strokes, layers, hidden), layers))
+    }
   })
 })
 

@@ -66,6 +66,44 @@ function fitted(bounds: Rect, m: Matrix): Matrix {
   return dx || dy ? andThen(m, translate(dx, dy)) : m
 }
 
+type Move = { ids: string[]; m: Matrix }
+
+/**
+ * 끄는 동안의 미리보기: 옮기는 획과 변환, 지우개로 지워질 획, 선택 상자를 다시 그릴 차례(version).
+ * 포인터가 움직일 때마다 바뀌므로 리액트 상태로 두지 않는다(그러면 노트 화면 전체가 매번 다시 렌더된다).
+ * PageView가 구독해 다음 프레임에 그 자리만 다시 그린다.
+ */
+export class EditPreview {
+  move: Move | null = null
+  eraseTargets: string[] = []
+  version = 0
+  private listeners = new Set<() => void>()
+
+  subscribe(fn: () => void): () => void {
+    this.listeners.add(fn)
+    return () => this.listeners.delete(fn)
+  }
+
+  setMove(move: Move | null): void {
+    if (move === this.move) return
+    this.move = move
+    this.bump()
+  }
+
+  setEraseTargets(ids: string[]): void {
+    const prev = this.eraseTargets
+    if (prev.length === ids.length && prev.every((id, k) => id === ids[k])) return
+    this.eraseTargets = ids
+    this.bump()
+  }
+
+  /** 선택 상자·손잡이 등 겹쳐 그리는 것이 바뀌었다 */
+  bump(): void {
+    this.version++
+    for (const fn of this.listeners) fn()
+  }
+}
+
 /**
  * 지우개와 선택·이동 도구. 그리기·글씨는 다른 곳에서 처리한다.
  * 잠긴 레이어와 내가 숨긴 레이어의 획은 지우거나 고를 수 없고, 지우개는 지금 그리는 레이어의 획만 지운다.
@@ -89,26 +127,21 @@ export function useEditTools(
   lasso = false,
 ) {
   const [selected, setSelected] = useState<string[]>([])
-  const [version, setVersion] = useState(0)
-  // 끄는 동안에는 문서에 쓰지 않고 화면에서만 바꿔 보인다. 놓을 때 한 번만 저장한다.
-  const [preview, setPreview] = useState<{ ids: string[]; m: Matrix } | null>(null)
+  // 끄는 동안 자주 바뀌는 미리보기(옮기기 변환·지워질 획·선택 상자). 리액트 상태가 아니라 PageView가 구독한다.
+  const live = useMemo(() => new EditPreview(), [])
   const drag = useRef<Drag | null>(null)
   // 마우스를 올려 둔 손잡이(강조해 그린다)
   const hovered = useRef<Handle | null>(null)
-  const bump = useCallback(() => setVersion((v) => v + 1), [])
+  const bump = useCallback(() => live.bump(), [live])
+  const setPreview = useCallback((move: Move | null) => live.setMove(move), [live])
   // 지우개를 올려 둔 자리에서 누르면 지워질 획(화면에 흐리게 + 점선 상자로 보인다)
-  const [eraseTargets, setEraseTargets] = useState<string[]>([])
-  const showEraseTargets = useCallback(
-    (ids: string[]) =>
-      setEraseTargets((prev) => (prev.length === ids.length && prev.every((id, i) => id === ids[i]) ? prev : ids)),
-    [],
-  )
+  const showEraseTargets = useCallback((ids: string[]) => live.setEraseTargets(ids), [live])
 
   // 도구를 바꾸면 선택과 지우개 표시를 푼다.
   useEffect(() => {
     if (tool !== 'select') setSelected([])
-    if (tool !== 'eraser') setEraseTargets([])
-  }, [tool])
+    if (tool !== 'eraser') live.setEraseTargets([])
+  }, [tool, live])
 
   // 다른 사람이 선택한 획을 지우면 선택에서도 뺀다.
   useEffect(() => {
@@ -122,8 +155,14 @@ export function useEditTools(
   /** 고른 획들을 감싸는 상자(여백 포함) */
   const selectionBox = useCallback(
     (ids: string[]): Rect | null => {
-      const byId = new Map(readStrokes(doc).map((s) => [s.id, s]))
-      const r = unionRect(ids.flatMap((id) => (byId.has(id) ? [strokeBounds(byId.get(id)!)] : [])))
+      // 고른 획만 읽는다(1만 획 노트에서 손잡이를 그릴 때마다 전부 읽지 않게)
+      const map = strokesMap(doc)
+      const r = unionRect(
+        ids.flatMap((id) => {
+          const m = map.get(id)
+          return m ? [strokeBounds(readStroke(id, m))] : []
+        }),
+      )
       const pad = BOX_PAD / scale
       return r && { x: r.x - pad, y: r.y - pad, width: r.width + pad * 2, height: r.height + pad * 2 }
     },
@@ -276,7 +315,7 @@ export function useEditTools(
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets, strokeIndex, onlyAuthor, lasso])
+  }, [tool, doc, origin, selected, bump, setPreview, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets, strokeIndex, onlyAuthor, lasso])
 
   const deleteSelected = useCallback(() => {
     deleteStrokes(doc, selected, origin)
@@ -314,7 +353,7 @@ export function useEditTools(
         ctx.restore()
         return
       }
-      const m = preview?.m ?? IDENTITY
+      const m = live.move?.m ?? IDENTITY
       const corners = transformedCorners(box, m)
       // 선택 상자(돌리면 함께 기운다)
       ctx.setLineDash([8 / scale, 6 / scale])
@@ -356,8 +395,8 @@ export function useEditTools(
       ctx.stroke()
       ctx.restore()
     },
-    [selected, preview, scale, selectionBox],
+    [selected, live, scale, selectionBox],
   )
 
-  return { pointerTool, overlay, overlayVersion: version, selected, deleteSelected, preview, eraseTargets }
+  return { pointerTool, overlay, selected, deleteSelected, live }
 }
