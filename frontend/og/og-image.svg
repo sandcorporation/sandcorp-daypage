@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#e4e6ec" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="#f7f6f1"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <!-- 앱 아이콘(favicon.svg)을 키운 모양 -->
+  <g transform="translate(96 150) scale(9.2)" fill="none">
+    <rect x="5" y="3" width="24" height="28" rx="3" fill="#fff" stroke="#1F2128" stroke-width="2.2"/>
+    <path d="M10 12h14M10 18h9" stroke="#1F2128" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M19 25c3-4 6-4 8-8" stroke="#2A47B0" stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+  <g font-family="'Gothic A1','Apple SD Gothic Neo','NanumGothicCoding','Malgun Gothic',sans-serif" fill="#1f2128" font-weight="700">
+    <text x="470" y="270" font-size="116" font-weight="800">Daypage</text>
+    <path d="M474 306c80-14 170-14 250-2" stroke="#2a47b0" stroke-width="8" stroke-linecap="round" fill="none"/>
+    <text x="470" y="385" font-size="36" fill="#3b3f4a">링크 하나로 여러 사람이</text>
+    <text x="470" y="440" font-size="36" fill="#3b3f4a">같은 하루치 지면에 실시간으로</text>
+    <text x="470" y="495" font-size="36" fill="#3b3f4a">그리고 쓰는 협업 노트</text>
+  </g>
+  <rect x="0" y="606" width="1200" height="24" fill="#2a47b0"/>
+</svg>
