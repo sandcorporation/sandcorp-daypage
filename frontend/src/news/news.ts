@@ -24,6 +24,22 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-25-pad-fixes',
+    date: '10월 25일 밤 -3',
+    items: [
+      {
+        kind: 'fix',
+        title: '패드에서 레이어·사진 순서 바꾸기',
+        text: '레이어·사진 패널의 줄마다 왼쪽에 손잡이(⋮⋮)가 생겼어요. 손가락이나 펜슬로 손잡이를 끌면 순서가 바뀌고, 놓을 자리에 선이 보여요.',
+      },
+      {
+        kind: 'fix',
+        title: '패드 펜 획이 매끈해졌어요',
+        text: '화면을 줄여 두고 가는 펜으로 그으면 획에 군데군데 홈이 패던 것을 고쳤어요. 새로 긋는 획부터 매끈하게 그려져요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-25-big-notes',
     date: '10월 25일 밤 -2',
     items: [
