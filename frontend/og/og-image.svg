@@ -16,7 +16,7 @@
     <text x="470" y="270" font-size="116" font-weight="800">Daypage</text>
     <path d="M474 306c80-14 170-14 250-2" stroke="#2a47b0" stroke-width="8" stroke-linecap="round" fill="none"/>
     <text x="470" y="385" font-size="36" fill="#3b3f4a">링크 하나로 여러 사람이</text>
-    <text x="470" y="440" font-size="36" fill="#3b3f4a">같은 하루치 지면에 실시간으로</text>
+    <text x="470" y="440" font-size="36" fill="#3b3f4a">같은 페이지에 실시간으로</text>
     <text x="470" y="495" font-size="36" fill="#3b3f4a">그리고 쓰는 협업 노트</text>
   </g>
   <rect x="0" y="606" width="1200" height="24" fill="#2a47b0"/>

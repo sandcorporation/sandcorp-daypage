@@ -32,6 +32,11 @@ describe('링크 공유 카드 메타', () => {
     expect(metaContent('name', 'twitter:card')).toBe('summary_large_image')
     expect(metaContent('property', 'og:image:width')).toBe('1200')
     expect(metaContent('property', 'og:image:height')).toBe('630')
+    const copy = '링크 하나로 여러 사람이 같은 페이지에 실시간으로 그리고 쓰는 협업 노트'
+    expect(metaContent('name', 'description')).toBe(copy)
+    expect(metaContent('property', 'og:description')).toBe(copy)
+    expect(metaContent('name', 'twitter:description')).toBe(copy)
+    expect(metaContent('property', 'og:image:alt')).toBe(`Daypage — ${copy}`)
   })
 
   test('모든 경로가 같은 HTML을 받으므로 노트별 값(제목·내용·링크)은 메타에 없다', () => {
