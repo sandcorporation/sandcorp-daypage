@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-26-inapp-keyboard',
+    date: '10월 26일 오후',
+    items: [
+      {
+        kind: 'fix',
+        title: '카카오톡 안에서 글씨 쓰기',
+        text: '카카오톡 같은 앱 안 브라우저에서 글씨 도구로 지면을 눌러도 키보드가 뜨지 않아 글을 쓸 수 없던 것을 고쳤어요. 건의해 주셔서 고마워요!',
+      },
+    ],
+  },
+  {
     id: '2026-10-25-pad-fixes',
     date: '10월 25일 밤 -3',
     items: [

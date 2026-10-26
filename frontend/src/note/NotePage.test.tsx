@@ -172,6 +172,22 @@ describe('손가락·화면 고정', () => {
     expect(strokes()).toBe(1)
   })
 
+  test('글씨 도구로 손가락 탭하면 그 탭 처리 중에 입력 칸에 포커스가 가 휴대폰 키보드가 뜬다(앱 안 브라우저)', async () => {
+    renderNote()
+    act(() => latest().emit('sync', [true]))
+    await userEvent.click(screen.getByRole('button', { name: '글씨' }))
+    // 앱 안 브라우저(WKWebView 등)는 터치 이벤트 처리 중에 받은 포커스에만 키보드를 띄운다.
+    let focusedDuringTap: Element | null = null
+    const record = () => (focusedDuringTap = document.activeElement)
+    window.addEventListener('pointerdown', record)
+    touch('pointerDown', 1, 120)
+    window.removeEventListener('pointerdown', record)
+    touch('pointerUp', 1, 120)
+    expect(focusedDuringTap).toBeInstanceOf(HTMLInputElement)
+    // 편집기가 그려지면 포커스는 글 상자로 넘어간다.
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', '글 상자'))
+  })
+
   test('화면 고정·손 버튼은 누르면 켜지고 알리며, 이 브라우저에 기억한다', async () => {
     renderNote()
     const lock = screen.getByRole('button', { name: '화면 고정' })

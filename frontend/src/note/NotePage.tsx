@@ -9,6 +9,7 @@ import { PhotoPanel } from "../page/PhotoPanel";
 import { photoBase } from "../page/photos";
 import { usePhotoPicker } from "../page/usePhotoPicker";
 import { createTextBoxAt, removeLeftoverEmptyBoxes } from "../page/textbox";
+import { primeKeyboard } from "../page/keyboardProxy";
 import { updateTextBox } from "../page/doc";
 import { fontOf } from "../page/fonts";
 import { LayerPanel } from "../page/LayerPanel";
@@ -516,7 +517,9 @@ export function NotePage({ initial }: Props) {
 
   const textTool = useMemo<PointerTool>(
     () => ({
-      down(p) {
+      down(p, e) {
+        // 휴대폰 키보드는 탭 처리 중에만 띄울 수 있다(앱 안 브라우저). 편집기는 다시 그린 뒤에 포커스를 받는다.
+        if (e.pointerType !== "mouse") primeKeyboard(e.clientX, e.clientY);
         const id = createTextBoxAt(
           doc,
           p,
