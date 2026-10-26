@@ -37,7 +37,7 @@ import { NewsButton } from "../news/NewsButton";
 import { PaperButton } from "./PaperButton";
 import { normalizePaper, type Paper } from "../page/paper";
 import { fingerScrollsOnly, type PenOnlyMode } from "../page/penOnly";
-import { SuggestButton } from "../suggest/SuggestButton";
+import { SuggestButton, type SuggestionContext } from "../suggest/SuggestButton";
 import { NoteHeader } from "./NoteHeader";
 import { Cursors } from "./Cursors";
 import { MemberLimitControl } from "./MemberLimitControl";
@@ -533,6 +533,28 @@ export function NotePage({ initial }: Props) {
     [doc, ink, note.me.nickname, origin, font],
   );
 
+  // 건의와 함께 보내는 화면 상태. 펜 전용 모드(손 버튼)·화면 고정처럼 켜 둔 줄 모르는 설정 때문에 '안 된다'는 건의를 가려내려고.
+  const layerNow = layers.find((l) => l.id === currentLayer);
+  const suggestionContext = (): SuggestionContext => ({
+    tool,
+    shape: tool === "shape" ? shape : null,
+    fingerMoves,
+    penOnly,
+    penSeen,
+    viewLock,
+    zoom: String(zoom),
+    scale: Math.round(scale * 100) / 100,
+    focusMode: focus,
+    dock,
+    layer: layerNow?.name ?? null,
+    layerLocked: layerNow?.locked ?? false,
+    layerHidden: hiddenLayers.has(currentLayer),
+    editingTextBox: editingBoxId !== null,
+    connection: status,
+    synced,
+    pageKey: note.page.key,
+  });
+
   // 단축키(page/shortcuts.ts). 사용자가 바꿀 수 있어 키를 직접 보지 않고 지금 단축키 표에서 동작을 찾는다.
   const keymap = useKeymap();
   // 계정에 둔 단축키를 받아 온다(그 전에는 이 브라우저의 사본)
@@ -931,7 +953,7 @@ export function NotePage({ initial }: Props) {
             newVersion={newVersion}
           />
           <NewsButton />
-          <SuggestButton noteId={note.id} />
+          <SuggestButton noteId={note.id} context={suggestionContext} />
           <ShortcutsButton open={keysOpen} onOpen={setKeysOpen} />
         </div>
       )}

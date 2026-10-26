@@ -20,6 +20,39 @@ log = logging.getLogger(__name__)
 ALERT_STATUSES = {Suggestion.Status.REVIEWING, Suggestion.Status.DONE}
 # 디스코드 메시지 한도는 2000자. 머리글·덧붙임을 빼고 본문은 이만큼만 옮긴다.
 QUOTE_LIMIT = 1500
+# 건의에 함께 남기는 화면 상태: 평평한 짧은 값만, 이만큼까지
+CONTEXT_MAX_KEYS = 40
+CONTEXT_KEY_LIMIT = 40
+CONTEXT_VALUE_LIMIT = 300
+# 디스코드 알림에 옮기는 화면 상태 한 줄의 길이. 브라우저 정보(userAgent)는 길어서 뺀다.
+CONTEXT_LINE_LIMIT = 400
+
+
+def clean_context(raw: object) -> dict:
+    """화면이 보낸 상태에서 남길 것만 고른다: 짧은 이름에 문자열·수·참거짓·null 값만, 긴 글은 자른다."""
+    if not isinstance(raw, dict):
+        return {}
+    kept: dict = {}
+    for key, value in raw.items():
+        if len(kept) >= CONTEXT_MAX_KEYS:
+            break
+        if not isinstance(key, str) or not key or len(key) > CONTEXT_KEY_LIMIT:
+            continue
+        if isinstance(value, str):
+            kept[key] = value[:CONTEXT_VALUE_LIMIT]
+        elif value is None or isinstance(value, (bool, int, float)):
+            kept[key] = value
+    return kept
+
+
+def _context_line(context: dict) -> str:
+    def show(v: object) -> str:
+        return "null" if v is None else str(v).lower() if isinstance(v, bool) else str(v)
+
+    line = " · ".join(f"{k}={show(v)}" for k, v in sorted(context.items()) if k != "userAgent")
+    if len(line) > CONTEXT_LINE_LIMIT:
+        line = line[:CONTEXT_LINE_LIMIT] + "…"
+    return f"🔧 {line}" if line else ""
 
 
 def change_status(s: Suggestion, status: str, note: str = "") -> bool:
@@ -63,6 +96,8 @@ def message(s: Suggestion, event: str, note: str = "") -> str:
     else:
         head = f"건의 #{s.id} · {Suggestion.Status(event).label}{who}"
     parts = [head, _quote(s.text)]
+    if event == "new" and (line := _context_line(s.context or {})):
+        parts.append(line)
     if note:
         parts.append(note.strip()[:300])
     return "\n".join(parts)

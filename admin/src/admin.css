@@ -277,6 +277,33 @@ body {
   white-space: pre-wrap;
   line-height: 1.6;
 }
+.card-context {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.card-context summary {
+  cursor: pointer;
+}
+.card-context dl {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 0;
+}
+.card-context dl > div {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.card-context dt {
+  flex: none;
+  min-width: 120px;
+}
+.card-context dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
 .card-meta {
   display: flex;
   flex-wrap: wrap;

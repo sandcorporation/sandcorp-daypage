@@ -53,6 +53,19 @@ def test_new_suggestion_is_announced_after_commit(sent, django_capture_on_commit
     assert sent[0]["allowed_mentions"] == {"parse": []}
 
 
+def test_new_suggestion_alert_shows_screen_context_without_user_agent(sent, django_capture_on_commit_callbacks):
+    client = login_as(1)
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(
+            "/api/suggestions",
+            {"text": "입력창이 안 떠요", "context": {"tool": "text", "fingerMoves": True, "userAgent": "Mozilla/5.0"}},
+            content_type="application/json",
+        )
+    last = sent[0]["content"].split("\n")[-1]
+    assert "fingerMoves=true" in last and "tool=text" in last
+    assert "Mozilla" not in sent[0]["content"]
+
+
 def test_reviewing_and_done_from_staff_page_are_announced_but_others_are_not(sent, django_capture_on_commit_callbacks):
     s = leave()
     admin = staff()

@@ -44,6 +44,33 @@ def test_note_of_suggestion_is_kept_only_for_members():
     assert Suggestion.objects.get().note_id is None
 
 
+def test_suggestion_keeps_screen_context_for_finding_user_slips():
+    """건의를 보낼 때의 화면 상태(도구·손 모드·기기)를 함께 남긴다. 사용자의 설정 실수를 가려내려고."""
+    client = login_as(1)
+    context = {"tool": "text", "fingerMoves": True, "scale": 0.75, "layer": None, "userAgent": "Mozilla/5.0 KAKAOTALK"}
+    res = client.post("/api/suggestions", {"text": "입력창이 안 떠요", "context": context}, content_type="application/json")
+    assert res.status_code == 201
+    assert Suggestion.objects.get().context == context
+    rows = staff().get("/api/admin/suggestions").json()
+    assert rows[0]["context"] == context
+
+
+def test_suggestion_context_keeps_only_small_flat_values():
+    """화면이 보내는 값이라도 믿지 않는다: 평평한 짧은 값만 남기고, 이상하면 건의는 그대로 받는다."""
+    client = login_as(1)
+    context = {"tool": "pen", "nested": {"a": 1}, "list": [1, 2], "long": "가" * 500, "k" * 100: 1}
+    assert client.post("/api/suggestions", {"text": "a", "context": context}, content_type="application/json").status_code == 201
+    kept = Suggestion.objects.get().context
+    assert kept["tool"] == "pen"
+    assert "nested" not in kept and "list" not in kept and "k" * 100 not in kept
+    assert len(kept["long"]) <= 300
+    many = {f"k{i}": i for i in range(100)}
+    assert client.post("/api/suggestions", {"text": "b", "context": many}, content_type="application/json").status_code == 201
+    assert len(Suggestion.objects.order_by("-id").first().context) <= 40
+    assert client.post("/api/suggestions", {"text": "c"}, content_type="application/json").status_code == 201
+    assert Suggestion.objects.order_by("-id").first().context == {}
+
+
 def test_too_many_suggestions_in_a_day_are_refused(settings):
     settings.SUGGESTIONS_PER_DAY = 2
     client = login_as(1)

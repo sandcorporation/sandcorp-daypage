@@ -204,6 +204,23 @@ describe('손가락·화면 고정', () => {
   })
 })
 
+test('건의를 보내면 지금 도구·펜 전용 모드 같은 화면 상태가 함께 간다(설정 실수를 가려내려고)', async () => {
+  localStorage.clear()
+  const fetchMock = vi.fn(async () => new Response('{"id":1}', { status: 201 }))
+  vi.stubGlobal('fetch', fetchMock)
+  renderNote()
+  act(() => latest().emit('sync', [true]))
+  await userEvent.click(screen.getByRole('button', { name: '글씨' }))
+  await userEvent.click(screen.getByRole('button', { name: '손가락으로 화면 옮기기' }))
+  await userEvent.click(screen.getByRole('button', { name: '기능 건의' }))
+  await userEvent.type(screen.getByRole('textbox', { name: '건의 내용' }), '입력창이 안 떠요')
+  await userEvent.click(screen.getByRole('button', { name: '보내기' }))
+  await waitFor(() => expect(screen.getByText(/고마워요/)).toBeInTheDocument())
+  const call = fetchMock.mock.calls.find((c) => String((c as unknown[])[0]) === '/api/suggestions') as unknown as [string, RequestInit]
+  const { context } = JSON.parse(call[1].body as string)
+  expect(context).toMatchObject({ tool: 'text', fingerMoves: true, penOnly: 'on', viewLock: false, synced: true })
+})
+
 test('만든 사람에게만 새 페이지 시각 버튼이 보이고, 봉인 예정이 바뀌었다는 알림에 카운트다운이 바뀐다', () => {
   render(
     <MemoryRouter>

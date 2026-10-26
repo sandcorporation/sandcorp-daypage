@@ -162,6 +162,8 @@ class Suggestion(models.Model):
     # 어느 노트에서 보냈는지(노트가 지워지면 비운다)
     note = models.ForeignKey(Note, on_delete=models.SET_NULL, null=True, blank=True, related_name="suggestions")
     text = models.TextField()
+    # 보낼 때의 화면 상태(도구·펜 전용 모드·확대·기기 등). 설정 실수를 가려내려고 남긴다(suggestions.clean_context).
+    context = models.JSONField(default=dict, blank=True, db_default=Value({}, output_field=models.JSONField()))
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW)
     created_at = models.DateTimeField(auto_now_add=True)
 

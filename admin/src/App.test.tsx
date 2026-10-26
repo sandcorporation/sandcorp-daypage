@@ -57,6 +57,34 @@ test('운영자는 현황을 본다: 숫자와 그래프', async () => {
   expect(screen.getAllByText('표로 보기').length).toBeGreaterThan(0)
 })
 
+test('건의에 함께 온 화면 상태를 펼쳐 볼 수 있다', async () => {
+  window.location.hash = '#suggestions'
+  stubApi({
+    '/api/me': { authenticated: true, isStaff: true },
+    '/api/admin/suggestions': [
+      {
+        id: 8,
+        text: '입력창이 안 떠요',
+        status: 'new',
+        createdAt: '2026-10-26T07:37:00Z',
+        userId: 3,
+        noteId: 'n',
+        noteName: '우리집',
+        context: { tool: 'text', fingerMoves: true, layer: null },
+      },
+      { id: 7, text: '지우개 크기', status: 'new', createdAt: '2026-10-19T05:00:00Z', userId: 3, noteId: 'n', noteName: '우리집', context: {} },
+    ],
+  })
+  render(<App />)
+  expect(await screen.findByText('입력창이 안 떠요')).toBeInTheDocument()
+  // 상태가 온 건의에만 보인다
+  expect(screen.getAllByText('화면 상태')).toHaveLength(1)
+  await userEvent.click(screen.getByText('화면 상태'))
+  expect(screen.getByText('fingerMoves')).toBeInTheDocument()
+  expect(screen.getByText('true')).toBeInTheDocument()
+  expect(screen.getByText('null')).toBeInTheDocument()
+})
+
 test('건의함에서 상태를 바꾸면 저장하고, 거르는 상태에서 빠진 건의는 목록에서 사라진다', async () => {
   window.location.hash = '#suggestions'
   const calls = stubApi({

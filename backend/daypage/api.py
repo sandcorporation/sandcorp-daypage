@@ -1,7 +1,7 @@
 import datetime as dt
 import json
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from django.conf import settings
 from django.db import transaction
@@ -129,6 +129,8 @@ def put_shortcuts(request):
 class SuggestionIn(Schema):
     text: str
     noteId: str | None = None
+    # 보낼 때의 화면 상태. 무엇이 와도 건의는 받고, 남길 것만 고른다(suggestions.clean_context).
+    context: Any = None
 
 
 SUGGESTION_MAX = 1000
@@ -148,7 +150,8 @@ def create_suggestion(request, payload: SuggestionIn):
     note_id = payload.noteId
     if note_id and not NoteMember.objects.filter(note_id=note_id, user=request.user).exists():
         note_id = None
-    s = Suggestion.objects.create(user=request.user, note_id=note_id, text=text)
+    context = suggestions.clean_context(payload.context)
+    s = Suggestion.objects.create(user=request.user, note_id=note_id, text=text, context=context)
     suggestions.announce(s.id, "new")
     return 201, {"id": s.id}
 

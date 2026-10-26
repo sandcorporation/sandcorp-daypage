@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-26-suggest-context',
+    date: '10월 26일 오후 -2',
+    items: [
+      {
+        kind: 'new',
+        title: '건의에 화면 상태도 함께',
+        text: '건의를 보내면 그때의 도구·화면 설정(펜 전용 모드, 화면 고정 등)과 기기 정보도 함께 가요. 켜 둔 설정 때문에 생긴 불편인지 빨리 알아보고 답해 드릴게요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-26-inapp-keyboard',
     date: '10월 26일 오후',
     items: [

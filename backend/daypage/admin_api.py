@@ -149,6 +149,7 @@ def list_suggestions(request, status: str | None = None):
             "userId": s.user_id,
             "noteId": s.note_id,
             "noteName": s.note.name if s.note else None,
+            "context": s.context,
         }
         for s in qs[:LIST_LIMIT]
     ]

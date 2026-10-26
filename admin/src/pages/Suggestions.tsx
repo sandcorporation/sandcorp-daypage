@@ -46,6 +46,19 @@ export function Suggestions() {
         {items?.map((s) => (
           <li key={s.id} className="card">
             <p className="card-text">{s.text}</p>
+            {s.context && Object.keys(s.context).length > 0 && (
+              <details className="card-context">
+                <summary>화면 상태</summary>
+                <dl>
+                  {Object.entries(s.context).map(([k, v]) => (
+                    <div key={k}>
+                      <dt>{k}</dt>
+                      <dd>{v === null ? 'null' : String(v)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            )}
             <div className="card-meta">
               <span>{shortTime(s.createdAt)}</span>
               <span>사용자 #{s.userId ?? '—'}</span>

@@ -4,13 +4,29 @@ import { ToolPopover } from '../components/ToolPopover'
 
 const MAX = 1000
 
+/** 건의와 함께 남기는 화면 상태. 평평한 짧은 값만(서버가 그 밖은 버린다). */
+export type SuggestionContext = Record<string, string | number | boolean | null>
+
 type Props = {
   /** 건의를 보낸 노트(운영자만 본다) */
   noteId?: string
+  /** 보내는 순간의 화면 상태(도구·펜 전용 모드 등). 사용자의 설정 실수를 가려내려고 운영자가 본다. */
+  context?: () => SuggestionContext
+}
+
+/** 기기·브라우저 정보. 앱 안 브라우저·화면 크기 같은 것으로 문제를 좁힌다. */
+function deviceContext(): SuggestionContext {
+  return {
+    userAgent: navigator.userAgent,
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    pixelRatio: window.devicePixelRatio,
+    touchPoints: navigator.maxTouchPoints ?? 0,
+    standalone: window.matchMedia?.('(display-mode: standalone)').matches ?? false,
+  }
 }
 
 /** 아래 왼쪽 '건의' 버튼. 바라는 기능이나 불편한 점을 글로 남긴다. */
-export function SuggestButton({ noteId }: Props) {
+export function SuggestButton({ noteId, context }: Props) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle')
@@ -31,7 +47,7 @@ export function SuggestButton({ noteId }: Props) {
     setState('sending')
     setError(null)
     try {
-      await api('/api/suggestions', { method: 'POST', body: JSON.stringify({ text: text.trim(), noteId }) })
+      await api('/api/suggestions', { method: 'POST', body: JSON.stringify({ text: text.trim(), noteId, context: { ...context?.(), ...deviceContext() } }) })
       setState('sent')
     } catch (e) {
       setState('idle')
@@ -74,7 +90,10 @@ export function SuggestButton({ noteId }: Props) {
                 void send()
               }}
             >
-              <p className="tool-pop-caption">있었으면 하는 기능이나 불편했던 점을 적어 주세요.</p>
+              <p className="tool-pop-caption">
+                있었으면 하는 기능이나 불편했던 점을 적어 주세요. 문제를 찾는 데 쓰도록 지금 도구·화면 설정과 기기 정보도
+                함께 보내요.
+              </p>
               <textarea
                 aria-label="건의 내용"
                 value={text}

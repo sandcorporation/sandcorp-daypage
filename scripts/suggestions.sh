@@ -2,7 +2,7 @@
 # 운영 건의함(daypage_suggestion)을 읽기 전용으로 살핀다. Orca 자동화(docs/agents/suggestion-automation.md)가 쓴다.
 #
 #   suggestions.sh check     새 건의(status=new, 아직 배정 안 됨)가 있으면 0, 없으면 1  ← Orca 자동화의 precheck
-#   suggestions.sh list      새 건의를 JSON 한 줄씩 출력 {"id","at"(KST),"nickname","text"}
+#   suggestions.sh list      새 건의를 JSON 한 줄씩 출력 {"id","at"(KST),"nickname","text","context"(보낼 때의 화면 상태)}
 #   suggestions.sh take      list와 같되, 출력한 건의를 '배정됨'으로 기록한다(다음 check에서 빠진다)
 #   suggestions.sh mark ID…  해당 id를 배정됨으로 기록만 한다(처음 설치할 때 지난 건의를 거르는 용도)
 #   suggestions.sh status ID reviewing|done|declined [덧붙임]
@@ -25,7 +25,8 @@ query_new() {
         SELECT s.id,
                to_char(s.created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD HH24:MI') AS at,
                COALESCE(m.nickname, '') AS nickname,
-               s.text
+               s.text,
+               COALESCE(to_jsonb(s)->'context', '{}'::jsonb) AS context
         FROM daypage_suggestion s
         LEFT JOIN daypage_notemember m ON m.note_id = s.note_id AND m.user_id = s.user_id
         WHERE s.status = 'new' ORDER BY s.id

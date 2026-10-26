@@ -54,6 +54,8 @@ export type Suggestion = {
   userId: number | null
   noteId: string | null
   noteName: string | null
+  /** 보낼 때의 화면 상태(도구·펜 전용 모드·기기 등). 예전 건의는 비어 있다. */
+  context?: Record<string, string | number | boolean | null>
 }
 
 export type NoteRow = {
