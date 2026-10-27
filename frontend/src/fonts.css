@@ -1,0 +1,56 @@
+/*
+ * 웹폰트(직접 호스팅)와, 웹폰트가 도착하기 전에 쓰는 크기 맞춤 대체 글꼴.
+ *
+ * 첫 방문에서 시스템 글꼴로 먼저 그렸다가 웹폰트로 바뀌면 글자 폭·줄 높이가 달라져 화면이 움직인다(CLS).
+ * 그래서 대체 글꼴 face를 따로 두고 웹폰트 메트릭에 맞춘다.
+ *
+ * 수치 계산 (실제 글꼴 파일의 head/hhea/hmtx에서 읽은 값, em = unitsPerEm 대비):
+ *   size-adjust     = 웹폰트 한글 '가'의 advance ÷ 시스템 한글 글꼴의 advance (한글 완성형은 모두 1em)
+ *   ascent-override = 웹폰트 hhea.ascent  ÷ size-adjust   (override는 size-adjust가 다시 곱해지므로 나눠서 넣는다)
+ *   descent-override= 웹폰트 |hhea.descent| ÷ size-adjust
+ *   line-gap-override = 웹폰트 hhea.lineGap ÷ size-adjust
+ *
+ *   글꼴              가 advance   ascent   descent  lineGap
+ *   Gothic A1         0.9609       0.7979   0.2021   0.25
+ *   Nanum Pen Script  0.665        0.8      0.2      0.25
+ *
+ * override는 대체 글꼴 자체의 세로 메트릭을 덮어쓰므로, 어떤 시스템 글꼴이 잡혀도 줄 높이가 같다.
+ * 가로 폭(size-adjust)은 시스템 한글 글꼴의 한글 advance가 1em이라는 점에 기댄 값이다.
+ */
+@import '@fontsource/gothic-a1/400.css';
+@import '@fontsource/gothic-a1/600.css';
+@import '@fontsource/gothic-a1/800.css';
+@import '@fontsource/nanum-pen-script/400.css';
+@import '@fontsource/gaegu/400.css';
+@import '@fontsource/gaegu/700.css';
+
+@font-face {
+  font-family: 'Gothic A1 Fallback';
+  font-weight: 400;
+  src: local('Apple SD Gothic Neo'), local('AppleSDGothicNeo-Regular'), local('Malgun Gothic'),
+    local('Noto Sans CJK KR'), local('Noto Sans KR');
+  size-adjust: 96.09%;
+  ascent-override: 83.03%;
+  descent-override: 21.03%;
+  line-gap-override: 26.02%;
+}
+@font-face {
+  font-family: 'Gothic A1 Fallback';
+  font-weight: 600 800;
+  src: local('Apple SD Gothic Neo Bold'), local('AppleSDGothicNeo-Bold'), local('Malgun Gothic Bold'),
+    local('Noto Sans CJK KR Bold'), local('Noto Sans KR Bold');
+  size-adjust: 96.09%;
+  ascent-override: 83.03%;
+  descent-override: 21.03%;
+  line-gap-override: 26.02%;
+}
+
+@font-face {
+  font-family: 'Nanum Pen Script Fallback';
+  src: local('Apple SD Gothic Neo'), local('AppleSDGothicNeo-Regular'), local('Malgun Gothic'),
+    local('Noto Sans CJK KR'), local('Noto Sans KR');
+  size-adjust: 66.5%;
+  ascent-override: 120.3%;
+  descent-override: 30.08%;
+  line-gap-override: 37.59%;
+}

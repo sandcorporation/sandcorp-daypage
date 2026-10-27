@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/gaegu':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/gothic-a1':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/nanum-pen-script':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@sentry/react':
         specifier: ^11.8.0
         version: 11.8.0(react-router@8.4.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)
@@ -179,6 +188,15 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+
+  '@fontsource/gaegu@5.3.0':
+    resolution: {integrity: sha512-eSVEXay02/DAB5BtH/gpsujvpT78EjO6XVuNA1ap1G+xvr3zokU2HoLoaW+CfzykRuVgDQ2oZ1oe7VAlmGZt/A==}
+
+  '@fontsource/gothic-a1@5.3.0':
+    resolution: {integrity: sha512-0HmmE3YQgdcXkVZd/pRTw7MOc9PffY7tNrR/dovEGO00cno/4ImiHxEXdJoq80Bs2jC52wuvuFRcepJ38mksEw==}
+
+  '@fontsource/nanum-pen-script@5.3.0':
+    resolution: {integrity: sha512-at9MFL8ga0A3Xce1+CO6/56F/SHIlf++D4vVKw3yCNRPKh6JU0UgZ3r9un0qHPVxx0Miq2bGZ35RRRlu/4BIDg==}
 
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
@@ -1331,6 +1349,12 @@ snapshots:
 
   '@floating-ui/utils@0.2.12':
     optional: true
+
+  '@fontsource/gaegu@5.3.0': {}
+
+  '@fontsource/gothic-a1@5.3.0': {}
+
+  '@fontsource/nanum-pen-script@5.3.0': {}
 
   '@jridgewell/resolve-uri@3.1.2': {}
 

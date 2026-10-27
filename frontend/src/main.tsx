@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router'
+import './fonts.css'
 import './index.css'
 import { startErrorReporting } from './errorReporting.ts'
 import { HistoryPage } from './history/HistoryPage.tsx'

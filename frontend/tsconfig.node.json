@@ -19,5 +19,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "metricsSnippet.ts"]
+  "include": ["vite.config.ts", "metricsSnippet.ts", "fontPreload.ts"]
 }
