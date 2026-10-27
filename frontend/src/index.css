@@ -18,8 +18,8 @@
   --green: #16794f;
   --kakao: #fee500;
 
-  --sans: 'Gothic A1', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-  --hand: 'Nanum Pen Script', cursive;
+  --sans: 'Gothic A1', 'Gothic A1 Fallback', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --hand: 'Nanum Pen Script', 'Nanum Pen Script Fallback', cursive;
 
   font-family: var(--sans);
   color: var(--ink);

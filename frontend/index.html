@@ -13,10 +13,20 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- 첫 화면에 안 쓰는 편집기 글꼴(감자꽃·하이멜로디·나눔명조)만 외부에서 받는다. 화면 그리기를 막지 않게 print로 받고 로드되면 켠다.
+         첫 화면 글꼴(Gothic A1·Nanum Pen Script·Gaegu)은 직접 호스팅(src/fonts.css)이다(#73). -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;600;800&family=Nanum+Pen+Script&family=Gaegu:wght@400;700&family=Gamja+Flower&family=Hi+Melody&family=Nanum+Myeongjo:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Gamja+Flower&family=Hi+Melody&family=Nanum+Myeongjo:wght@400;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Gamja+Flower&family=Hi+Melody&family=Nanum+Myeongjo:wght@400;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
     <title>Daypage</title>
     <!-- 링크 공유 카드. 모든 경로가 이 파일을 받으므로 공유 노트 링크에도 일반 문구만 나간다(노트 제목·내용은 넣지 않는다). -->
     <meta name="description" content="링크 하나로 여러 사람이 같은 페이지에 실시간으로 그리고 쓰는 협업 노트" />
