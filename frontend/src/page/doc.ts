@@ -284,3 +284,29 @@ export function transformStrokes(doc: Y.Doc, ids: string[], m: Matrix, origin?: 
     }
   }, origin)
 }
+
+/**
+ * 고른 획과 글 상자를 한 번에 옮긴다(되돌리기 한 단계). 획은 m으로 변환하고, 글 상자는 m의 이동량만큼 옮긴다
+ * (섞인 묶음은 옮기기만 하므로 m은 이동이다).
+ */
+export function transformSelection(doc: Y.Doc, strokes: string[], texts: string[], m: Matrix, origin?: unknown): void {
+  if (strokes.length === 0 && texts.length === 0) return
+  doc.transact(() => {
+    transformStrokes(doc, strokes, m, origin)
+    for (const id of texts) {
+      const t = textboxesMap(doc).get(id)
+      if (!t) continue
+      t.set('x', round((t.get('x') as number) + m[4]))
+      t.set('y', round((t.get('y') as number) + m[5]))
+    }
+  }, origin)
+}
+
+/** 고른 획과 글 상자를 한 번에 지운다(되돌리기 한 단계). */
+export function deleteSelection(doc: Y.Doc, strokes: string[], texts: string[], origin?: unknown): void {
+  if (strokes.length === 0 && texts.length === 0) return
+  doc.transact(() => {
+    for (const id of strokes) strokesMap(doc).delete(id)
+    for (const id of texts) textboxesMap(doc).delete(id)
+  }, origin)
+}

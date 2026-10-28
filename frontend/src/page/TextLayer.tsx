@@ -1,5 +1,5 @@
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import * as Y from 'yjs'
 import { readTextBox, textBoxContent, textboxesMap, updateTextBox, type TextBox } from './doc'
 import { LINE_GAP, PAGE_WIDTH, pageDelta } from './geometry'
@@ -10,6 +10,7 @@ import { FormatBar } from './FormatBar'
 import { clampBoxWidth, fitBoxInPage, nudgeBox, removeIfEmpty, shouldRemoveOnBlur, snapBoxPosition } from './textbox'
 import type { ToolKind } from './tools'
 import { PAN_START_EVENT } from './touchPan'
+import type { EditPreview } from './useEditTools'
 
 /** 서식 막대의 화면 폭(px, 대략). 장 오른쪽 끝에서 잘리지 않게 자리를 정할 때 쓴다. */
 const FORMAT_BAR_WIDTH = 480
@@ -33,6 +34,24 @@ type Props = {
   me: string
   /** 노트 색: 서식 막대의 글자 색에 함께 보인다 */
   noteColors?: string[]
+  /** 선택 도구로 고른 글 상자(테두리로 보인다) */
+  selectedTexts?: readonly string[]
+  /** 선택 도구로 묶음을 끄는 동안의 미리보기: 고른 글 상자를 같은 만큼 옮겨 보인다 */
+  editPreview?: EditPreview
+}
+
+const noSubscribe = () => () => {}
+
+/** 끄는 동안 이 상자가 옮겨 보일 거리. 문자열이라 같은 값이면 다시 그리지 않는다. */
+function usePreviewOffset(preview: EditPreview | undefined, id: string): { dx: number; dy: number } {
+  const subscribe = useCallback((fn: () => void) => (preview ? preview.subscribe(fn) : noSubscribe()), [preview])
+  const key = useSyncExternalStore(subscribe, () => {
+    const mv = preview?.move
+    return mv && mv.texts.includes(id) ? `${mv.m[4]},${mv.m[5]}` : ''
+  })
+  if (!key) return { dx: 0, dy: 0 }
+  const [dx, dy] = key.split(',').map(Number)
+  return { dx, dy }
 }
 
 function useTextBoxes(doc: Y.Doc): TextBox[] {
@@ -77,7 +96,11 @@ function TextBoxView({
   editors,
   me,
   noteColors,
+  selectedTexts,
+  editPreview,
 }: ViewProps) {
+  const offset = usePreviewOffset(editPreview, box.id)
+  const picked = tool === 'select' && !!selectedTexts?.includes(box.id)
   const fragment = textBoxContent(doc, box.id)
   const [focused, setFocused] = useState(false)
   // 서식 막대는 옮기기 손잡이를 (끌지 않고) 눌렀을 때만 연다.
@@ -138,6 +161,9 @@ function TextBoxView({
   }, [editor, focusId, box.id, onFocusHandled])
 
   const interactive = !readOnly && (tool === 'text' || tool === 'select')
+  // 상자가 포인터를 직접 받는지. 선택 도구에서는 몸통을 누르면 지면(선택 도구)이 고르고 옮긴다(다른 획·글 상자와 섞어 고르게).
+  // 손잡이·폭 조절은 늘 상자가 처리한다.
+  const ownsPointer = interactive && (tool !== 'select' || focused)
 
   // 내가 쓰는 동안 줄이 늘어 장 아래로 넘치면 상자를 칸 단위로 끌어올린다.
   // (장 밖은 잘려서 다른 사람에게 보이지 않는다. 옮긴 위치는 동기화된다.)
@@ -165,8 +191,8 @@ function TextBoxView({
       return !open
     })
   }
-  const x = drag?.x ?? box.x
-  const y = drag?.y ?? box.y
+  const x = (drag?.x ?? box.x) + offset.dx
+  const y = (drag?.y ?? box.y) + offset.dy
   const width = drag?.width ?? box.width
   const others = editors.get(box.id) ?? []
   // 아무도 쓰지 않는 빈 상자는 보이지 않게 둔다(나갔다 들어와 남은 상자 등).
@@ -258,10 +284,10 @@ function TextBoxView({
 
   return (
     <div
-      className={`textbox${focused ? ' is-focused' : ''}${interactive ? ' is-interactive' : ''}${tool === 'select' ? ' is-select' : ''}${idleEmpty ? ' is-idle-empty' : ''}`}
+      className={`textbox${focused ? ' is-focused' : ''}${interactive ? ' is-interactive' : ''}${tool === 'select' ? ' is-select' : ''}${picked ? ' is-picked' : ''}${idleEmpty ? ' is-idle-empty' : ''}`}
       ref={rootRef}
       data-box-id={box.id}
-      {...(interactive ? { 'data-page-ui': '' } : {})}
+      {...(ownsPointer ? { 'data-page-ui': '' } : {})}
       style={{
         left: x,
         top: y,
@@ -271,9 +297,6 @@ function TextBoxView({
         fontSize: box.fontSize,
         lineHeight: `${LINE_GAP}px`,
         borderColor: others[0]?.color,
-      }}
-      onPointerDown={(e) => {
-        if (tool === 'select' && !focused) startDrag('move', e)
       }}
       onPointerMove={moveDrag}
       onPointerUp={(e) => void endDrag(e)}
@@ -299,6 +322,7 @@ function TextBoxView({
         <button
           type="button"
           className={`textbox-grip${x * scale < 36 ? ' inside' : ''}`}
+          data-page-ui=""
           aria-label="글 상자 옮기기·서식 (끌어서 옮기기, 눌러서 서식)"
           title="끌어서 옮기기 · 눌러서 서식 · 화살표 키로 한 칸씩"
           style={{ transform: `scale(${1 / scale})` }}
@@ -330,6 +354,7 @@ function TextBoxView({
       {interactive && (
         <span
           className="textbox-handle"
+          data-page-ui=""
           style={{ transform: `scale(${1 / scale})` }}
           role="separator"
           aria-orientation="vertical"

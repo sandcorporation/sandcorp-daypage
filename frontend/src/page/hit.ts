@@ -122,6 +122,24 @@ export function strokesInLasso(strokes: Stroke[], path: Point[]): string[] {
     .map((s) => s.id)
 }
 
+/** 사각형(글 상자 등)이 올가미에 걸리는지: 꼭짓점이 안에 있거나, 올가미 길이 사각형 안을 지나거나, 변이 엇갈린다. */
+export function rectInLasso(r: Rect, path: Point[]): boolean {
+  if (path.length < 3) return false
+  const corners: Point[] = [
+    { x: r.x, y: r.y },
+    { x: r.x + r.width, y: r.y },
+    { x: r.x + r.width, y: r.y + r.height },
+    { x: r.x, y: r.y + r.height },
+  ]
+  if (corners.some((c) => insidePolygon(c, path))) return true
+  if (path.some((p) => p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height)) return true
+  const sides = corners.map((c, i) => [c, corners[(i + 1) % 4]] as [Point, Point])
+  return path.some((p, i) => {
+    const q = path[(i + 1) % path.length]
+    return sides.some(([a, b]) => segmentsIntersect(p, q, a, b))
+  })
+}
+
 /** 묶음 경계가 장 밖으로 나가지 않게 이동량을 줄인다. */
 export function clampMoveDelta(bounds: Rect, dx: number, dy: number): { dx: number; dy: number } {
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))

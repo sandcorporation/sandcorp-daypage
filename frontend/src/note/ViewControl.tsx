@@ -4,15 +4,33 @@ type Props = {
   onFingerMoves: (on: boolean) => void
   locked: boolean
   onLocked: (on: boolean) => void
+  /** 선택 도구의 더해 고르기(shift 대신). undefined면 버튼을 보이지 않는다(선택 도구가 아닐 때) */
+  addSelect?: boolean
+  onAddSelect?: (on: boolean) => void
 }
 
 /**
  * 오른쪽 아래 확대·축소 위의 손가락·화면 고정 버튼(터치 기기에서만 보인다).
  * 손: 한 손가락으로 화면을 옮긴다(펜 전용 모드 켬·끔과 같다). 고정: 손가락·휠로 화면이 움직이거나 확대되지 않는다.
+ * 더해 고르기(선택 도구일 때만): 켜 두면 누르기는 고른 것에 더하기·빼기, 상자·올가미는 더하기(PC의 shift와 같다).
  */
-export function ViewControl({ fingerMoves, onFingerMoves, locked, onLocked }: Props) {
+export function ViewControl({ fingerMoves, onFingerMoves, locked, onLocked, addSelect, onAddSelect }: Props) {
   return (
     <div className="view-control" role="group" aria-label="손가락·화면">
+      {addSelect !== undefined && (
+        <button
+          type="button"
+          aria-label="더해 고르기"
+          title={addSelect ? '누르는 것마다 고른 것에 더하거나 빼요 (누르면 꺼요)' : '더해 고르기: 누르는 것마다 고른 것에 더하거나 빼요'}
+          aria-pressed={addSelect}
+          onClick={() => onAddSelect?.(!addSelect)}
+        >
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="2.75" y="2.75" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 2" />
+            <path d="M14.5 10.5v7M11 14h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
       <button
         type="button"
         aria-label="손가락으로 화면 옮기기"

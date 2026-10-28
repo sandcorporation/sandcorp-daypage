@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-28-multi-select',
+    date: '10월 28일',
+    items: [
+      {
+        kind: 'new',
+        title: '여러 개 골라 옮기기',
+        text: '선택·이동 도구로 획과 글 상자를 섞어 골라 한 번에 옮기거나 지울 수 있어요. 컴퓨터에서는 shift를 누른 채 누르면 고른 것에 더하거나 빼고, 터치 화면에서는 오른쪽 아래 ‘더해 고르기’를 켜 두면 돼요. 되돌리기 한 번이면 모두 제자리로 돌아와요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-26-suggest-context',
     date: '10월 26일 오후 -2',
     items: [
