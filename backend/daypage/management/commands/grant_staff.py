@@ -15,7 +15,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("user_id", nargs="?", type=int)
-        parser.add_argument("--note", help="이 노트를 만든 사람")
+        parser.add_argument("--note", help="이 노트를 만든 사람. '-'로 시작하는 ID는 --note=ID 꼴로 쓴다")
         parser.add_argument("--latest", action="store_true", help="가장 최근에 노트를 연 사람")
         parser.add_argument("--off", action="store_true", help="권한을 끈다")
 

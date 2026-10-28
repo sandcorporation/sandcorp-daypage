@@ -24,7 +24,7 @@ def today_doc(note_id: str):
 
 def test_fills_todays_empty_page_with_text_boxes_and_doodles():
     note_id = create_note(login_as(1), name="샘플용 페이지")
-    call_command("seed_sample", note_id)
+    call_command("seed_sample", f"--note={note_id}")
     doc = today_doc(note_id)
     boxes = doc.get("textboxes", type=Map)
     strokes = doc.get("strokes", type=Map)
@@ -42,18 +42,18 @@ def test_fills_todays_empty_page_with_text_boxes_and_doodles():
 
 def test_does_not_overwrite_a_page_that_already_has_content():
     note_id = create_note(login_as(1))
-    call_command("seed_sample", note_id)
+    call_command("seed_sample", f"--note={note_id}")
     count = len(today_doc(note_id).get("textboxes", type=Map))
     with pytest.raises(CommandError):
-        call_command("seed_sample", note_id)
+        call_command("seed_sample", f"--note={note_id}")
     assert len(today_doc(note_id).get("textboxes", type=Map)) == count
 
 
 def test_force_replaces_existing_content():
     note_id = create_note(login_as(1))
-    call_command("seed_sample", note_id)
+    call_command("seed_sample", f"--note={note_id}")
     first = set(today_doc(note_id).get("textboxes", type=Map).keys())
-    call_command("seed_sample", note_id, "--force")
+    call_command("seed_sample", f"--note={note_id}", "--force")
     second = set(today_doc(note_id).get("textboxes", type=Map).keys())
     assert first.isdisjoint(second)
     assert len(second) == len(first)
@@ -71,7 +71,7 @@ def box_rects(doc):
 
 def test_dense_style_fills_the_whole_page_without_overlap():
     note_id = create_note(login_as(1))
-    call_command("seed_sample", note_id, "--style", "dense")
+    call_command("seed_sample", f"--note={note_id}", "--style", "dense")
     doc = today_doc(note_id)
     boxes = doc.get("textboxes", type=Map)
     assert len(boxes) >= 250
@@ -91,7 +91,7 @@ def test_dense_style_fills_the_whole_page_without_overlap():
 def test_new_option_creates_a_note_for_the_same_owner():
     owner = login_as(1)
     note_id = create_note(owner, name="샘플용 페이지", memberLimit=2)
-    call_command("seed_sample", note_id, "--style", "sparse", "--new", "샘플용 페이지 (간단)")
+    call_command("seed_sample", f"--note={note_id}", "--style", "sparse", "--new", "샘플용 페이지 (간단)")
     new = Note.objects.get(name="샘플용 페이지 (간단)")
     template = Note.objects.get(pk=note_id)
     assert new.owner_id == template.owner_id and new.member_limit == 2
@@ -102,7 +102,7 @@ def test_new_option_creates_a_note_for_the_same_owner():
 
 def test_dense_style_uses_four_columns_each_filled_top_to_bottom():
     note_id = create_note(login_as(1))
-    call_command("seed_sample", note_id, "--style", "dense")
+    call_command("seed_sample", f"--note={note_id}", "--style", "dense")
     boxes = list(today_doc(note_id).get("textboxes", type=Map).values())
     starts = [80, 457, 834, 1211]
     for m in boxes:
@@ -113,3 +113,32 @@ def test_dense_style_uses_four_columns_each_filled_top_to_bottom():
         assert len(col) >= 40
         assert min(m.get("y") for m in col) <= 64
         assert max(m.get("y") for m in col) >= 2400 - 32 * 6
+
+
+# 노트 id는 token_urlsafe라 '-'로 시작할 수 있다. 무작위에 기대지 않고 고정해서 시험한다.
+DASH_ID = "-dashFirstNoteId0123456789abcd"
+
+
+def dash_note() -> str:
+    owner = login_as(1)  # 사용자 만들기
+    note_id = create_note(owner)
+    other = Note.objects.get(pk=note_id)
+    Note.objects.create(id=DASH_ID, name="대시", owner=other.owner)
+    return DASH_ID
+
+
+def test_note_option_accepts_an_id_that_starts_with_a_dash():
+    note_id = dash_note()
+    call_command("seed_sample", f"--note={note_id}")
+    assert len(today_doc(note_id).get("textboxes", type=Map)) > 0
+
+
+def test_double_dash_accepts_an_id_that_starts_with_a_dash():
+    note_id = dash_note()
+    call_command("seed_sample", "--force", "--", note_id)
+    assert len(today_doc(note_id).get("textboxes", type=Map)) > 0
+
+
+def test_note_id_is_required():
+    with pytest.raises(CommandError):
+        call_command("seed_sample")
