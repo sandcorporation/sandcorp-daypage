@@ -9,3 +9,6 @@ dist/
 staticfiles/
 *.log
 .playwright-mcp/
+dist-e2e/
+test-results/
+playwright-report/
