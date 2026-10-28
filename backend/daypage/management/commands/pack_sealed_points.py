@@ -26,7 +26,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument("--write", action="store_true", help="실제로 스냅샷을 다시 쓴다(페이지마다 트랜잭션 하나)")
-        parser.add_argument("--note", help="이 노트의 페이지만")
+        parser.add_argument("--note", help="이 노트의 페이지만. '-'로 시작하는 ID는 --note=ID 꼴로 쓴다")
 
     def handle(self, *args: object, write: bool = False, note: str | None = None, **options: object) -> None:
         pages = Page.objects.filter(sealed_at__isnull=False)

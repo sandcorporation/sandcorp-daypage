@@ -2,6 +2,8 @@
 
     python manage.py seed_sample <노트 ID> [--style sparse|dense] [--new 이름] [--force]
 
+노트 ID는 '-'로 시작할 수 있다(옵션으로 읽힌다). 그럴 때는 `--note=<노트 ID>`로 쓰거나 `-- <노트 ID>`처럼 `--` 뒤에 쓴다.
+
 장은 자정이 지나면 기록으로 넘어가므로, 데모 직전에 그날 장을 채우는 용도로 쓴다.
 접속해 있는 사람에게도 바로 보이도록 웹소켓 방에 업데이트를 보낸다.
 """
@@ -497,12 +499,28 @@ class Command(BaseCommand):
     help = "샘플(데모)용 노트의 오늘 페이지를 손글씨 메모와 낙서로 채운다."
 
     def add_arguments(self, parser):
-        parser.add_argument("note_id", help="채울 노트(--new를 쓰면 주인·정원을 따라 할 노트)")
+        parser.add_argument(
+            "note_id", nargs="?", help="채울 노트(--new를 쓰면 주인·정원을 따라 할 노트). '-'로 시작하면 --note=ID 또는 `-- ID`로 쓴다"
+        )
+        parser.add_argument("--note", dest="note_opt", metavar="ID", help="노트 ID를 옵션으로 받는다. '-'로 시작하는 ID는 --note=ID 꼴로 쓴다")
         parser.add_argument("--style", choices=["sparse", "dense"], default="sparse", help="간단한 버전 또는 빽빽한 버전")
         parser.add_argument("--new", metavar="이름", help="같은 주인으로 새 노트를 만들어 거기에 채운다")
         parser.add_argument("--force", action="store_true", help="오늘 페이지에 내용이 있어도 지우고 다시 채운다")
 
-    def handle(self, note_id: str, style: str = "sparse", new: str | None = None, force: bool = False, **options):
+    def handle(
+        self,
+        note_id: str | None = None,
+        style: str = "sparse",
+        new: str | None = None,
+        force: bool = False,
+        note_opt: str | None = None,
+        **options,
+    ):
+        if note_id and note_opt and note_id != note_opt:
+            raise CommandError("노트 ID를 두 번 다르게 적었어요")
+        note_id = note_opt or note_id
+        if not note_id:
+            raise CommandError("노트 ID가 필요해요: seed_sample <노트 ID> (또는 --note=<노트 ID>)")
         note = Note.objects.filter(pk=note_id).first()
         if note is None:
             raise CommandError(f"노트를 찾을 수 없어요: {note_id}")
