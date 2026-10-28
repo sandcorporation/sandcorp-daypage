@@ -21,6 +21,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "ruff>=0.15",
     "daphne>=4.2.3",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -32,3 +33,15 @@ DJANGO_SETTINGS_MODULE = "config.settings"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+# 린트는 시험의 고정 대기만 막는다(다른 규칙은 켜지 않는다). 실행: uv run ruff check
+[tool.ruff]
+target-version = "py314"
+include = ["tests/**/*.py"]  # 운영 코드(daypage/)의 sleep 은 대상이 아니다
+
+[tool.ruff.lint]
+select = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"time.sleep".msg = "시험은 시간으로 기다리지 않는다 — 사건(asyncio.Event·timeout 있는 받기)이나 tests/waiting.py 의 until 로 기다린다."
+"asyncio.sleep".msg = "시험은 시간으로 기다리지 않는다 — 사건(asyncio.Event·timeout 있는 받기)이나 tests/waiting.py 의 until 로 기다린다. 정말 필요하면 줄 끝에 사유와 함께 # noqa: TID251."

@@ -1,8 +1,51 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
+  "plugins": [
+    "react",
+    "typescript",
+    "oxc"
+  ],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "setTimeout",
+            "message": "시험은 시간으로 기다리지 않는다 — vi.useFakeTimers() + vi.advanceTimersByTimeAsync, 또는 findBy*/waitFor 로 사건을 기다린다."
+          },
+          {
+            "name": "setInterval",
+            "message": "시험은 시간으로 기다리지 않는다 — vi.useFakeTimers() + vi.advanceTimersByTimeAsync, 또는 findBy*/waitFor 로 사건을 기다린다."
+          }
+        ],
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "window",
+            "property": "setTimeout",
+            "message": "시험은 시간으로 기다리지 않는다 — vi.useFakeTimers() + vi.advanceTimersByTimeAsync, 또는 findBy*/waitFor 로 사건을 기다린다."
+          },
+          {
+            "object": "globalThis",
+            "property": "setTimeout",
+            "message": "시험은 시간으로 기다리지 않는다 — vi.useFakeTimers() + vi.advanceTimersByTimeAsync, 또는 findBy*/waitFor 로 사건을 기다린다."
+          }
+        ]
+      }
+    }
+  ]
 }

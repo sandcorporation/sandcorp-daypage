@@ -1,6 +1,5 @@
 """프로세스 안의 장 방(hub). 두 프로세스는 같은 채널 레이어를 쓰는 Hub 두 개로 흉내 낸다."""
 
-import asyncio
 import datetime as dt
 
 import pytest
@@ -11,6 +10,7 @@ from pycrdt import Doc, Map, YMessageType, read_message
 from daypage import awareness, clock, hub, pages
 from daypage.models import Note
 from tests.helpers import create_note, login_as
+from tests.waiting import until
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.asyncio]
 
@@ -60,21 +60,16 @@ def load(page_id: int):
     return lambda: hub.db(pages.load_updates)(page_id)
 
 
-async def settle():
-    for _ in range(20):
-        await asyncio.sleep(0.01)
-
-
 async def test_edit_in_one_process_reaches_people_in_the_other():
     page_id = await make_page()
     one, two = hub.Hub(), hub.Hub()
     a, b = FakeMember(), FakeMember()
     room_one = await one.join(page_id, a, load(page_id))
     room_two = await two.join(page_id, b, load(page_id))
-    await settle()
+    await until(lambda: room_one.peers and room_two.peers)  # 서로를 알아야 편집이 건너간다
 
     await room_one.local_update(a, stroke_update(Doc(), "s1"), TODAY)
-    await settle()
+    await until(lambda: "s1" in b.doc().get("strokes", type=Map).keys())
 
     assert set(b.doc().get("strokes", type=Map).keys()) == {"s1"}
     assert set(room_two.ydoc.get("strokes", type=Map).keys()) == {"s1"}
@@ -91,7 +86,7 @@ async def test_process_opening_later_gets_unsaved_edits_from_the_other():
     await room_one.local_update(a, stroke_update(Doc(), "unsaved"), TODAY)
 
     room_two = await two.join(page_id, b, load(page_id))
-    await settle()
+    await until(lambda: "unsaved" in room_two.ydoc.get("strokes", type=Map).keys())
 
     assert "unsaved" in room_two.ydoc.get("strokes", type=Map).keys()
     await one.leave(room_one, a)
@@ -109,7 +104,7 @@ async def test_cursors_are_sent_together_and_not_echoed_to_a_lone_sender():
     await room.local_awareness(a, [(1, 1, {"cursor": {"x": 1, "y": 1}})])
     await room.local_awareness(a, [(1, 2, {"cursor": {"x": 2, "y": 2}})])
     await room.local_awareness(b, [(2, 1, {"cursor": {"x": 9, "y": 9}})])
-    await asyncio.sleep(hub.AWARENESS_EVERY * 3)
+    await until(lambda: len(b.awareness()) == 2 and len(a.awareness()) == 1)  # 모아 보낸 묶음이 도착할 때까지
 
     assert b.awareness() == [
         [(1, 1, {"cursor": {"x": 1, "y": 1}})],
@@ -129,7 +124,7 @@ async def test_newcomer_in_another_process_sees_existing_cursors():
     await room_one.local_awareness(a, [(1, 1, {"cursor": {"x": 5, "y": 5}})])
 
     room_two = await two.join(page_id, b, load(page_id))
-    await settle()
+    await until(lambda: room_two.presence_message() is not None)
 
     assert room_two.presence_message() is not None
     assert awareness.decode_message(room_two.presence_message()) == [(1, 1, {"cursor": {"x": 5, "y": 5}})]
