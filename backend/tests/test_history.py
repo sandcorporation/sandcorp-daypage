@@ -99,3 +99,19 @@ def test_non_member_cannot_read_history(history):
     stranger = login_as(99)
     assert stranger.get(f"/api/notes/{note_id}/pages").status_code == 403
     assert stranger.get(f"/api/notes/{note_id}/pages/2026-10-13").status_code == 403
+
+
+def test_member_reads_todays_open_page_as_binary_yjs(history):
+    note_id, owner = history
+    res = owner.get(f"/api/notes/{note_id}/today")
+    assert res.status_code == 200
+    assert res["Content-Type"] == "application/octet-stream"
+    assert res["Cache-Control"] == "no-store"
+    doc = Doc()
+    doc.apply_update(res.content)
+    assert set(doc.get("strokes", type=Map).keys()) == {"today"}
+
+
+def test_non_member_cannot_read_todays_page(history):
+    note_id, _ = history
+    assert login_as(99).get(f"/api/notes/{note_id}/today").status_code == 403

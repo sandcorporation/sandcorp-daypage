@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-28-book-cancel-today',
+    date: '10월 28일 오후 -1',
+    items: [
+      {
+        kind: 'new',
+        title: '책 엮기를 멈추고, 오늘 장도 담기',
+        text: '‘책으로 저장 (PDF)’을 누르면 이제 오늘 페이지도 지금 종이 그대로 맨 뒤에 들어가요(비어 있으면 빠져요). 장이 많아 오래 걸릴 땐 ‘엮는 중…’ 옆의 ‘취소’로 멈출 수 있고, 멈추면 파일은 내려받지 않아요. 건의해 주셔서 고마워요!',
+      },
+    ],
+  },
+  {
     id: '2026-10-28-touch-drag',
     date: '10월 28일 오후',
     items: [
