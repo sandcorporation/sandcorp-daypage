@@ -46,6 +46,41 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "e2e/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "setTimeout",
+            "message": "e2e는 시간으로 기다리지 않는다 — 로케이터·expect.poll·사건(웹소켓, rAF)을 기다린다."
+          },
+          {
+            "name": "setInterval",
+            "message": "e2e는 시간으로 기다리지 않는다 — 로케이터·expect.poll·사건(웹소켓, rAF)을 기다린다."
+          }
+        ],
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "window",
+            "property": "setTimeout",
+            "message": "e2e는 시간으로 기다리지 않는다."
+          },
+          {
+            "object": "globalThis",
+            "property": "setTimeout",
+            "message": "e2e는 시간으로 기다리지 않는다."
+          },
+          {
+            "property": "waitForTimeout",
+            "message": "waitForTimeout 금지 — 로케이터·expect.poll·사건을 기다린다(고정 대기 금지)."
+          }
+        ]
+      }
     }
   ]
 }
