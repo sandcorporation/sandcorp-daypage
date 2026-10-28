@@ -9,6 +9,7 @@ from uvicorn.protocols.utils import ClientDisconnected
 
 from daypage import awareness, clock, consumers, hub, rooms
 from tests.helpers import create_note, login_as
+from tests.waiting import until
 from tests.ws import join
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.asyncio]
@@ -67,7 +68,7 @@ async def test_backed_up_connection_is_closed_once_and_quietly():
     c.push(b"a")  # 자리를 채운다
     for _ in range(5):
         c.push(b"b")  # 넘친다: 처음 한 번만 닫는다
-    await asyncio.sleep(0.05)
+    await until(lambda: c.closes >= 1)  # 닫기 작업이 돌 때까지. 이미 닫는 중이라 더 만들어지지 않는다
     assert c.closes == 1
     assert c.closing
 
@@ -78,8 +79,7 @@ async def test_closing_an_already_gone_client_does_not_raise():
     assert c.closing
     # 닫기 시작한 연결에는 더 보내지 않는다(넘쳐도 다시 닫지 않는다)
     c.push(b"a")
-    c.push(b"b")
-    await asyncio.sleep(0.05)
+    c.push(b"b")  # 닫는 중이면 push 는 동기로 돌아온다: 기다릴 작업이 생기지 않는다
     assert c.closes == 1
 
 

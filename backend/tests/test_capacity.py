@@ -1,6 +1,7 @@
 """수용 인원·대기열·자리 비움. 수용 인원은 설정이 가리키는 cgroup 파일(cpu.max)로 조절한다."""
 
 import asyncio
+import contextlib
 import datetime as dt
 import json
 
@@ -215,14 +216,21 @@ async def test_away_person_is_let_go_for_a_waiter(cpu, settings):
     yc = await queue(c, note_id)
     assert await next_position(yc.ws) == 1
 
+    waiter_in = asyncio.Event()
+
     async def keep_moving():
-        for i in range(20):
-            await ya.ws.send_to(bytes_data=awareness_message(111, i + 1, {"cursor": {"x": i, "y": 1}}))
-            await asyncio.sleep(0.1)
+        # 자리 비움 판정이 실제 시계(time.time)라서 입력 사이에 시간이 흘러야 한다. 대기자가 들어오면 바로 멈춘다.
+        i = 0
+        while not waiter_in.is_set():
+            i += 1
+            await ya.ws.send_to(bytes_data=awareness_message(111, i, {"cursor": {"x": i, "y": 1}}))
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(waiter_in.wait(), 0.1)
 
     mover = asyncio.create_task(keep_moving())
     assert await expect_close(yb.ws) == 4408  # 아무 입력이 없던 사람
     await yc.sync()  # 그 자리로 대기자가 들어온다
+    waiter_in.set()
     await mover
     await ya.drain()
     assert not hasattr(ya, "closed")  # 입력이 있던 사람은 남는다
@@ -235,7 +243,6 @@ async def test_nobody_is_let_go_without_waiters(cpu, settings):
     settings.AWAY_AFTER = 0.1
     note_id, (a,) = await setup_note(1)
     ya = await join(a, note_id, DATE)
-    await asyncio.sleep(0.4)
-    await ya.drain()
+    await ya.drain(timeout=0.4)  # 자리 비움 한도(0.1초)의 몇 배 동안 아무 일도 없어야 한다(안 와야 할 닫기는 짧게 받아 본다)
     assert not hasattr(ya, "closed")
     await ya.close()

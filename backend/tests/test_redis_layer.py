@@ -15,6 +15,7 @@ from django.conf import settings
 pytestmark = pytest.mark.asyncio
 
 from config import settings as project_settings  # noqa: E402
+from tests.waiting import until  # noqa: E402
 
 
 def redis_layer():
@@ -43,7 +44,6 @@ async def test_hub_and_connection_waiting_together_both_receive(monkeypatch):
     monkeypatch.setattr(hub, "get_channel_layer", lambda: layer)
     h = hub.Hub()
     await h._start()  # 허브가 먼저 자기 채널을 기다리기 시작한다(서버와 같은 순서)
-    await asyncio.sleep(0.3)
 
     conn = await layer.new_channel()  # Channels가 연결마다 만드는 채널과 같은 방식
     await layer.group_add("probe.note", conn)
@@ -54,18 +54,20 @@ async def test_hub_and_connection_waiting_together_both_receive(monkeypatch):
             got.append((await layer.receive(conn))["n"])
 
     task = asyncio.create_task(consumer())
-    await asyncio.sleep(0.3)
     for i in range(3):
         await layer.group_send("probe.note", {"type": "x", "n": i})
-        await asyncio.sleep(0.2)
-    await asyncio.sleep(0.5)
+        await until(lambda: len(got) == i + 1, timeout=5)  # 보낸 것이 도착해야 다음을 보낸다(순서 확인)
     assert got == [0, 1, 2]
 
     # 허브 채널로 온 다른 프로세스 메시지도 허브가 받는다
     seen = []
-    monkeypatch.setattr(h, "_dispatch", lambda event: seen.append(event) or asyncio.sleep(0))
+
+    async def dispatch(event):
+        seen.append(event)
+
+    monkeypatch.setattr(h, "_dispatch", dispatch)
     await layer.send(h.channel, {"type": "hub.bye", "page": 1})
-    await asyncio.sleep(0.5)
+    await until(lambda: seen, timeout=5)
     assert seen and seen[0]["type"] == "hub.bye"
 
     task.cancel()
