@@ -46,6 +46,8 @@ export type PointerTool = {
   cancel?: () => void
   /** 누르지 않고 올려만 둔 위치에서 보일 커서(손잡이 등). null이면 도구 기본 커서. p가 null이면 지면을 벗어났다. */
   hover?: (p: Point | null) => string | null
+  /** 끌어서 무언가를 옮기는 중이면 true. 손가락·펜은 이때 브라우저 스크롤이 끌기를 가져가지 못하게 막는다. */
+  grabbing?: () => boolean
 }
 
 type Props = {
@@ -198,6 +200,8 @@ export function PageView({
   const lastClient = useRef<{ x: number; y: number } | null>(null)
   // 터치: 한 손가락은 그리기(도구 동작), 두 손가락은 스크롤·핀치
   const touchPan = useRef(new TouchPan())
+  // 고른 것을 손가락으로 끄는 중(브라우저 스크롤을 막아야 한다)
+  const touchGrab = useRef(false)
   // 이번 방문에서 펜 입력을 봤는지(펜 전용 모드 '자동'의 근거)
   const penSeen = useRef(false)
   // 핀치: 두 손가락이 닿은 순간의 배율·종이 위치·스크롤. 끄는 동안은 종이에 transform으로만 미리 보이고(캔버스를 다시
@@ -968,6 +972,7 @@ export function PageView({
    * 그것으로, 모르는 도구는 그 자리에서 끝낸다(포인터 이벤트가 있을 때만).
    */
   function cancelGesture(e?: PointerEvent<HTMLDivElement>) {
+    touchGrab.current = false
     if (activePointer.current === null) return
     activePointer.current = null
     if (curve.current) {
@@ -1070,6 +1075,8 @@ export function PageView({
       e.currentTarget.setPointerCapture(e.pointerId)
       activePointer.current = e.pointerId
       e.preventDefault()
+      // 고른 묶음·획·글 상자를 잡은 손가락은 스크롤이 아니라 옮기기다(touch-action은 이미 시작된 제스처에 듣지 않는다)
+      if (e.pointerType !== 'mouse' && pointerTool.grabbing?.()) touchGrab.current = true
     }
   }
 
@@ -1254,6 +1261,7 @@ export function PageView({
   }
 
   function onUp(e: PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== 'mouse') touchGrab.current = false
     if (pan.current?.id === e.pointerId) {
       pan.current = null
       return
@@ -1343,6 +1351,22 @@ export function PageView({
       el.removeEventListener('touchstart', blockTouch)
     }
   }, [readOnly, tool])
+
+  // 고른 것을 끄는 한 손가락은 브라우저 스크롤이 가져가지 못하게 한다. React 합성 이벤트는 passive라 막을 수 없어 직접 단다.
+  // pointerdown이 touchstart보다 먼저 와서 touchGrab이 이미 정해져 있다. 두 손가락이 되면 풀려 스크롤·핀치가 된다.
+  useEffect(() => {
+    const el = frameRef.current
+    if (!el) return
+    const stop = (e: TouchEvent) => {
+      if (touchGrab.current && e.touches.length === 1 && e.cancelable) e.preventDefault()
+    }
+    el.addEventListener('touchstart', stop, { passive: false })
+    el.addEventListener('touchmove', stop, { passive: false })
+    return () => {
+      el.removeEventListener('touchstart', stop)
+      el.removeEventListener('touchmove', stop)
+    }
+  }, [])
 
   useEffect(() => {
     const el = frameRef.current

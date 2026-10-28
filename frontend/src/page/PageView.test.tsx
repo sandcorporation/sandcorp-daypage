@@ -360,3 +360,58 @@ describe('여러 손가락 탭과 화면 고정', () => {
     expect(page.scrollTop).not.toBe(50)
   })
 })
+
+// 선택 도구의 지면은 touch-action: pan-x pan-y 라 손가락이 17px쯤 움직이면 브라우저가 스크롤로 가져가며 옮기기가 끊겼다.
+describe('고른 것을 손가락으로 끌 때는 브라우저 스크롤을 막는다', () => {
+  const touchEvent = (el: Element, type: string, touches: number) => {
+    const e = new Event(type, { bubbles: true, cancelable: true })
+    Object.defineProperty(e, 'touches', { value: Array.from({ length: touches }) })
+    el.dispatchEvent(e)
+    return e.defaultPrevented
+  }
+  function select(grabbing: boolean) {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    const pointerTool = { down: () => true, grabbing: () => grabbing }
+    const { container } = render(
+      <PageView doc={new Y.Doc()} tool="select" ink="#000" widthLevel={1} author="나" pointerTool={pointerTool} />,
+    )
+    return container.querySelector('.page-frame') as HTMLElement
+  }
+  const down = (el: HTMLElement, id = 1, pointerType = 'touch') =>
+    fireEvent.pointerDown(el, { pointerId: id, pointerType, clientX: 100, clientY: 100, button: 0, buttons: 1 })
+
+  test('옮기는 중인 한 손가락: touchmove의 기본 동작(스크롤)을 막는다', () => {
+    const el = select(true)
+    down(el)
+    expect(touchEvent(el, 'touchstart', 1)).toBe(true)
+    expect(touchEvent(el, 'touchmove', 1)).toBe(true)
+  })
+
+  test('빈 곳에서 시작한 한 손가락(상자 고르기)은 스크롤을 막지 않는다', () => {
+    const el = select(false)
+    down(el)
+    expect(touchEvent(el, 'touchmove', 1)).toBe(false)
+  })
+
+  test('두 번째 손가락이 닿으면 막지 않는다(두 손가락 이동·확대)', () => {
+    const el = select(true)
+    down(el)
+    down(el, 2)
+    expect(touchEvent(el, 'touchmove', 2)).toBe(false)
+    expect(touchEvent(el, 'touchmove', 1)).toBe(false)
+  })
+
+  test('손가락을 떼면 다음 스크롤은 막지 않는다', () => {
+    const el = select(true)
+    down(el)
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    expect(touchEvent(el, 'touchmove', 1)).toBe(false)
+  })
+
+  test('펜도 같다', () => {
+    const el = select(true)
+    down(el, 1, 'pen')
+    expect(touchEvent(el, 'touchmove', 1)).toBe(true)
+  })
+})

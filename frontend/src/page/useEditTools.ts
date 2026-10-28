@@ -460,6 +460,11 @@ export function useEditTools(
             bump()
           }
         },
+        // 고른 것을 옮기거나 키우거나 돌리는 중인가(빈 곳의 상자·올가미 고르기는 아니다). 터치에서는 이때 브라우저 스크롤을 막는다.
+        grabbing() {
+          const k = drag.current?.kind
+          return k === 'move' || k === 'scale' || k === 'rotate'
+        },
         // 끌던 것을 결과 없이 거둔다: 옮기던 묶음은 원래 자리로, 그리던 선택 상자·올가미는 사라진다
         cancel() {
           drag.current = null
