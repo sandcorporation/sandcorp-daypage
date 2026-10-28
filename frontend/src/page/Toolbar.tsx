@@ -425,7 +425,8 @@ export function Toolbar(props: Props) {
             {selectOpen && (
               <ToolPopover title="선택·이동" anchor={selectRef} onClose={() => setSelectOpen(false)}>
                 <p className="tool-pop-caption">
-                  획을 누르거나 {props.selectLasso ? '올가미' : '상자'}로 둘러 고른 뒤 끌어서 옮기고, 손잡이로 키우거나 돌려요.
+                  획·글 상자를 누르거나 {props.selectLasso ? '올가미' : '상자'}로 둘러 고른 뒤 끌어서 옮기고, 손잡이로 키우거나 돌려요.
+                  shift+누르기(터치는 오른쪽 아래 ‘더해 고르기’)로 고른 것에 더하거나 빼요.
                 </p>
                 {props.onSelectLasso && (
                   <div className="pen-only" role="radiogroup" aria-label="고르는 모양">

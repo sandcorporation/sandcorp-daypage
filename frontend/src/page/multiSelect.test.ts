@@ -93,6 +93,17 @@ describe('shift+클릭으로 더하기·빼기', () => {
     expect(sel()).toEqual({ strokes: ['a'], texts: [] })
   })
 
+  test('더해 고르기 중에 고른 것을 끌면 빼지 않고 묶음째 옮긴다', () => {
+    const { doc, t, click, sel } = setup({ additive: true })
+    click(200, 102)
+    click(200, 502)
+    act(() => void t()?.down?.({ x: 200, y: 502 }, plain))
+    act(() => void t()?.move?.({ x: 220, y: 522 }))
+    act(() => void t()?.up?.({ x: 220, y: 522 }, plain))
+    expect(sel()).toEqual({ strokes: ['a', 'b'], texts: [] })
+    expect(pointsOf(doc, 'a')).toEqual([120, 120, 0.5, 320, 120, 0.5])
+  })
+
   test('내 획만 고르기면 남의 글 상자도 고르지 않는다', () => {
     const doc = new Y.Doc()
     text(doc, 'theirs', 400, 288, '남')

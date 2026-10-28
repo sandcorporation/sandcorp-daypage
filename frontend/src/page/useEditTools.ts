@@ -94,7 +94,16 @@ function snapToLines(m: Matrix, lineY: number, bounds: Rect): Matrix {
 }
 
 type Drag =
-  | { kind: 'move'; sel: Selection; start: Point; bounds: Rect; m: Matrix; lineY: number | null }
+  | {
+      kind: 'move'
+      sel: Selection
+      start: Point
+      bounds: Rect
+      m: Matrix
+      lineY: number | null
+      /** 더해 고르기로 이미 고른 것을 눌렀을 때: 끌지 않고 떼면 이것을 고른 것에서 뺀다 */
+      dropOnClick: Selection | null
+    }
   | { kind: 'scale'; ids: string[]; bounds: Rect; anchor: Point; corner: Point; m: Matrix }
   | { kind: 'rotate'; ids: string[]; bounds: Rect; center: Point; start: Point; m: Matrix }
   | { kind: 'band'; start: Point; end: Point; add: boolean }
@@ -324,11 +333,11 @@ export function useEditTools(
       // 글 상자가 섞이면 크기·회전 손잡이는 없다
       const handleOf = (box: Rect | null, p: Point) =>
         box && selected.texts.length === 0 ? handleAt(box, p, HANDLE_HIT / scale, ROTATE_OFFSET / scale) : null
-      const startMove = (sel: Selection, p: Point) => {
+      const startMove = (sel: Selection, p: Point, dropOnClick: Selection | null = null) => {
         const bounds = selectionBox(sel) ?? { x: p.x, y: p.y, width: 0, height: 0 }
         const first = sel.texts.length ? textboxesMap(doc).get(sel.texts[0]) : undefined
         const lineY = first ? (first.get('y') as number) : null
-        drag.current = { kind: 'move', sel, start: p, bounds, m: IDENTITY, lineY }
+        drag.current = { kind: 'move', sel, start: p, bounds, m: IDENTITY, lineY, dropOnClick }
       }
       return {
         hover(p) {
@@ -368,10 +377,9 @@ export function useEditTools(
               ? { strokes: [], texts: [text.id] }
               : { strokes: grabIds([stroke!.id], pickable(), readLayers(doc)), texts: [] }
             const picked = text ? selected.texts.includes(text.id) : selected.strokes.includes(stroke!.id)
+            // 더해 고르기로 이미 고른 것을 누르면: 떼면 빼고, 끌면 묶음째 옮긴다(터치에서 토글을 끄지 않고 옮기게)
             if (add && picked) {
-              setSelected(minus(selected, item))
-              drag.current = null
-              bump()
+              startMove(selected, p, item)
               return true
             }
             const next = picked ? selected : add ? plus(selected, item) : item
@@ -419,6 +427,10 @@ export function useEditTools(
           if (d?.kind === 'move') {
             // 획과 글 상자를 한 transaction으로(되돌리기 한 단계)
             if (moved(d.m)) transformSelection(doc, d.sel.strokes, d.sel.texts, d.m, origin)
+            else if (d.dropOnClick) {
+              setSelected(minus(selected, d.dropOnClick))
+              bump()
+            }
             setPreview(null)
           }
           if (d?.kind === 'scale' || d?.kind === 'rotate') {
