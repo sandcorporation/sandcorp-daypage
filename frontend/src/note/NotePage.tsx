@@ -27,7 +27,7 @@ import {
   type WidthLevel,
 } from "../page/tools";
 import type { ShapeFill, ShapeKind } from "../page/shapes";
-import { useEditTools } from "../page/useEditTools";
+import { hasSelection, useEditTools } from "../page/useEditTools";
 import { isTypingTarget, useUndo } from "../page/useUndo";
 import { useNavigate } from "react-router";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -147,6 +147,8 @@ export function NotePage({ initial }: Props) {
   const [selectMine, setSelectMine] = useState(prefs.selectMine);
   // 선택·이동이 빈 곳에서 끌 때 상자 대신 올가미로 두르기. 브라우저에 기억한다.
   const [selectLasso, setSelectLasso] = useState(prefs.selectLasso);
+  // 더해 고르기(터치에서 shift 대신). 잠깐 켜 쓰는 것이라 도구 설정에 남기지 않는다.
+  const [selectAdd, setSelectAdd] = useState(false);
   // 집중 모드: 머리글·아래 칩을 숨기고 툴바만 종이 위에 띄운다. 되는 기기에서는 브라우저 전체 화면까지.
   const [focus, setFocus] = useState(false);
   const toggleFocus = useCallback((on: boolean) => {
@@ -377,6 +379,7 @@ export function NotePage({ initial }: Props) {
     eraserR,
     selectMine ? note.me.nickname : null,
     selectLasso,
+    { additive: selectAdd },
   );
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
@@ -580,7 +583,7 @@ export function NotePage({ initial }: Props) {
           break;
         case "delete":
           // 고른 것이 없으면 키를 그대로 둔다
-          if (!edit.selected.length) return;
+          if (!hasSelection(edit.selected)) return;
           edit.deleteSelected();
           break;
         case "zoomIn":
@@ -932,6 +935,8 @@ export function NotePage({ initial }: Props) {
             editors={presence.editors}
             me={note.me.nickname}
             noteColors={note.colors}
+            selectedTexts={edit.selected.texts}
+            editPreview={edit.live}
           />
           {tool === "select" && (
             <PhotoControls
@@ -962,6 +967,8 @@ export function NotePage({ initial }: Props) {
         onFingerMoves={chooseFingerMoves}
         locked={viewLock}
         onLocked={chooseViewLock}
+        addSelect={tool === "select" ? selectAdd : undefined}
+        onAddSelect={setSelectAdd}
       />
       <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
       {confirmDelete && (

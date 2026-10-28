@@ -120,7 +120,7 @@ describe('내가 그린 획만 고르기', () => {
     act(() => void t()?.down?.({ x: 200, y: 302 }, {} as never))
     act(() => void t()?.move?.({ x: 260, y: 382 }))
     expect(hook.result.current.live.move).toBeNull()
-    expect(hook.result.current.selected).toEqual([])
+    expect(hook.result.current.selected.strokes).toEqual([])
     act(() => void t()?.up?.({ x: 260, y: 382 }, {} as never))
     expect(readStrokes(doc).find((s) => s.id === 'theirs')?.points).toEqual([100, 300, 0.5, 300, 300, 0.5])
   })
@@ -139,7 +139,7 @@ describe('내가 그린 획만 고르기', () => {
     act(() => void t()?.down?.({ x: 50, y: 50 }, {} as never))
     act(() => void t()?.move?.({ x: 350, y: 350 }))
     act(() => void t()?.up?.({ x: 350, y: 350 }, {} as never))
-    expect(hook.result.current.selected).toEqual(['mine'])
+    expect(hook.result.current.selected.strokes).toEqual(['mine'])
     let cursor: string | null | undefined
     act(() => void (cursor = t()?.hover?.({ x: 200, y: 302 })))
     expect(cursor).toBeNull()
@@ -150,7 +150,7 @@ describe('내가 그린 획만 고르기', () => {
     addStroke(doc, others('theirs', 100, 300, 300, 300))
     const hook = renderHook(() => useEditTools(doc, 'select', 'me'))
     act(() => void hook.result.current.pointerTool?.down?.({ x: 200, y: 302 }, {} as never))
-    expect(hook.result.current.selected).toEqual(['theirs'])
+    expect(hook.result.current.selected.strokes).toEqual(['theirs'])
   })
 })
 
@@ -170,7 +170,7 @@ describe('올가미로 고르기', () => {
     for (const p of [{ x: 300, y: 100 }, { x: 300, y: 160 }, { x: 160, y: 160 }, { x: 160, y: 240 }, { x: 100, y: 240 }])
       act(() => void t()?.move?.(p))
     act(() => void t()?.up?.({ x: 100, y: 240 }, {} as never))
-    expect(hook.result.current.selected).toEqual(['top'])
+    expect(hook.result.current.selected.strokes).toEqual(['top'])
   })
 
   test('고른 묶음은 평소처럼 끌어 옮긴다', () => {
@@ -178,7 +178,7 @@ describe('올가미로 고르기', () => {
     act(() => void t()?.down?.({ x: 100, y: 100 }, {} as never))
     for (const p of [{ x: 300, y: 100 }, { x: 300, y: 260 }, { x: 100, y: 260 }]) act(() => void t()?.move?.(p))
     act(() => void t()?.up?.({ x: 100, y: 260 }, {} as never))
-    expect(hook.result.current.selected.sort()).toEqual(['notch', 'top'])
+    expect(hook.result.current.selected.strokes.sort()).toEqual(['notch', 'top'])
     act(() => void t()?.down?.({ x: 200, y: 132 }, {} as never))
     act(() => void t()?.move?.({ x: 210, y: 142 }))
     act(() => void t()?.up?.({ x: 210, y: 142 }, {} as never))
@@ -191,7 +191,7 @@ describe('올가미로 고르기', () => {
     for (const p of [{ x: 300, y: 100 }, { x: 300, y: 260 }]) act(() => void t()?.move?.(p))
     act(() => void t()?.cancel?.())
     act(() => void t()?.up?.({ x: 100, y: 260 }, {} as never))
-    expect(hook.result.current.selected).toEqual([])
+    expect(hook.result.current.selected.strokes).toEqual([])
   })
 })
 
@@ -203,7 +203,7 @@ describe('끄는 동안의 미리보기 저장소', () => {
     live.setEraseTargets(['a'])
     live.setEraseTargets(['a'])
     expect(seen).toHaveBeenCalledTimes(1)
-    live.setMove({ ids: ['a'], m: [1, 0, 0, 1, 5, 5] })
+    live.setMove({ ids: ['a'], texts: [], m: [1, 0, 0, 1, 5, 5] })
     live.setMove(null)
     expect(seen).toHaveBeenCalledTimes(3)
     off()

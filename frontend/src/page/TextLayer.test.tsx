@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import * as Y from 'yjs'
 import { textboxesMap } from './doc'
 import { TextLayer } from './TextLayer'
 import { createTextBoxAt } from './textbox'
 import { PAN_START_EVENT } from './touchPan'
+import { EditPreview } from './useEditTools'
 
 beforeEach(() => {
   // jsdom에는 포인터 캡처가 없다
@@ -74,5 +75,46 @@ describe('글 상자 끌기와 손가락 스크롤', () => {
     fireEvent.pointerMove(grip, { pointerId: 1, pointerType: 'touch', clientX: 160, clientY: 220, buttons: 1 })
     fireEvent.pointerCancel(grip, { pointerId: 1, pointerType: 'touch' })
     expect(pos()).toEqual(start)
+  })
+})
+
+describe('선택 도구로 섞어 고르기', () => {
+  function setupSelect() {
+    const doc = new Y.Doc()
+    const id = createTextBoxAt(doc, { x: 300, y: 400 }, { color: '#000', author: '나' })
+    const preview = new EditPreview()
+    const props = {
+      doc,
+      tool: 'select' as const,
+      scale: 1,
+      readOnly: false,
+      origin: 'me',
+      focusId: null,
+      onFocusHandled: () => {},
+      onEditing: () => {},
+      editors: new Map(),
+      me: '나',
+      editPreview: preview,
+    }
+    const { container, rerender } = render(<TextLayer {...props} />)
+    const el = () => container.querySelector<HTMLElement>(`[data-box-id="${id}"]`)!
+    return { id, preview, el, rerender, props }
+  }
+
+  test('상자 몸통은 지면이 받는다(선택 도구가 고르게), 손잡이는 상자가 받는다', () => {
+    const { el } = setupSelect()
+    expect(el().hasAttribute('data-page-ui')).toBe(false)
+    expect(screen.getByRole('button', { name: /글 상자 옮기기/ }).hasAttribute('data-page-ui')).toBe(true)
+  })
+
+  test('묶음을 끄는 동안 고른 상자를 같은 만큼 옮겨 보이고, 고른 상자는 표시된다', () => {
+    const { id, preview, el, rerender, props } = setupSelect()
+    const left = el().style.left
+    act(() => preview.setMove({ ids: [], texts: [id], m: [1, 0, 0, 1, 20, 32] }))
+    expect(el().style.left).toBe(`${parseFloat(left) + 20}px`)
+    act(() => preview.setMove(null))
+    expect(el().style.left).toBe(left)
+    rerender(<TextLayer {...props} selectedTexts={[id]} />)
+    expect(el().classList.contains('is-picked')).toBe(true)
   })
 })

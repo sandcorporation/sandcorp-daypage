@@ -379,6 +379,10 @@
 .textbox.is-select {
   cursor: move;
 }
+/* 선택 도구로 고른 글 상자 */
+.textbox.is-picked {
+  border-color: #2a47b0;
+}
 .textbox.is-focused {
   border-color: currentColor !important;
   background: rgba(255, 255, 255, 0.92);
