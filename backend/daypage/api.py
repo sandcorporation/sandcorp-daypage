@@ -397,6 +397,17 @@ def sealed_pages(request, note_id: str):
     ]
 
 
+@api.get("/notes/{note_id}/today")
+def today_page_snapshot(request, note_id: str):
+    """지금 쓰는 장의 Yjs 문서(바이너리). 책으로 저장할 때 오늘 장을 담는 데 쓴다. 참여자라면 누구나."""
+    note = member_note(request, note_id)
+    page = pages.open_page(note)
+    res = HttpResponse(pages.build_doc(pages.load_updates(page.id)).get_update(), content_type="application/octet-stream")
+    # 쓰는 중인 장이라 계속 바뀐다.
+    res["Cache-Control"] = "no-store"
+    return res
+
+
 @api.get("/notes/{note_id}/pages/{key}")
 def sealed_page_snapshot(request, note_id: str, key: str):
     note = member_note(request, note_id)

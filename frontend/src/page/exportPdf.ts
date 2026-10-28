@@ -287,6 +287,8 @@ export type BookOptions = {
   pages: BookSource[]
   /** 사진 주소 앞부분(photoBase) */
   photos?: string
+  /** 신호가 오면 남은 장을 더 그리지 않고 AbortError로 멈춘다 */
+  signal?: AbortSignal
   /** 장을 하나 그릴 때마다(표지 제외) */
   onProgress?: (done: number, total: number) => void
   /** 장 좌표 1당 픽셀. 1.5면 2400×3744px(약 360dpi). 너무 크면 iPad의 캔버스 한계(약 1,670만 픽셀)를 넘는다 */
@@ -295,17 +297,28 @@ export type BookOptions = {
   quality?: number
 }
 
-/** 노트의 봉인된 장들을 책 한 권(PDF)으로 엮는다. 장은 하나씩 받아 그리고 바로 JPEG로 굳혀 메모리를 아낀다. */
+/** 엮기를 취소했을 때 던지는 오류인가 */
+export function isBookCancelled(e: unknown): boolean {
+  return e instanceof DOMException && e.name === 'AbortError'
+}
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('책 엮기를 취소했어요', 'AbortError')
+}
+
+/** 노트의 장들을 책 한 권(PDF)으로 엮는다. 장은 하나씩 받아 그리고 바로 JPEG로 굳혀 메모리를 아낀다. */
 export async function renderNoteBook({
   noteName,
   memberCount,
   pages,
   photos,
+  signal,
   onProgress,
   pixelScale = 1.5,
   quality = 0.9,
 }: BookOptions): Promise<Blob> {
   if (pages.length === 0) throw new Error('엮을 장이 없어요')
+  throwIfCancelled(signal)
   const ordered = [...pages].sort((a, b) => comparePages(a.page, b.page))
   const total = ordered.length
 
@@ -316,6 +329,7 @@ export async function renderNoteBook({
   } catch {
     // 글꼴을 못 받아도 기본 글꼴로 그린다
   }
+  throwIfCancelled(signal)
   const coverCanvas = document.createElement('canvas')
   coverCanvas.width = PAGE_WIDTH * pixelScale
   coverCanvas.height = BOOK_PAGE_HEIGHT * pixelScale
@@ -331,13 +345,19 @@ export async function renderNoteBook({
 
   onProgress?.(0, total)
   for (let i = 0; i < total; i++) {
+    throwIfCancelled(signal)
     const { page, load } = ordered[i]
     const doc = await load()
+    if (signal?.aborted) {
+      doc.destroy()
+      throwIfCancelled(signal)
+    }
     const canvas = await renderBookPage(doc, { ...page, paper: page.paper ?? DEFAULT_PAPER }, i, total, pixelScale, photos)
     pdfPages.push(toPdfPage(canvas, await canvasJpeg(canvas, quality), pixelScale))
     doc.destroy()
     onProgress?.(i + 1, total)
   }
+  throwIfCancelled(signal)
   const bytes = buildPdf(pdfPages, { title: noteName })
   return new Blob([bytes as BlobPart], { type: 'application/pdf' })
 }

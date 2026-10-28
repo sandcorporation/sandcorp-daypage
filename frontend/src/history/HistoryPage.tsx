@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import * as Y from 'yjs'
 import { api, ApiError } from '../api/client'
@@ -6,7 +6,8 @@ import { useToast } from '../components/Toast'
 import { formatHourRange, formatPageKey, formatShortDate, seqSuffix } from '../note/time'
 import { ZoomControl, type Zoom } from '../note/ZoomControl'
 import type { NoteDetail } from '../note/types'
-import { bookFileName, bookOrder, renderNoteBook } from '../page/exportPdf'
+import { isPageEmpty } from '../page/doc'
+import { bookFileName, bookOrder, comparePages, isBookCancelled, renderNoteBook, type BookSource } from '../page/exportPdf'
 import { downloadBlob, exportFileName, renderPagePng } from '../page/exportPng'
 import { normalizePaper, type Paper } from '../page/paper'
 import { PageView } from '../page/PageView'
@@ -39,7 +40,11 @@ export function HistoryPage() {
   const [error, setError] = useState<'missing' | 'server' | null>(null)
   const [blocked, setBlocked] = useState<{ kind: BlockedKind; detail: string } | null>(null)
   const [binding, setBinding] = useState<{ done: number; total: number } | null>(null)
+  const bindingAbort = useRef<AbortController | null>(null)
   const { toast, show } = useToast()
+
+  // 화면을 떠나면 엮던 책을 멈춘다
+  useEffect(() => () => bindingAbort.current?.abort(), [])
 
   useEffect(() => {
     let cancelled = false
@@ -66,30 +71,59 @@ export function HistoryPage() {
 
   const selected = pageKey ?? pages?.[0]?.key ?? null
 
-  /** 지난 페이지를 모두 받아 날짜순으로 엮은 PDF 책을 내려받는다. 장은 하나씩 받아 그린다. */
+  /** 지난 페이지와 오늘 페이지(비어 있지 않으면)를 날짜순으로 엮은 PDF 책을 내려받는다. 장은 하나씩 받아 그린다. */
   async function saveBook() {
     if (!note || !pages || pages.length === 0 || binding) return
+    const abort = new AbortController()
+    bindingAbort.current = abort
     setBinding({ done: 0, total: pages.length })
     try {
-      const ordered = bookOrder(pages)
-      const blob = await renderNoteBook({
-        noteName: note.name,
-        memberCount: note.memberCount,
-        pages: ordered.map((p) => ({
+      const sources: BookSource[] = pages
+        .filter((p) => p.key !== note.page.key)
+        .map((p) => ({
           page: { ...p, paper: normalizePaper(p.paper) },
           load: async () => {
             const doc = new Y.Doc()
-            Y.applyUpdate(doc, new Uint8Array(await api<ArrayBuffer>(`/api/notes/${noteId}/pages/${p.key}`)))
+            const buf = await api<ArrayBuffer>(`/api/notes/${noteId}/pages/${p.key}`, { signal: abort.signal })
+            Y.applyUpdate(doc, new Uint8Array(buf))
             return doc
           },
-        })),
+        }))
+      // 오늘 장은 아직 봉인되지 않았다. 지금 종이로 그리고, 비었으면 빈 날처럼 건너뛴다.
+      const today = new Y.Doc()
+      Y.applyUpdate(today, new Uint8Array(await api<ArrayBuffer>(`/api/notes/${noteId}/today`, { signal: abort.signal })))
+      if (!isPageEmpty(today)) {
+        sources.push({
+          page: {
+            key: note.page.key,
+            date: note.page.date,
+            seq: note.page.seq,
+            openedAt: note.page.openedAt,
+            closedAt: note.page.dueAt,
+            paper: normalizePaper(note.paper),
+          },
+          load: async () => today,
+        })
+      } else {
+        today.destroy()
+      }
+      if (sources.length === 0) throw new Error('엮을 장이 없어요')
+      sources.sort((a, b) => comparePages(a.page, b.page))
+      const ordered = bookOrder(sources.map((s) => s.page))
+      setBinding({ done: 0, total: sources.length })
+      const blob = await renderNoteBook({
+        noteName: note.name,
+        memberCount: note.memberCount,
+        pages: sources,
         photos: photoBase(noteId),
+        signal: abort.signal,
         onProgress: (done, total) => setBinding({ done, total }),
       })
       downloadBlob(blob, bookFileName(note.name, ordered[0].date, ordered[ordered.length - 1].date))
-    } catch {
-      show('책을 만들지 못했어요')
+    } catch (e) {
+      if (!abort.signal.aborted && !isBookCancelled(e)) show('책을 만들지 못했어요')
     } finally {
+      bindingAbort.current = null
       setBinding(null)
     }
   }
@@ -132,10 +166,15 @@ export function HistoryPage() {
                 className="btn"
                 onClick={saveBook}
                 disabled={binding !== null}
-                title="지난 페이지를 모두 날짜순으로 엮은 PDF를 내려받아요"
+                title="지난 페이지와 오늘 페이지를 날짜순으로 엮은 PDF를 내려받아요"
               >
                 {binding ? `엮는 중… ${binding.done}/${binding.total}` : '책으로 저장 (PDF)'}
               </button>
+              {binding && (
+                <button type="button" className="btn" onClick={() => bindingAbort.current?.abort()}>
+                  취소
+                </button>
+              )}
             </div>
             <ol>
               {pages.map((p) => (

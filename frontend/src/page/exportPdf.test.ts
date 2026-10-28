@@ -4,6 +4,8 @@ import {
   bookOrder,
   bookPeriod,
   buildPdf,
+  isBookCancelled,
+  renderNoteBook,
   pageCaption,
   pdfDate,
   pdfTextString,
@@ -88,5 +90,18 @@ describe('책 엮기', () => {
   test('파일 이름에는 노트 이름과 기간이 들어간다', () => {
     expect(bookFileName('우리집/공용 노트', '2026-10-01', '2026-10-22')).toBe('daypage-우리집_공용 노트-2026-10-01~2026-10-22.pdf')
     expect(bookFileName('하루', '2026-10-01', '2026-10-01')).toBe('daypage-하루-2026-10-01.pdf')
+  })
+})
+
+describe('책 엮기 취소', () => {
+  test('이미 취소된 신호면 어떤 장도 받지 않고 AbortError로 멈춘다', async () => {
+    const load = vi.fn()
+    const page = { key: '2026-10-21', date: '2026-10-21', seq: 1, openedAt: '', closedAt: '', paper: { pattern: 'lined', margin: true, color: 'white' } } as const
+    const abort = new AbortController()
+    abort.abort()
+    const err = await renderNoteBook({ noteName: '집', memberCount: 1, pages: [{ page, load }], signal: abort.signal }).catch((e) => e)
+    expect(isBookCancelled(err)).toBe(true)
+    expect(load).not.toHaveBeenCalled()
+    expect(isBookCancelled(new Error('boom'))).toBe(false)
   })
 })
