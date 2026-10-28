@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-28-touch-drag',
+    date: '10월 28일 오후',
+    items: [
+      {
+        kind: 'fix',
+        title: '손가락으로 고른 것 끌기',
+        text: '선택·이동 도구에서 손가락으로 고른 것을 끌면 중간에 멈추던 문제를 고쳤어요. 끝까지 옮겨져요. 빈 곳을 끌면 예전처럼 화면이 스크롤돼요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-28-multi-select',
     date: '10월 28일',
     items: [
