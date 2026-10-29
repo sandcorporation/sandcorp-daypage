@@ -1,3 +1,4 @@
+import { DEFAULT_ERASE_FILTER, DEFAULT_ERASER_MODE, isEraseFilter, isEraserMode, type EraseFilter, type EraserMode } from '../page/erase'
 import { DEFAULT_FONT, FONTS } from '../page/fonts'
 import { DEFAULT_PEN_ONLY, isPenOnlyMode, type PenOnlyMode } from '../page/penOnly'
 import { DEFAULT_SHAPE, isShape, isShapeFill, type ShapeFill, type ShapeKind } from '../page/shapes'
@@ -36,6 +37,9 @@ export type ToolPrefs = {
   /** 지우개 크기 단계와 직접 정한 지름(px). 있으면 단계 대신 쓴다 */
   eraserLevel: WidthLevel
   eraserWidth: number | null
+  /** 지우개 방식(범위·획·올가미)과 지울 대상 거르기(모두·펜만·형광펜만) */
+  eraserMode: EraserMode
+  eraseFilter: EraseFilter
   /** 채색 붓: 굵기 단계·직접 정한 굵기(px, 최대 200)·불투명도(0.1~1)·부드러운 가장자리 */
   paintLevel: WidthLevel
   paintWidth: number | null
@@ -63,6 +67,8 @@ export const DEFAULT_TOOL_PREFS: ToolPrefs = {
   viewLock: false,
   eraserLevel: 1,
   eraserWidth: null,
+  eraserMode: DEFAULT_ERASER_MODE,
+  eraseFilter: DEFAULT_ERASE_FILTER,
   paintLevel: 1,
   paintWidth: null,
   paintOpacity: DEFAULT_PAINT_OPACITY,
@@ -114,6 +120,8 @@ export function loadToolPrefs(storage: StorageLike | null = defaultStorage()): T
     viewLock: typeof raw.viewLock === 'boolean' ? raw.viewLock : d.viewLock,
     eraserLevel: [0, 1, 2].includes(raw.eraserLevel as number) ? (raw.eraserLevel as WidthLevel) : d.eraserLevel,
     eraserWidth: typeof raw.eraserWidth === 'number' ? clampCustomWidth(raw.eraserWidth) : null,
+    eraserMode: isEraserMode(raw.eraserMode) ? raw.eraserMode : d.eraserMode,
+    eraseFilter: isEraseFilter(raw.eraseFilter) ? raw.eraseFilter : d.eraseFilter,
     paintLevel: [0, 1, 2].includes(raw.paintLevel as number) ? (raw.paintLevel as WidthLevel) : d.paintLevel,
     paintWidth: typeof raw.paintWidth === 'number' ? clampCustomWidth(raw.paintWidth, PAINT_WIDTH_MAX) : null,
     paintOpacity: (typeof raw.paintOpacity === 'number' && clampOpacity(raw.paintOpacity)) || d.paintOpacity,

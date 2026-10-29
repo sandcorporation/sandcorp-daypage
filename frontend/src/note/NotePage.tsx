@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useToast } from "../components/Toast";
+import type { EraseFilter, EraserMode } from "../page/erase";
 import * as Y from "yjs";
 import { PageView, type PointerTool } from "../page/PageView";
 import { TextLayer } from "../page/TextLayer";
@@ -127,6 +128,13 @@ export function NotePage({ initial }: Props) {
     setEraserWidth(null);
   }, []);
   const eraserR = eraserRadius(eraserLevel, eraserWidth);
+  // 지우개 방식(범위·획·올가미)과 지울 대상 거르기(브라우저에 기억)
+  const [eraserMode, setEraserMode] = useState<EraserMode>(prefs.eraserMode);
+  const [eraseFilter, setEraseFilter] = useState<EraseFilter>(
+    prefs.eraseFilter,
+  );
+  // 「이 장 모두 지우기」 확인 창에 보일 획 수(null이면 창을 닫았다)
+  const [confirmClear, setConfirmClear] = useState<number | null>(null);
   // 채색 붓 설정(브라우저에 기억)
   const [paintLevel, setPaintLevel] = useState<WidthLevel>(prefs.paintLevel);
   const [paintWidth, setPaintWidth] = useState<number | null>(
@@ -233,6 +241,8 @@ export function NotePage({ initial }: Props) {
         viewLock,
         eraserLevel,
         eraserWidth,
+        eraserMode,
+        eraseFilter,
         paintLevel,
         paintWidth,
         paintOpacity,
@@ -255,6 +265,8 @@ export function NotePage({ initial }: Props) {
       viewLock,
       eraserLevel,
       eraserWidth,
+      eraserMode,
+      eraseFilter,
       paintLevel,
       paintWidth,
       paintOpacity,
@@ -384,8 +396,21 @@ export function NotePage({ initial }: Props) {
     eraserR,
     selectMine ? note.me.nickname : null,
     selectLasso,
-    { additive: selectAdd },
+    { additive: selectAdd, eraserMode, eraseFilter },
   );
+  const askClear = useCallback(() => {
+    const n = edit.clearTargets().length;
+    if (n === 0) show("지울 획이 없어요.");
+    else setConfirmClear(n);
+  }, [edit, show]);
+  const clearPage = useCallback(() => {
+    setConfirmClear(null);
+    // 앞의 작업과 합쳐지지 않게 끊고 한 단계로 지운다(되돌리기 한 번으로 되살아난다)
+    history.stopCapturing();
+    const n = edit.clearAll();
+    history.stopCapturing();
+    if (n > 0) show(`획 ${n}개를 지웠어요.`, { label: "되돌리기", onClick: undo });
+  }, [edit, history, show, undo]);
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
   const reconnectRef = useRef<() => void>(() => {});
@@ -829,6 +854,11 @@ export function NotePage({ initial }: Props) {
           eraserWidth={eraserWidth}
           onEraserLevel={chooseEraserLevel}
           onEraserWidth={setEraserWidth}
+          eraserMode={eraserMode}
+          onEraserMode={setEraserMode}
+          eraseFilter={eraseFilter}
+          onEraseFilter={setEraseFilter}
+          onClearPage={askClear}
           paintLevel={paintLevel}
           paintWidth={paintWidth}
           onPaintLevel={choosePaintLevel}
@@ -923,6 +953,7 @@ export function NotePage({ initial }: Props) {
           author={note.me.nickname}
           origin={origin}
           pointerTool={tool === "text" ? textTool : edit.pointerTool}
+          penEraserTool={edit.eraserTool}
           onScale={setScale}
           zoom={zoom}
           view={view}
@@ -1012,6 +1043,24 @@ export function NotePage({ initial }: Props) {
               함께 쓰던 참여자 {note.memberCount - 1}명도 더는 볼 수 없어요.
             </p>
           )}
+        </ConfirmDialog>
+      )}
+      {confirmClear !== null && (
+        <ConfirmDialog
+          title="이 장의 획을 모두 지울까요?"
+          confirmLabel="모두 지우기"
+          onConfirm={clearPage}
+          onCancel={() => setConfirmClear(null)}
+        >
+          <p>
+            {eraseFilter === "pen"
+              ? "펜 획"
+              : eraseFilter === "highlighter"
+                ? "형광펜 획"
+                : "획"}{" "}
+            {confirmClear}개를 지워요(지금 그리는 레이어만). 글 상자와 사진은
+            그대로 둬요. 지운 뒤 되돌리기로 되살릴 수 있어요.
+          </p>
         </ConfirmDialog>
       )}
       {toast}

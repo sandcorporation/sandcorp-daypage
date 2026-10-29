@@ -425,3 +425,27 @@ describe('사진 패널', () => {
     expect(screen.getByText('사진 목록')).toBeInTheDocument()
   })
 })
+
+describe('지우개 창: 방식·거르기·이 장 모두 지우기(#95)', () => {
+  test('방식과 거르기를 고르면 알리고, 모두 지우기는 창을 닫고 부른 쪽에 묻게 한다', async () => {
+    const onEraserMode = vi.fn()
+    const onEraseFilter = vi.fn()
+    const onClearPage = vi.fn()
+    setup({ tool: 'eraser', eraserLevel: 1, onEraserLevel: vi.fn(), eraserMode: 'range', onEraserMode, eraseFilter: 'all', onEraseFilter, onClearPage })
+    await userEvent.click(screen.getByRole('button', { name: '지우개 크기: 보통' }))
+    expect(screen.getByRole('radio', { name: /^범위/ })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(screen.getByRole('radio', { name: /^올가미/ }))
+    expect(onEraserMode).toHaveBeenCalledWith('lasso')
+    await userEvent.click(screen.getByRole('radio', { name: '형광펜만' }))
+    expect(onEraseFilter).toHaveBeenCalledWith('highlighter')
+    await userEvent.click(screen.getByRole('button', { name: '이 장 모두 지우기' }))
+    expect(onClearPage).toHaveBeenCalled()
+    expect(screen.queryByRole('radiogroup', { name: '지우는 방식' })).toBeNull()
+  })
+
+  test('올가미는 크기를 쓰지 않아 크기 단계를 감춘다', async () => {
+    setup({ tool: 'eraser', eraserLevel: 1, onEraserLevel: vi.fn(), eraserMode: 'lasso', onEraserMode: vi.fn() })
+    await userEvent.click(screen.getByRole('button', { name: '지우개 크기: 보통' }))
+    expect(screen.queryByRole('button', { name: /크게/ })).toBeNull()
+  })
+})

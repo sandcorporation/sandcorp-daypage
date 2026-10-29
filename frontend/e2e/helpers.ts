@@ -174,3 +174,21 @@ export async function zoomIn(page: Page, times = 2) {
 export const scrollTopOf = (page: Page) => page.locator('.page-viewport').evaluate((el) => el.scrollTop)
 export const zoomPercent = async (page: Page) =>
   Number.parseInt((await page.getByRole('button', { name: '화면에 맞추기' }).textContent()) ?? '0', 10)
+
+/**
+ * 펜 지우개 버튼을 누른 채 긋기(#95): 펜 PointerEvent에 button 5·buttons 32를 실어 지면에 보낸다.
+ * CDP 한계: Input.dispatchMouseEvent의 button은 none·left·middle·right·back·forward뿐이고 buttons도 그 다섯 비트만
+ * 옮겨서(32를 주면 버린다) 지우개 버튼을 낼 수 없다. 그래서 이 입력만 페이지 안에서 PointerEvent를 만들어 보낸다.
+ * pointerId는 늘 살아 있는 마우스 포인터(1)를 빌린다(없는 id면 setPointerCapture가 예외를 던진다).
+ */
+export async function penEraserStroke(page: Page, path: Pt[]) {
+  await page.locator('.page-frame').evaluate((el, pts) => {
+    const fire = (type: string, p: { x: number; y: number }, button: number, buttons: number) =>
+      el.dispatchEvent(
+        new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, pointerId: 1, pointerType: 'pen', isPrimary: true, clientX: p.x, clientY: p.y, button, buttons, pressure: buttons ? 0.5 : 0 }),
+      )
+    fire('pointerdown', pts[0], 5, 32)
+    for (const p of pts.slice(1)) fire('pointermove', p, -1, 32)
+    fire('pointerup', pts[pts.length - 1], 5, 0)
+  }, path)
+}

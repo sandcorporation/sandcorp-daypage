@@ -310,3 +310,46 @@ export function deleteSelection(doc: Y.Doc, strokes: string[], texts: string[], 
     for (const id of texts) textboxesMap(doc).delete(id)
   }, origin)
 }
+
+/** 범위 지우개가 자른 획: 원래 획 id와 남은 조각들([x, y, 압력] 평평한 배열) */
+export type StrokeCut = { id: string; pieces: number[][] }
+
+/**
+ * 자른 조각의 id. 원래 획 id의 앞 16자에 4자를 붙여, 그리는 순서(같은 시각이면 id 순)에서 원래 획 자리를 지킨다.
+ * 조각을 또 잘라도 길이는 20자로 머문다.
+ */
+function pieceId(base: string, taken: (id: string) => boolean): string {
+  for (;;) {
+    const id = base.slice(0, 16) + newId().slice(0, 4)
+    if (!taken(id)) return id
+  }
+}
+
+/**
+ * 지우개 한 번(누르고 떼기까지)의 결과를 한 transaction으로 쓴다(되돌리기 한 단계, 다른 화면에 반쯤 지운 상태가 보이지 않게).
+ * remove는 통째로 지울 획, cuts는 잘린 획: 원래 획을 지우고 조각마다 같은 도구·색·굵기·레이어·작성자·시각으로 새 획을 만든다
+ * (점 형식도 원래 획을 따른다). 새로 만든 조각 id를 돌려준다.
+ */
+export function eraseStrokes(doc: Y.Doc, remove: string[], cuts: StrokeCut[], origin?: unknown): string[] {
+  if (remove.length === 0 && cuts.length === 0) return []
+  const map = strokesMap(doc)
+  const added: string[] = []
+  doc.transact(() => {
+    for (const id of remove) map.delete(id)
+    for (const { id, pieces } of cuts) {
+      const orig = map.get(id)
+      if (!orig) continue
+      const binary = isBinary(orig)
+      for (const points of pieces) {
+        const m = new Y.Map<unknown>()
+        for (const [k, v] of orig.entries()) if (k !== 'points' && k !== 'pts') m.set(k, v)
+        writePoints(m, points, binary)
+        const pid = pieceId(id, (x) => map.has(x))
+        map.set(pid, m)
+        added.push(pid)
+      }
+      map.delete(id)
+    }
+  }, origin)
+  return added
+}

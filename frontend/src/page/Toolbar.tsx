@@ -6,6 +6,7 @@ import { dockAt, type ToolbarDock } from './toolbarDock'
 import { BrushPicker } from './BrushPicker'
 import { WidthPanel } from './WidthPanel'
 import { ShapePicker } from './ShapePicker'
+import { ERASE_FILTERS, ERASER_MODES, type EraseFilter, type EraserMode } from './erase'
 import { SHAPES, type ShapeFill, type ShapeKind } from './shapes'
 import { InkControl } from './InkControl'
 import { FontPicker } from './FontPicker'
@@ -80,6 +81,13 @@ type Props = {
   eraserWidth?: number | null
   onEraserLevel?: (level: WidthLevel) => void
   onEraserWidth?: (px: number) => void
+  /** 지우개 방식(범위·획·올가미)과 거르기(모두·펜만·형광펜만). 고르는 함수가 없으면 지우개 창에 보이지 않는다 */
+  eraserMode?: EraserMode
+  onEraserMode?: (mode: EraserMode) => void
+  eraseFilter?: EraseFilter
+  onEraseFilter?: (filter: EraseFilter) => void
+  /** 이 장 모두 지우기(확인은 부른 쪽이 묻는다). 없으면 버튼을 두지 않는다 */
+  onClearPage?: () => void
   /** 선택·이동: 내가 그린 획만 고르기. onSelectMine이 없으면 선택 버튼에 창을 두지 않는다 */
   selectMine?: boolean
   onSelectMine?: (on: boolean) => void
@@ -508,17 +516,73 @@ export function Toolbar(props: Props) {
         </button>
       </div>
       {widthOpen && (
-        <ToolPopover title={widthLabel} anchor={widthRef} onClose={() => setWidthOpen(false)}>
+        <ToolPopover title={eraserMode ? '지우개' : widthLabel} anchor={widthRef} onClose={() => setWidthOpen(false)}>
           {eraserMode ? (
-            <WidthPanel
-              widthLevel={eraserLevel}
-              customWidth={eraserWidth}
-              onWidth={(level) => props.onEraserLevel?.(level)}
-              onCustomWidth={props.onEraserWidth}
-              onDone={() => setWidthOpen(false)}
-              names={ERASER_SIZE_NAMES}
-              round
-            />
+            <>
+              {props.onEraserMode && (
+                <div className="pen-only" role="radiogroup" aria-label="지우는 방식">
+                  <p className="tool-pop-caption pen-only-title">방식</p>
+                  <div className="pen-only-options">
+                    {ERASER_MODES.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={(props.eraserMode ?? 'stroke') === m.id}
+                        aria-label={`${m.name}: ${m.desc}`}
+                        title={m.desc}
+                        className="pen-only-option"
+                        onClick={() => props.onEraserMode?.(m.id)}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {props.onEraseFilter && (
+                <div className="pen-only" role="radiogroup" aria-label="지울 대상">
+                  <p className="tool-pop-caption pen-only-title">지울 대상</p>
+                  <div className="pen-only-options">
+                    {ERASE_FILTERS.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={(props.eraseFilter ?? 'all') === f.id}
+                        className="pen-only-option"
+                        onClick={() => props.onEraseFilter?.(f.id)}
+                      >
+                        {f.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {props.eraserMode !== 'lasso' && (
+                <WidthPanel
+                  widthLevel={eraserLevel}
+                  customWidth={eraserWidth}
+                  onWidth={(level) => props.onEraserLevel?.(level)}
+                  onCustomWidth={props.onEraserWidth}
+                  onDone={() => setWidthOpen(false)}
+                  names={ERASER_SIZE_NAMES}
+                  round
+                />
+              )}
+              {props.onClearPage && (
+                <button
+                  type="button"
+                  className="btn eraser-clear"
+                  onClick={() => {
+                    setWidthOpen(false)
+                    props.onClearPage?.()
+                  }}
+                >
+                  이 장 모두 지우기
+                </button>
+              )}
+            </>
           ) : paintMode ? (
             <WidthPanel
               widthLevel={paintLevel}

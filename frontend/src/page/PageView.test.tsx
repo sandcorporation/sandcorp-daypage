@@ -415,3 +415,54 @@ describe('고른 것을 손가락으로 끌 때는 브라우저 스크롤을 막
     expect(touchEvent(el, 'touchmove', 1)).toBe(true)
   })
 })
+
+describe('펜 지우개 버튼(#95)', () => {
+  beforeEach(() => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+  })
+
+  function penFrame() {
+    const calls: string[] = []
+    const tool = (name: string) => ({
+      down: () => (calls.push(`${name}:down`), true),
+      move: () => void calls.push(`${name}:move`),
+      up: () => void calls.push(`${name}:up`),
+      cancel: () => void calls.push(`${name}:cancel`),
+    })
+    const doc = new Y.Doc()
+    const { container } = render(
+      <PageView doc={doc} tool="select" ink="#000" widthLevel={1} author="나" pointerTool={tool('select')} penEraserTool={tool('eraser')} />,
+    )
+    return { el: container.querySelector('.page-frame') as HTMLElement, calls, doc }
+  }
+
+  test('지우개 버튼을 누른 채 그으면 지금 도구 대신 지우개가 받고, 떼면 원래 도구로 돌아간다', () => {
+    const { el, calls } = penFrame()
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'pen', clientX: 100, clientY: 100, button: 5, buttons: 32 })
+    fireEvent.pointerMove(el, { pointerId: 1, pointerType: 'pen', clientX: 120, clientY: 100, button: -1, buttons: 32 })
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'pen', clientX: 120, clientY: 100, button: 5, buttons: 0 })
+    expect(calls).toEqual(['eraser:down', 'eraser:move', 'eraser:up'])
+    fireEvent.pointerDown(el, { pointerId: 2, pointerType: 'pen', clientX: 100, clientY: 100, button: 0, buttons: 1 })
+    fireEvent.pointerUp(el, { pointerId: 2, pointerType: 'pen', clientX: 100, clientY: 100, button: 0, buttons: 0 })
+    expect(calls.slice(3)).toEqual(['select:down', 'select:up'])
+  })
+
+  test('펜 도구로 쓰던 중에도 지우개 버튼이면 획을 남기지 않는다', () => {
+    const calls: string[] = []
+    const eraser = { down: () => (calls.push('down'), true), up: () => void calls.push('up') }
+    const doc = new Y.Doc()
+    const { container } = render(<PageView doc={doc} tool="pen" ink="#000" widthLevel={1} author="나" penEraserTool={eraser} />)
+    const el = container.querySelector('.page-frame') as HTMLElement
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'pen', clientX: 100, clientY: 100, button: 5, buttons: 32 })
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'pen', clientX: 140, clientY: 100, button: 5, buttons: 0 })
+    expect(calls).toEqual(['down', 'up'])
+    expect(doc.getMap('strokes').size).toBe(0)
+  })
+
+  test('마우스 오른쪽 버튼 등 다른 버튼은 여전히 무시한다', () => {
+    const { el, calls } = penFrame()
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100, button: 2, buttons: 2 })
+    expect(calls).toEqual([])
+  })
+})
