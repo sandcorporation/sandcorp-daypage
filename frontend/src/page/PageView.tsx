@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type PointerEvent, type ReactNode } from 'react'
 import * as Y from 'yjs'
 import { addStroke, newId, readStroke, readStrokes, round, strokesMap, type Stroke } from './doc'
-import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, toPagePoint, type Point } from './geometry'
+import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, type Point } from './geometry'
 import { canDrawOn, DIM, highlightPlan, layerOf, layerPlan, layersMap, readLayers, type Layer } from './layers'
 import { strokeBounds, unionRect, type Rect } from './hit'
 import { fromPixelRect, PaintedStrokes, toPixelRect, union } from './inkScene'
@@ -16,6 +16,8 @@ import { straightPoints } from './straight'
 import { smoothPoints, smoothTailFrom } from './inkSmooth'
 import { DEFAULT_SHAPE, closedShape, curvePoints, densify, shapePoints, type ShapeKind } from './shapes'
 import { DEFAULT_PAPER, paperPalette, paperStyle, type Paper } from './paper'
+import { ViewContext } from './viewContext'
+import { VIEW_IDENTITY, clientToPage, isIdentityView, pageToDisplay, pageViewBox, sameView, viewBox, viewCss, type ViewTransform } from './viewTransform'
 import { anchorAt, fitScaleIn, isPanButton, pinchZoom, scrollAfterZoom, wheelZoom, type ClientPoint, type ZoomAnchor } from './viewport'
 
 /** 곡선: 첫 점·직전 점에서 이만큼(화면 px) 안을 누르면 닫기·끝내기로 본다 */
@@ -123,6 +125,8 @@ type Props = {
    * 지우개를 올려 둔 자리에서 지워질 획은 흐리게 그리고 점선 상자로 감싼다(화면에만). 바뀌면 overlay도 다시 그린다.
    */
   editPreview?: EditPreview
+  /** 이 탭에서만 쓰는 보기 변환(회전·거울). 장 좌표와 문서는 그대로다. */
+  view?: ViewTransform
 }
 
 export function PageView({
@@ -166,6 +170,7 @@ export function PageView({
   underlay,
   overlay,
   editPreview,
+  view = VIEW_IDENTITY,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -222,8 +227,22 @@ export function PageView({
   // 배율을 바꾸기 전에 적어 두는 기준점. 없으면 상자 가운데. 바뀐 뒤 그 아래의 종이 자리로 스크롤을 맞춘다.
   const requested = useRef<{ zoom: number; anchor: ClientPoint } | null>(null)
   const restore = useRef<ZoomAnchor | null>(null)
+  const viewRef = useRef(view)
   const scaleRef = useRef(scale)
   scaleRef.current = scale
+  // 보기 변환이 바뀌면 지금 화면 가운데에 있는 장 자리를 적어 두었다가, 바뀐 모양에서도 그 자리가 가운데에 오게 스크롤한다.
+  // 렌더 중이라 DOM은 아직 이전 보기다(여기서 읽는 값이 이전 보기의 것이다).
+  const centerKeep = useRef<Point | null>(null)
+  const targetScale = useRef(scale)
+  if (!sameView(viewRef.current, view)) {
+    const vp = viewportRef.current
+    const frame = frameRef.current
+    if (vp && frame) {
+      const box = vp.getBoundingClientRect()
+      centerKeep.current = clientToPage(viewRef.current, box.left + vp.clientWidth / 2, box.top + vp.clientHeight / 2, frame.getBoundingClientRect(), scaleRef.current)
+    }
+  }
+  viewRef.current = view
   const lockedRef = useRef(viewLocked)
   lockedRef.current = viewLocked
 
@@ -231,7 +250,8 @@ export function PageView({
     const el = viewportRef.current
     if (!el) return
     const update = () => {
-      const s = zoom === 'fit' ? (fitHeight ? fitScaleIn(el.clientWidth, el.clientHeight) : fitScale(el.clientWidth)) : zoom
+      const box = pageViewBox(viewRef.current)
+      const s = zoom === 'fit' ? (fitHeight ? fitScaleIn(el.clientWidth, el.clientHeight, box) : fitScale(el.clientWidth, box.width)) : zoom
       const frame = frameRef.current
       if (frame && s !== scaleRef.current && !restore.current) {
         const req = requested.current
@@ -241,6 +261,7 @@ export function PageView({
           req && req.zoom === zoom ? req.anchor : { clientX: box.left + el.clientWidth / 2, clientY: box.top + el.clientHeight / 2 }
         restore.current = anchorAt(point, frame.getBoundingClientRect(), scaleRef.current)
       }
+      targetScale.current = s
       setScale(s)
       onScale?.(s)
     }
@@ -248,7 +269,7 @@ export function PageView({
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [onScale, zoom, fitHeight])
+  }, [onScale, zoom, fitHeight, view])
 
   useLayoutEffect(() => {
     const el = viewportRef.current
@@ -262,6 +283,19 @@ export function PageView({
     el.scrollLeft = next.left
     el.scrollTop = next.top
   }, [scale])
+
+  useLayoutEffect(() => {
+    const keep = centerKeep.current
+    const vp = viewportRef.current
+    const frame = frameRef.current
+    if (!keep || !vp || !frame) return
+    const box = vp.getBoundingClientRect()
+    const at = pageToDisplay(view, keep, scale)
+    const rect = frame.getBoundingClientRect()
+    vp.scrollLeft += rect.left + at.x - (box.left + vp.clientWidth / 2)
+    vp.scrollTop += rect.top + at.y - (box.top + vp.clientHeight / 2)
+    if (Math.abs(scale - targetScale.current) < 1e-9) centerKeep.current = null
+  }, [view, scale])
 
   // 두 손가락 스크롤: 손가락 이벤트가 번갈아 오면 가운데 점이 ±소수점으로 흔들리는데, 스크롤 값이 정수로 반올림되며
   // 한쪽으로 조금씩 쌓였다. 소수점은 모아 두었다가 1px이 될 때 반영한다.
@@ -489,10 +523,11 @@ export function PageView({
   /** 지금 보이는 곳에 가까운 칸부터 그리도록 캔버스를 칸으로 나눈다 */
   const tilesOf = (w: number, h: number): PixelRect[] => {
     const frame = frameRef.current?.getBoundingClientRect()
-    const view = viewportRef.current?.getBoundingClientRect()
-    const k = frame && frame.width ? w / frame.width : 1
-    const cx = frame && view ? ((view.left + view.right) / 2 - frame.left) * k : w / 2
-    const cy = frame && view ? ((view.top + view.bottom) / 2 - frame.top) * k : h / 2
+    const vp = viewportRef.current?.getBoundingClientRect()
+    const k = w / (PAGE_WIDTH * scaleRef.current)
+    const center = frame && vp ? clientToPage(viewRef.current, (vp.left + vp.right) / 2, (vp.top + vp.bottom) / 2, frame, scaleRef.current) : null
+    const cx = center ? center.x * scaleRef.current * k : w / 2
+    const cy = center ? center.y * scaleRef.current * k : h / 2
     const tiles: PixelRect[] = []
     for (let y = 0; y < h; y += TILE_PX)
       for (let x = 0; x < w; x += TILE_PX) tiles.push({ x, y, width: Math.min(TILE_PX, w - x), height: Math.min(TILE_PX, h - y) })
@@ -791,7 +826,7 @@ export function PageView({
 
   function pagePoint(e: PointerEvent<HTMLDivElement>): Point {
     const rect = frameRef.current!.getBoundingClientRect()
-    return clampToPage(toPagePoint(e.clientX, e.clientY, rect, scale))
+    return clampToPage(clientToPage(view, e.clientX, e.clientY, rect, scale))
   }
 
   /** 점의 필압 값. 필압을 끄면 고정값, 만년필을 필압 없는 입력으로 쓰면 속도로 만든다. */
@@ -991,7 +1026,7 @@ export function PageView({
     }
     const c = lastClient.current
     const frame = frameRef.current
-    if (e && c && frame) pointerTool?.up?.(clampToPage(toPagePoint(c.x, c.y, frame.getBoundingClientRect(), scale)), e)
+    if (e && c && frame) pointerTool?.up?.(clampToPage(clientToPage(view, c.x, c.y, frame.getBoundingClientRect(), scale)), e)
   }
   // 최신 함수를 키 효과에서 부르기 위해 둔다
   const gestureActions = useRef({ cancelGesture })
@@ -1171,7 +1206,7 @@ export function PageView({
     const raw = rawInk.current
     const before = raw.length
     for (const ev of samples) {
-      const q = clampToPage(toPagePoint(ev.clientX, ev.clientY, rect, scale))
+      const q = clampToPage(clientToPage(view, ev.clientX, ev.clientY, rect, scale))
       raw.push(round(q.x), round(q.y), pressure(ev, q))
     }
     // 화면 정수 픽셀로 잘린 좌표의 계단을 편다(inkSmooth.ts). 새 점 근처의 끝부분만 다시 고른다.
@@ -1203,7 +1238,7 @@ export function PageView({
   // activePointer가 달라 쉰다(어느 쪽이 먼저 와도 한 획은 한 길로만 그어진다).
   const stylusTouch = useRef<number | null>(null)
   function stylusPoint(t: Touch): Point {
-    return clampToPage(toPagePoint(t.clientX, t.clientY, frameRef.current!.getBoundingClientRect(), scale))
+    return clampToPage(clientToPage(view, t.clientX, t.clientY, frameRef.current!.getBoundingClientRect(), scale))
   }
   function stylusSample(t: Touch, e: TouchEvent): PressureSample & ClientPoint {
     return { clientX: t.clientX, clientY: t.clientY, pressure: t.force, pointerType: 'pen', timeStamp: e.timeStamp }
@@ -1304,18 +1339,19 @@ export function PageView({
       const c = lastClient.current
       const frame = frameRef.current
       if (!c || !frame) return
-      const p = clampToPage(toPagePoint(c.x, c.y, frame.getBoundingClientRect(), scale))
+      const p = clampToPage(clientToPage(view, c.x, c.y, frame.getBoundingClientRect(), scale))
       onPointerMove?.(p)
       if (activePointer.current !== null && !drawing.current) pointerTool?.move?.(p)
     }
     window.addEventListener('scroll', onScroll, { capture: true, passive: true })
     return () => window.removeEventListener('scroll', onScroll, { capture: true })
-  }, [scale, pointerTool, onPointerMove])
+  }, [scale, view, pointerTool, onPointerMove])
 
   const width = PAGE_WIDTH * scale
   // 도구가 바뀌면 이전 도구의 커서는 버린다(같은 도구일 때만 쓴다)
   const hoverCursor = hover.tool === pointerTool ? hover.cursor : null
   const height = PAGE_HEIGHT * scale
+  const shown = viewBox(view, width, height)
   const cursor =
     (spaceHeld ? 'grab' : null) ??
     hoverCursor ??
@@ -1387,11 +1423,12 @@ export function PageView({
   }, [])
 
   return (
+    <ViewContext.Provider value={view}>
     <div ref={viewportRef} className="page-viewport" style={viewLocked ? { overflow: 'hidden' } : undefined}>
       <div
         ref={frameRef}
         className="page-frame"
-        style={{ width, height, cursor, touchAction: readOnly || tool === 'select' ? 'pan-x pan-y' : 'none' }}
+        style={{ width: shown.width, height: shown.height, cursor, touchAction: readOnly || tool === 'select' ? 'pan-x pan-y' : 'none' }}
         data-picking={picking || undefined}
         onPointerDown={onPointerDown}
         onPointerMove={onMove}
@@ -1404,39 +1441,41 @@ export function PageView({
           if (activePointer.current === null) updateHover(null)
         }}
       >
-        <div
-          className="page-layer paper"
-          style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})`, ...paperStyle(paper) }}
-        />
-        {underlay && (
-          <div className="page-layer photos" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
-            {underlay}
+        <div className="page-stage" style={{ width, height, transform: isIdentityView(view) ? undefined : viewCss(view, width, height) }}>
+          <div
+            className="page-layer paper"
+            style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})`, ...paperStyle(paper) }}
+          />
+          {underlay && (
+            <div className="page-layer photos" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
+              {underlay}
+            </div>
+          )}
+          <canvas
+            ref={colorCanvasRef}
+            className="color-canvas"
+            style={{ width, height }}
+            aria-hidden="true"
+          />
+          <canvas
+            ref={inkCanvasRef}
+            style={{ width, height }}
+            aria-hidden="true"
+          />
+          <canvas
+            ref={liveCanvasRef}
+            className="live-canvas"
+            data-blend={tool === 'paint' ? 'multiply' : undefined}
+            width={Math.round(width * dpr)}
+            height={Math.round(height * dpr)}
+            style={{ width, height }}
+            aria-hidden="true"
+          />
+          <div className="page-layer" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
+            {children}
           </div>
-        )}
-        <canvas
-          ref={colorCanvasRef}
-          className="color-canvas"
-          style={{ width, height }}
-          aria-hidden="true"
-        />
-        <canvas
-          ref={inkCanvasRef}
-          style={{ width, height }}
-          aria-hidden="true"
-        />
-        <canvas
-          ref={liveCanvasRef}
-          className="live-canvas"
-          data-blend={tool === 'paint' ? 'multiply' : undefined}
-          width={Math.round(width * dpr)}
-          height={Math.round(height * dpr)}
-          style={{ width, height }}
-          aria-hidden="true"
-        />
-        <div className="page-layer" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
-          {children}
+          {eraserRadius ? <div ref={ringRef} className="eraser-ring" aria-hidden="true" /> : null}
         </div>
-        {eraserRadius ? <div ref={ringRef} className="eraser-ring" aria-hidden="true" /> : null}
       </div>
       {curveCount > 0 && (
         <div className="curve-bar" role="toolbar" aria-label="곡선">
@@ -1458,6 +1497,7 @@ export function PageView({
         </div>
       )}
     </div>
+    </ViewContext.Provider>
   )
 }
 

@@ -18,6 +18,10 @@ export type ShortcutAction =
   | 'zoomOut'
   | 'zoomFit'
   | 'focus'
+  | 'rotateCw'
+  | 'rotateCcw'
+  | 'mirror'
+  | 'viewReset'
   | 'eyedropper'
   | 'help'
 
@@ -52,6 +56,10 @@ export const SHORTCUT_GROUPS: { name: string; actions: { id: ShortcutAction; lab
       { id: 'zoomOut', label: '축소' },
       { id: 'zoomFit', label: '화면에 맞추기' },
       { id: 'focus', label: '집중 모드' },
+      { id: 'rotateCw', label: '시계 방향으로 돌리기' },
+      { id: 'rotateCcw', label: '반시계 방향으로 돌리기' },
+      { id: 'mirror', label: '좌우 뒤집기' },
+      { id: 'viewReset', label: '돌리기·뒤집기 원위치' },
       { id: 'help', label: '단축키 보기' },
     ],
   },
@@ -75,6 +83,10 @@ export const DEFAULT_KEYMAP: Keymap = {
   zoomOut: ['Minus', 'NumpadSubtract'],
   zoomFit: ['0', 'Numpad0'],
   focus: ['F'],
+  rotateCw: ['R'],
+  rotateCcw: ['Shift+R'],
+  mirror: ['M'],
+  viewReset: ['Shift+0'],
   help: ['Shift+Slash'],
 }
 

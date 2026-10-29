@@ -2497,3 +2497,63 @@
 .photo-empty {
   padding: 8px 4px;
 }
+
+/* 보기 변환(회전·거울)을 거는 상자. 틀(page-frame)은 변환 뒤의 크기로 스크롤을 만들고, 이 상자가 장을 돌려 놓는다. */
+.page-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+/* 보기 돌리기·뒤집기: 확대·축소 바로 위(터치 기기에서는 손가락·화면 고정 위) */
+.rotate-control {
+  position: fixed;
+  right: 16px;
+  bottom: 72px;
+  z-index: 30;
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--white);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(31, 33, 40, 0.08);
+}
+@media (any-pointer: coarse) {
+  .rotate-control {
+    bottom: 128px;
+  }
+}
+.rotate-control button {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rotate-control button:hover {
+  background: var(--paper-dark);
+}
+.rotate-control button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@media (max-width: 720px) {
+  .rotate-control {
+    right: 12px;
+    bottom: 68px;
+  }
+  @media (any-pointer: coarse) {
+    .rotate-control {
+      bottom: 124px;
+    }
+  }
+}

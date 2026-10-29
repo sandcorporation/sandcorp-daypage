@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-10-29-view-rotate-mirror',
+    date: '10월 29일 오후',
+    items: [
+      {
+        kind: 'new',
+        title: '페이지 보기 돌리기·좌우 뒤집기',
+        text: '오른쪽 아래 버튼이나 R(시계 방향)·Shift+R(반시계 방향)로 90도씩 돌리고, M으로 좌우를 뒤집어요. Shift+0이면 원위치예요. 이 화면에서만 잠깐 그렇게 보일 뿐 노트와 다른 사람의 화면은 그대로이고, 새로고침하면 원래대로 돌아와요. 돌린 채로도 펜·지우개·선택이 손끝에 맞게 움직여요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-28-book-cancel-today',
     date: '10월 28일 오후 -1',
     items: [
