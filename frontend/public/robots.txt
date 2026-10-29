@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /note/
+Disallow: /staff/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /ws/
+
+Sitemap: https://daypage.sandcorp.co.kr/sitemap.xml

@@ -56,6 +56,10 @@
 	# 나머지는 SPA. 없는 경로는 index.html로(React Router가 처리)
 	handle {
 		root * /srv
+		# 개인 일지(노트·운영자 노트 화면)는 색인하지 않는다. robots.txt가 이 경로의 크롤링도 막지만,
+		# 링크로 알려진 URL이 내용 없이 색인되는 것까지는 못 막으므로 헤더를 함께 둔다.
+		@private path /note/* /staff/*
+		header @private X-Robots-Tag "noindex"
 		@assets path /assets/*
 		header @assets Cache-Control "public, max-age=31536000, immutable"
 		try_files {path} /index.html
