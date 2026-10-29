@@ -154,6 +154,25 @@ button {
   z-index: 100;
 }
 
+.toast-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+.toast-btn {
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: var(--white);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .btn-danger {
   border: 0;
   background: #b91c1c;

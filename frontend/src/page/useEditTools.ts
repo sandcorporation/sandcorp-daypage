@@ -3,6 +3,8 @@ import * as Y from 'yjs'
 import {
   deleteSelection,
   deleteStrokes,
+  eraseStrokes,
+  type StrokeCut,
   readStroke,
   readStrokes,
   readTextBox,
@@ -29,6 +31,7 @@ import {
   type Rect,
 } from './hit'
 import { useStrokeIndex } from './strokeIndex'
+import { cutStroke, erasesWhole, filterStrokes, type EraseFilter, type EraserMode } from './erase'
 import type { PointerTool } from './PageView'
 import type { ToolKind } from './tools'
 import {
@@ -53,6 +56,9 @@ import {
 /** 지우개 반지름(장 좌표). 화면의 지우개 동그라미도 이 크기로 그린다. */
 export const ERASER_RADIUS = 10
 const PICK_TOLERANCE = 8
+/** 범위·올가미 지우개가 지나간 자리의 표시 색(지워질 획 테두리와 같은 주황) */
+const ERASE_LINE_COLOR = '#C2410C'
+const ERASE_PATH_COLOR = 'rgba(194, 65, 12, 0.18)'
 /** 선택 상자 여백·손잡이 크기(화면 px). 장 좌표로는 배율로 나눈다. */
 const BOX_PAD = 6
 const HANDLE_HIT = 14
@@ -109,6 +115,10 @@ type Drag =
   | { kind: 'band'; start: Point; end: Point; add: boolean }
   | { kind: 'lasso'; path: Point[]; add: boolean }
   | { kind: 'erase'; last: Point; ids: Set<string> }
+  /** 범위 지우개: 지나간 길, 닿은 획(손을 뗄 때 자른다), 통째로 지울 획(채움 도형 등) */
+  | { kind: 'rub'; path: Point[]; hits: Set<string>; whole: Set<string> }
+  /** 올가미 지우개: 두르는 길 */
+  | { kind: 'lassoErase'; path: Point[] }
 
 /** 끄는 모서리가 어느 손잡이인지 */
 function cornerOf(r: Rect, p: Point): Handle {
@@ -190,9 +200,13 @@ export function useEditTools(
     additive?: boolean
     /** 글 상자 높이 재기(시험용으로 바꿔 끼운다). 없으면 그려진 상자에서 잰다 */
     textHeight?: (id: string) => number | undefined
+    /** 지우개 방식(erase.ts). 없으면 획 지우개 */
+    eraserMode?: EraserMode
+    /** 지울 대상 거르기. 없으면 모두 */
+    eraseFilter?: EraseFilter
   } = {},
 ) {
-  const { additive = false, textHeight = domTextHeight } = options
+  const { additive = false, textHeight = domTextHeight, eraserMode = 'stroke', eraseFilter = 'all' } = options
   const [selected, setSelected] = useState<Selection>(NOTHING)
   // 끄는 동안 자주 바뀌는 미리보기(옮기기 변환·지워질 획·선택 상자). 리액트 상태가 아니라 PageView가 구독한다.
   const live = useMemo(() => new EditPreview(), [])
@@ -261,6 +275,133 @@ export function useEditTools(
   // 획 공간 색인: 지우개·선택 판정은 포인터 근처의 획만 본다(획 수에 비례해 느려지지 않게)
   const strokeIndex = useStrokeIndex(doc)
 
+  /**
+   * 지우개(eraserMode에 따라 범위·획·올가미). 지금 도구가 지우개일 때와, 펜의 지우개 버튼을 누른 채 그을 때 쓴다.
+   * 셋 다 끄는 동안은 화면에만 보이고(지나간 길·두른 길·지워질 획), 손을 뗄 때 한 transaction으로 쓴다
+   * (되돌리기 한 단계, 네트워크 갱신도 한 번).
+   */
+  const eraserTool = useMemo<PointerTool>(() => {
+    const near = (rect: Rect): Stroke[] => {
+      const map = strokesMap(doc)
+      return strokeIndex()
+        .near(rect)
+        .flatMap((id) => {
+          const m = map.get(id)
+          return m ? [readStroke(id, m)] : []
+        })
+    }
+    const erasableNear = (rect: Rect) =>
+      filterStrokes(
+        currentLayer
+          ? erasableStrokes(near(rect), readLayers(doc), currentLayer, hiddenLayers)
+          : editableStrokes(near(rect), readLayers(doc), hiddenLayers),
+        eraseFilter,
+      )
+    const hitsOn = (path: Point[]) => strokesHitBy(erasableNear(pathBounds(path, eraserRadius)), path, eraserRadius)
+    const readOne = (id: string): Stroke | null => {
+      const m = strokesMap(doc).get(id)
+      return m ? readStroke(id, m) : null
+    }
+    /** 범위 지우개가 닿은 획을 나눈다: 통째로 지울 것은 whole에(미리보기에 보인다), 자를 것은 hits에 */
+    const rubbed = (d: { hits: Set<string>; whole: Set<string> }, ids: string[]): boolean => {
+      let grew = false
+      for (const id of ids) {
+        if (d.hits.has(id) || d.whole.has(id)) continue
+        const s = readOne(id)
+        if (!s) continue
+        if (erasesWhole(s)) {
+          d.whole.add(id)
+          grew = true
+        } else d.hits.add(id)
+      }
+      return grew
+    }
+    return {
+      // 올려 두면 누를 때 통째로 지워질 획을 미리 알린다(화면에만 표시, 문서는 그대로). 범위 지우개는 채움 도형처럼 통째로 지울 것만.
+      hover(p) {
+        if (!p || eraserMode === 'lasso') showEraseTargets([])
+        else {
+          const ids = hitsOn([p])
+          showEraseTargets(eraserMode === 'range' ? ids.filter((id) => { const s = readOne(id); return !!s && erasesWhole(s) }) : ids)
+        }
+        return null
+      },
+      // 끄는 동안은 지나간 획을 흐리게만 보이고, 손을 뗄 때 한 번에 지운다. 손가락으로 두 손가락 스크롤·핀치를
+      // 시작할 때 첫 손가락이 닿은 자리의 획이 지워지지 않도록(그때는 cancel이 와서 아무것도 지우지 않는다).
+      down(p) {
+        if (eraserMode === 'lasso') {
+          drag.current = { kind: 'lassoErase', path: [p] }
+          showEraseTargets([])
+          bump()
+          return true
+        }
+        if (eraserMode === 'range') {
+          const d: Drag & { kind: 'rub' } = { kind: 'rub', path: [p], hits: new Set(), whole: new Set() }
+          rubbed(d, hitsOn([p]))
+          drag.current = d
+          showEraseTargets([...d.whole])
+          bump()
+          return true
+        }
+        const ids = new Set(hitsOn([p]))
+        drag.current = { kind: 'erase', last: p, ids }
+        showEraseTargets([...ids])
+        return true
+      },
+      move(p) {
+        const d = drag.current
+        if (d?.kind === 'lassoErase') {
+          d.path.push(p)
+          bump()
+          return
+        }
+        if (d?.kind === 'rub') {
+          const seg = [d.path[d.path.length - 1], p]
+          d.path.push(p)
+          if (rubbed(d, hitsOn(seg))) showEraseTargets([...d.whole])
+          bump()
+          return
+        }
+        if (d?.kind !== 'erase') return
+        const before = d.ids.size
+        const path = [d.last, p]
+        for (const id of hitsOn(path)) d.ids.add(id)
+        d.last = p
+        if (d.ids.size !== before) showEraseTargets([...d.ids])
+      },
+      up() {
+        const d = drag.current
+        drag.current = null
+        if (d?.kind === 'erase') deleteStrokes(doc, [...d.ids], origin)
+        if (d?.kind === 'lassoErase') {
+          const ids = d.path.length >= 3 ? strokesInLasso(erasableNear(pathBounds(d.path, 0)), d.path) : []
+          deleteStrokes(doc, ids, origin)
+          bump()
+        }
+        if (d?.kind === 'rub') {
+          const remove = [...d.whole]
+          const cuts: StrokeCut[] = []
+          for (const id of d.hits) {
+            const s = readOne(id)
+            const pieces = s && cutStroke(s, d.path, eraserRadius)
+            if (!pieces) continue
+            if (pieces.length === 0) remove.push(id)
+            else cuts.push({ id, pieces })
+          }
+          eraseStrokes(doc, remove, cuts, origin)
+          bump()
+        }
+        showEraseTargets([])
+      },
+      cancel() {
+        const k = drag.current?.kind
+        drag.current = null
+        showEraseTargets([])
+        if (k === 'rub' || k === 'lassoErase') bump()
+      },
+    }
+  }, [doc, origin, hiddenLayers, currentLayer, eraserRadius, eraserMode, eraseFilter, showEraseTargets, strokeIndex, bump])
+
   const pointerTool = useMemo<PointerTool | undefined>(() => {
     const editable = () => editableStrokes(readStrokes(doc), readLayers(doc), hiddenLayers)
     const near = (rect: Rect): Stroke[] => {
@@ -273,49 +414,11 @@ export function useEditTools(
         })
     }
     const editableNear = (rect: Rect) => editableStrokes(near(rect), readLayers(doc), hiddenLayers)
-    const erasableNear = (rect: Rect) =>
-      currentLayer ? erasableStrokes(near(rect), readLayers(doc), currentLayer, hiddenLayers) : editableNear(rect)
     // 선택·이동이 고를 수 있는 획: '내가 그린 획만 고르기'가 켜져 있으면 남의 획은 뺀다
     const mine = (strokes: Stroke[]) => (onlyAuthor ? strokes.filter((s) => s.author === onlyAuthor) : strokes)
     const pickable = () => mine(editable())
     const pickableNear = (rect: Rect) => mine(editableNear(rect))
-    if (tool === 'eraser') {
-      return {
-        // 올려 두면 누를 때 지워질 획을 미리 알린다(화면에만 표시, 문서는 그대로)
-        hover(p) {
-          showEraseTargets(p ? strokesHitBy(erasableNear(pathBounds([p], eraserRadius)), [p], eraserRadius) : [])
-          return null
-        },
-        // 끄는 동안은 지나간 획을 흐리게만 보이고, 손을 뗄 때 한 번에 지운다. 손가락으로 두 손가락 스크롤·핀치를
-        // 시작할 때 첫 손가락이 닿은 자리의 획이 지워지지 않도록(그때는 cancel이 와서 아무것도 지우지 않는다).
-        down(p) {
-          const ids = new Set(strokesHitBy(erasableNear(pathBounds([p], eraserRadius)), [p], eraserRadius))
-          drag.current = { kind: 'erase', last: p, ids }
-          showEraseTargets([...ids])
-          return true
-        },
-        move(p) {
-          const d = drag.current
-          if (d?.kind !== 'erase') return
-          const before = d.ids.size
-          const path = [d.last, p]
-          for (const id of strokesHitBy(erasableNear(pathBounds(path, eraserRadius)), path, eraserRadius)) d.ids.add(id)
-          d.last = p
-          if (d.ids.size !== before) showEraseTargets([...d.ids])
-        },
-        up() {
-          const d = drag.current
-          drag.current = null
-          if (d?.kind !== 'erase') return
-          deleteStrokes(doc, [...d.ids], origin)
-          showEraseTargets([])
-        },
-        cancel() {
-          drag.current = null
-          showEraseTargets([])
-        },
-      }
-    }
+    if (tool === 'eraser') return eraserTool
     if (tool === 'select') {
       // 고를 수 있는 글 상자의 자리(위에 그려진 것이 뒤에 온다). 빈 상자(보이지 않는다)와 '내 것만'이면 남의 상자는 뺀다.
       const pickableTexts = (): (Rect & { id: string })[] =>
@@ -409,7 +512,7 @@ export function useEditTools(
             bump()
             return
           }
-          if (d.kind === 'erase') return
+          if (d.kind === 'erase' || d.kind === 'rub' || d.kind === 'lassoErase') return
           if (d.kind === 'move') {
             const m = fitted(d.bounds, translate(p.x - d.start.x, p.y - d.start.y))
             d.m = d.lineY === null ? m : snapToLines(m, d.lineY, d.bounds)
@@ -474,7 +577,25 @@ export function useEditTools(
       }
     }
     return undefined
-  }, [tool, doc, origin, selected, bump, setPreview, hiddenLayers, scale, selectionBox, currentLayer, eraserRadius, showEraseTargets, strokeIndex, onlyAuthor, lasso, additive, textRect])
+  }, [tool, eraserTool, doc, origin, selected, bump, setPreview, hiddenLayers, scale, selectionBox, strokeIndex, onlyAuthor, lasso, additive, textRect])
+
+  /**
+   * 「이 장 모두 지우기」가 지울 획: 지우개 규칙(지금 그리는 레이어, 잠김·숨김 레이어 제외)과 거르기를 따른다.
+   * 글 상자와 사진은 지우지 않는다.
+   */
+  const clearTargets = useCallback((): string[] => {
+    const all = readStrokes(doc)
+    const layers = readLayers(doc)
+    const erasable = currentLayer ? erasableStrokes(all, layers, currentLayer, hiddenLayers) : editableStrokes(all, layers, hiddenLayers)
+    return filterStrokes(erasable, eraseFilter).map((s) => s.id)
+  }, [doc, currentLayer, hiddenLayers, eraseFilter])
+
+  /** 이 장의 획을 한 번에 지운다(되돌리기 한 단계). 지운 획 수를 돌려준다. */
+  const clearAll = useCallback((): number => {
+    const ids = clearTargets()
+    deleteStrokes(doc, ids, origin)
+    return ids.length
+  }, [doc, origin, clearTargets])
 
   const deleteSelected = useCallback(() => {
     deleteSelection(doc, selected.strokes, selected.texts, origin)
@@ -496,7 +617,24 @@ export function useEditTools(
         ctx.restore()
         return
       }
-      if (d?.kind === 'lasso') {
+      if (d?.kind === 'rub') {
+        // 범위 지우개가 지나간 자리(손을 떼면 이 안의 잉크가 지워진다)
+        ctx.strokeStyle = ERASE_PATH_COLOR
+        ctx.lineWidth = eraserRadius * 2
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.beginPath()
+        d.path.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)))
+        if (d.path.length === 1) ctx.lineTo(d.path[0].x + 0.01, d.path[0].y)
+        ctx.stroke()
+        ctx.restore()
+        return
+      }
+      if (d?.kind === 'lassoErase') {
+        ctx.strokeStyle = ERASE_LINE_COLOR
+        ctx.fillStyle = ERASE_PATH_COLOR
+      }
+      if (d?.kind === 'lasso' || d?.kind === 'lassoErase') {
         // 지나간 길을 점선으로, 처음 점까지 닫아 안을 옅게 칠한다
         ctx.setLineDash([8 / scale, 6 / scale])
         ctx.beginPath()
@@ -559,8 +697,8 @@ export function useEditTools(
       ctx.stroke()
       ctx.restore()
     },
-    [selected, live, scale, selectionBox],
+    [selected, live, scale, selectionBox, eraserRadius],
   )
 
-  return { pointerTool, overlay, selected, deleteSelected, live }
+  return { pointerTool, eraserTool, overlay, selected, deleteSelected, clearTargets, clearAll, live }
 }

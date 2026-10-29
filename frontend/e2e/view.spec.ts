@@ -90,6 +90,8 @@ test('#89 새로고침하면 돌리기·뒤집기가 원위치로 돌아온다',
 })
 
 test('#89 마우스·지우개·글 상자·선택이동: 90도+거울 상태에서도 손끝 자리에 맞는다', async ({ page }) => {
+  // 이 시험의 지우개는 획을 통째로 지우는 획 지우개로(기본은 #95부터 범위 지우개)
+  await page.addInitScript(() => localStorage.setItem('daypage:tool-prefs', JSON.stringify({ eraserMode: 'stroke' })))
   const saved = await openNote(page)
   const hands = await Hands.on(page)
   await page.keyboard.press('r')

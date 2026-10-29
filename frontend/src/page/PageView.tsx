@@ -102,6 +102,8 @@ type Props = {
   readOnly?: boolean
   /** 지우개·선택·글씨처럼 그리기 외 도구의 포인터 처리 */
   pointerTool?: PointerTool
+  /** 펜의 지우개 버튼(button 5, buttons & 32)을 누른 채 그을 때 쓰는 지우개. 떼면 원래 도구로 돌아간다 */
+  penEraserTool?: PointerTool
   /** 내가 만든 변경에 붙는 origin(되돌리기 추적용) */
   origin?: unknown
   onPointerMove?: (p: Point | null) => void
@@ -159,6 +161,7 @@ export function PageView({
   author,
   readOnly = false,
   pointerTool,
+  penEraserTool,
   origin,
   onPointerMove,
   onScale,
@@ -201,6 +204,8 @@ export function PageView({
   const curveNearFirst = useRef(false)
   // 지금 처리 중인 포인터. 두 번째 손가락·손바닥이 한 획에 섞이지 않게 한다.
   const activePointer = useRef<number | null>(null)
+  // 펜 지우개 버튼으로 지우는 중(이번 누르기는 지금 도구 대신 penEraserTool이 받는다)
+  const penErasing = useRef(false)
   // 마지막 포인터 화면 위치. 누른 채 스크롤하면 이 위치로 장 좌표를 다시 계산한다.
   const lastClient = useRef<{ x: number; y: number } | null>(null)
   // 터치: 한 손가락은 그리기(도구 동작), 두 손가락은 스크롤·핀치
@@ -829,6 +834,20 @@ export function PageView({
     return clampToPage(clientToPage(view, e.clientX, e.clientY, rect, scale))
   }
 
+  /**
+   * 지우개에 이번 이동의 점을 모두 넘긴다. 브라우저가 한 프레임의 이동을 한 이벤트로 합치므로(coalesced),
+   * 마지막 점만 넘기면 빠르게 두른 올가미·문지른 길이 거칠어진다.
+   */
+  function eraseMove(target: PointerTool | undefined, p: Point, e: PointerEvent<HTMLDivElement>) {
+    const events = e.nativeEvent.getCoalescedEvents?.() ?? []
+    if (events.length <= 1 || !target?.move) {
+      target?.move?.(p, e)
+      return
+    }
+    const rect = frameRef.current!.getBoundingClientRect()
+    for (const ev of events) target.move(clampToPage(clientToPage(view, ev.clientX, ev.clientY, rect, scale)), e)
+  }
+
   /** 점의 필압 값. 필압을 끄면 고정값, 만년필을 필압 없는 입력으로 쓰면 속도로 만든다. */
   function pressure(e: PressureSample, q: Point): number {
     const real = e.pointerType !== 'mouse' && e.pressure !== 0
@@ -1010,6 +1029,11 @@ export function PageView({
     touchGrab.current = false
     if (activePointer.current === null) return
     activePointer.current = null
+    if (penErasing.current) {
+      penErasing.current = false
+      penEraserTool?.cancel?.()
+      return
+    }
     if (curve.current) {
       // 곡선: 이번에 찍은 점만 버리고 이어 찍을 수 있게 둔다
       undoCurvePoint()
@@ -1039,7 +1063,9 @@ export function PageView({
       pan.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
       return
     }
-    if (readOnly || e.button > 0) return
+    // 펜 지우개 버튼: 누르고 닿으면 button 5(buttons에 32). 다른 버튼(오른쪽 등)은 그리지 않는다
+    const penButton = e.pointerType === 'pen' && (e.button === 5 || (e.buttons & 32) !== 0)
+    if (readOnly || (e.button > 0 && !penButton)) return
     if (e.pointerType === 'pen' && !penSeen.current) {
       penSeen.current = true
       onPenSeen?.()
@@ -1085,6 +1111,16 @@ export function PageView({
     }
     placeRing(p)
     onGestureStart?.()
+    if (penButton) {
+      // 지금 도구와 상관없이 고른 지우개 방식으로 지운다(그리던 곡선 점 등은 건드리지 않는다)
+      if (penEraserTool?.down?.(p, e)) {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        activePointer.current = e.pointerId
+        penErasing.current = true
+        e.preventDefault()
+      }
+      return
+    }
     if (tool === 'shape') {
       if (!curve.current && !canDrawHere()) return
       e.currentTarget.setPointerCapture(e.pointerId)
@@ -1143,6 +1179,10 @@ export function PageView({
     const p = pagePoint(e)
     onPointerMove?.(p)
     placeRing(p)
+    if (penErasing.current) {
+      eraseMove(penEraserTool, p, e)
+      return
+    }
     if (tool === 'shape') {
       const c = curve.current
       if (c) {
@@ -1166,6 +1206,7 @@ export function PageView({
       return
     }
     if (activePointer.current === null) updateHover(p)
+    else if (tool === 'eraser') eraseMove(pointerTool, p, e)
     else pointerTool?.move?.(p, e)
   }
 
@@ -1308,6 +1349,11 @@ export function PageView({
     }
     if (e.pointerId !== activePointer.current) return
     activePointer.current = null
+    if (penErasing.current) {
+      penErasing.current = false
+      penEraserTool?.up?.(pagePoint(e), e)
+      return
+    }
     if (tool === 'shape') {
       // 곡선은 점을 찍을 때마다 이어 가고, 끝낼 때 한 번에 저장한다
       if (curve.current) return
@@ -1341,11 +1387,11 @@ export function PageView({
       if (!c || !frame) return
       const p = clampToPage(clientToPage(view, c.x, c.y, frame.getBoundingClientRect(), scale))
       onPointerMove?.(p)
-      if (activePointer.current !== null && !drawing.current) pointerTool?.move?.(p)
+      if (activePointer.current !== null && !drawing.current) (penErasing.current ? penEraserTool : pointerTool)?.move?.(p)
     }
     window.addEventListener('scroll', onScroll, { capture: true, passive: true })
     return () => window.removeEventListener('scroll', onScroll, { capture: true })
-  }, [scale, view, pointerTool, onPointerMove])
+  }, [scale, view, pointerTool, penEraserTool, onPointerMove])
 
   const width = PAGE_WIDTH * scale
   // 도구가 바뀌면 이전 도구의 커서는 버린다(같은 도구일 때만 쓴다)

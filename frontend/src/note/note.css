@@ -2221,6 +2221,18 @@
   color: var(--accent);
   font-weight: 700;
 }
+/* 지우개 창: 방식·거르기 묶음 사이 간격, 맨 아래 「이 장 모두 지우기」 */
+.pen-only + .width-panel {
+  margin-top: 12px;
+}
+.eraser-clear {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 12px;
+  color: #b91c1c;
+  border-color: #b91c1c;
+}
 
 /* 집중 모드: 머리글·아래 칩을 숨기고 툴바만 종이 위에 띄운다. 배율 칩은 남긴다. */
 .note-screen[data-focus] .toolbar-grip {
