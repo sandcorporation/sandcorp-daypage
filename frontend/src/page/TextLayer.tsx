@@ -2,7 +2,9 @@ import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import * as Y from 'yjs'
 import { readTextBox, textBoxContent, textboxesMap, updateTextBox, type TextBox } from './doc'
-import { LINE_GAP, PAGE_WIDTH, pageDelta } from './geometry'
+import { LINE_GAP, PAGE_WIDTH } from './geometry'
+import { usePageViewTransform } from './viewContext'
+import { pageDeltaOf } from './viewTransform'
 import { textBoxExtensions } from './editorExtensions'
 import { fontOf } from './fonts'
 import { CharCounter } from './CharCounter'
@@ -200,6 +202,8 @@ function TextBoxView({
   const empty = useEditorState({ editor, selector: ({ editor: e }) => e?.isEmpty ?? false })
   const idleEmpty = empty && !focused && focusId !== box.id && others.length === 0 && !drag
 
+  const view = usePageViewTransform()
+
   function frameRect(): { left: number; top: number } {
     const frame = rootRef.current?.closest('.page-frame')
     const r = frame?.getBoundingClientRect()
@@ -210,7 +214,7 @@ function TextBoxView({
   function applyDrag() {
     const s = dragStart.current
     if (!s) return
-    const { dx, dy } = pageDelta(s.client, s.rect, s.last, frameRect(), scale)
+    const { dx, dy } = pageDeltaOf(view, s.client, s.rect, s.last, frameRect(), scale)
     s.moved = Math.max(s.moved, Math.hypot(dx, dy) * scale)
     if (s.kind === 'move') setDrag({ x: s.box.x + dx, y: s.box.y + dy, width: s.box.width })
     else setDrag({ x: s.box.x, y: s.box.y, width: clampBoxWidth(s.box.width + dx, s.box.x) })
@@ -268,7 +272,7 @@ function TextBoxView({
     if (!s) return false
     if (e) s.last = { x: e.clientX, y: e.clientY }
     // 놓는 순간의 위치를 장 기준으로 직접 계산한다(렌더 상태는 한 박자 늦을 수 있다).
-    const { dx, dy } = pageDelta(s.client, s.rect, s.last, frameRect(), scale)
+    const { dx, dy } = pageDeltaOf(view, s.client, s.rect, s.last, frameRect(), scale)
     const moved = Math.max(s.moved, Math.hypot(dx, dy) * scale)
     // 장 위에서 거의 움직이지 않았으면 클릭으로 보고 쓰지 않는다(스크롤로 옮겨진 것도 움직인 것).
     if (moved < 4) return !!e

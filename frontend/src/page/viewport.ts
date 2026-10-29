@@ -52,10 +52,10 @@ export function pinchZoom(startScale: number, startDistance: number, distance: n
   return clampZoom((startScale * distance) / startDistance)
 }
 
-/** 화면에 맞추기: 폭(그리고 높이를 주면 높이까지)에 들어오는 가장 큰 배율. 1을 넘지 않는다. */
-export function fitScaleIn(width: number, height?: number): number {
-  const byWidth = width / PAGE_WIDTH
-  const byHeight = height === undefined ? Infinity : height / PAGE_HEIGHT
+/** 화면에 맞추기: 폭(그리고 높이를 주면 높이까지)에 들어오는(box: 보기 변환을 거친 장의 가로·세로, 기본은 장 그대로) 가장 큰 배율. 1을 넘지 않는다. */
+export function fitScaleIn(width: number, height?: number, box = { width: PAGE_WIDTH, height: PAGE_HEIGHT }): number {
+  const byWidth = width / box.width
+  const byHeight = height === undefined ? Infinity : height / box.height
   return Math.min(1, Math.max(0.1, Math.min(byWidth, byHeight)))
 }
 

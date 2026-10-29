@@ -22,6 +22,10 @@ ACTIONS = frozenset(
         "zoomOut",
         "zoomFit",
         "focus",
+        "rotateCw",
+        "rotateCcw",
+        "mirror",
+        "viewReset",
         "help",
     }
 )

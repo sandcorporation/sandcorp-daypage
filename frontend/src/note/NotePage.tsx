@@ -50,6 +50,8 @@ import {
 } from "../page/toolbarDock";
 import { stepZoom, ZoomControl, type Zoom } from "./ZoomControl";
 import { ViewControl } from "./ViewControl";
+import { RotateControl } from "./RotateControl";
+import { VIEW_IDENTITY, mirrorView, rotateView, type ViewTransform } from "../page/viewTransform";
 import {
   actionFor,
   comboOf,
@@ -264,6 +266,8 @@ export function NotePage({ initial }: Props) {
   );
   const [scale, setScale] = useState(0.5);
   const [zoom, setZoom] = useState<Zoom>("fit");
+  // 보기 돌리기·뒤집기: 이 탭의 메모리에만 둔다(서버·저장소·계정 설정에 넣지 않는다). 새로고침하면 원위치.
+  const [view, setView] = useState<ViewTransform>(VIEW_IDENTITY);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [editingBoxId, setEditingBoxId] = useState<string | null>(null);
   const clearFocus = useCallback(() => setFocusId(null), []);
@@ -293,6 +297,7 @@ export function NotePage({ initial }: Props) {
     author: note.me.nickname,
     origin,
     scale,
+    view,
     // 붙이자마자 옮기거나 크기를 바꿀 수 있게 선택·이동 도구로
     onPlaced: () => setTool("select"),
     show,
@@ -597,6 +602,18 @@ export function NotePage({ initial }: Props) {
           break;
         case "focus":
           toggleFocus(!focus);
+          break;
+        case "rotateCw":
+          setView((v) => rotateView(v, 1));
+          break;
+        case "rotateCcw":
+          setView((v) => rotateView(v, -1));
+          break;
+        case "mirror":
+          setView(mirrorView);
+          break;
+        case "viewReset":
+          setView(VIEW_IDENTITY);
           break;
         case "eyedropper":
           setPicking(true);
@@ -908,6 +925,7 @@ export function NotePage({ initial }: Props) {
           pointerTool={tool === "text" ? textTool : edit.pointerTool}
           onScale={setScale}
           zoom={zoom}
+          view={view}
           onZoom={setZoom}
           onPointerMove={presence.setCursor}
           overlay={edit.overlay}
@@ -969,6 +987,13 @@ export function NotePage({ initial }: Props) {
         onLocked={chooseViewLock}
         addSelect={tool === "select" ? selectAdd : undefined}
         onAddSelect={setSelectAdd}
+      />
+      <RotateControl
+        view={view}
+        keymap={keymap}
+        onRotate={(dir) => setView((v) => rotateView(v, dir))}
+        onMirror={() => setView(mirrorView)}
+        onReset={() => setView(VIEW_IDENTITY)}
       />
       <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
       {confirmDelete && (

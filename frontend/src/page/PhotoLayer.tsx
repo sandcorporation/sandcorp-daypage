@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import * as Y from 'yjs'
-import { PAGE_HEIGHT, PAGE_WIDTH, pageDelta } from './geometry'
+import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
+import { usePageViewTransform } from './viewContext'
+import { pageDeltaOf } from './viewTransform'
 import { deletePhoto, photosMap, PHOTO_MIN_SIDE, photoUrl, readPhotos, updatePhoto, type Photo } from './photos'
 import { PAN_START_EVENT } from './touchPan'
 
@@ -112,6 +114,8 @@ function PhotoControl({ photo, doc, scale, origin, onPreview }: ControlsProps & 
   const r = drag ?? photo
   const ui = useMemo(() => ({ transform: `scale(${1 / scale})` }), [scale])
 
+  const view = usePageViewTransform()
+
   function frameRect() {
     const box = rootRef.current?.closest('.page-frame')?.getBoundingClientRect()
     return { left: box?.left ?? 0, top: box?.top ?? 0 }
@@ -120,7 +124,7 @@ function PhotoControl({ photo, doc, scale, origin, onPreview }: ControlsProps & 
   function apply(): PhotoDrag | null {
     const s = start.current
     if (!s) return null
-    const { dx, dy } = pageDelta(s.client, s.rect, s.last, frameRect(), scale)
+    const { dx, dy } = pageDeltaOf(view, s.client, s.rect, s.last, frameRect(), scale)
     const next = dragResult(s.kind, photo, dx, dy)
     setDrag(next)
     onPreview(next)

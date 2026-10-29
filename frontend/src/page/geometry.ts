@@ -7,8 +7,8 @@ export const MARGIN_X = 96
 export type Point = { x: number; y: number }
 
 /** 보이는 폭에 장 전체 폭이 들어가는 배율(최대 1). */
-export function fitScale(viewportWidth: number): number {
-  return Math.min(1, Math.max(0.1, viewportWidth / PAGE_WIDTH))
+export function fitScale(viewportWidth: number, boxWidth = PAGE_WIDTH): number {
+  return Math.min(1, Math.max(0.1, viewportWidth / boxWidth))
 }
 
 export function toPagePoint(clientX: number, clientY: number, rect: { left: number; top: number }, scale: number): Point {

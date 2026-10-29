@@ -3,6 +3,7 @@ import * as Y from 'yjs'
 import { ApiError } from '../api/client'
 import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 import { newId } from './doc'
+import { VIEW_IDENTITY, clientToPage, type ViewTransform } from './viewTransform'
 import { usePhotos } from './PhotoLayer'
 import {
   addPhoto,
@@ -25,13 +26,15 @@ type Options = {
   author: string
   origin: unknown
   scale: number
+  /** 이 탭의 보기 변환(화면 가운데를 장 좌표로 바꿀 때) */
+  view?: ViewTransform
   /** 붙인 뒤(선택·이동 도구로 바꿔 바로 옮길 수 있게) */
   onPlaced?: () => void
   show: (message: string) => void
 }
 
 /** 지금 화면에 보이는 장의 가운데(장 좌표). 장이 화면 밖이면 장 가운데 */
-function visibleCenter(scale: number): { x: number; y: number } {
+function visibleCenter(scale: number, view: ViewTransform): { x: number; y: number } {
   const rect = document.querySelector('.page-frame')?.getBoundingClientRect()
   if (!rect) return { x: PAGE_WIDTH / 2, y: PAGE_HEIGHT / 2 }
   const left = Math.max(rect.left, 0)
@@ -39,14 +42,14 @@ function visibleCenter(scale: number): { x: number; y: number } {
   const top = Math.max(rect.top, 0)
   const bottom = Math.min(rect.bottom, window.innerHeight)
   if (right <= left || bottom <= top) return { x: PAGE_WIDTH / 2, y: PAGE_HEIGHT / 2 }
-  return { x: ((left + right) / 2 - rect.left) / scale, y: ((top + bottom) / 2 - rect.top) / scale }
+  return clientToPage(view, (left + right) / 2, (top + bottom) / 2, rect, scale)
 }
 
 /**
  * 사진 붙이기: 숨은 파일 고르기 칸과, 도구 막대 버튼에 넘길 open·blocked. 서버에 사진 저장소가 없으면 enabled가 false.
  * 고른 사진은 줄여 올리고, 받은 id를 지금 보이는 자리 가운데에 붙인다.
  */
-export function usePhotoPicker({ doc, noteId, author, origin, scale, onPlaced, show }: Options) {
+export function usePhotoPicker({ doc, noteId, author, origin, scale, view = VIEW_IDENTITY, onPlaced, show }: Options) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [enabled, setEnabled] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -73,7 +76,7 @@ export function usePhotoPicker({ doc, noteId, author, origin, scale, onPlaced, s
       const shrunk = await shrinkPhoto(file)
       const src = await uploadPhoto(noteId, shrunk.data, shrunk.mime)
       // 이미 붙은 사진과 꼭 겹치지 않게 장 수만큼 조금씩 비켜 붙인다
-      const c = visibleCenter(scale)
+      const c = visibleCenter(scale, view)
       const shift = PHOTO_CASCADE * count
       c.x += shift
       c.y += shift
