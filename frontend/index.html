@@ -46,7 +46,12 @@
     <meta name="twitter:image" content="https://daypage.sandcorp.co.kr/og-image.png" />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- 크롤러용 정적 footer(#97): React가 마운트하면 #root 안이 통째로 대체된다. 공개 홈의 footer는 HomePage.tsx에서 같은 링크를 그린다. -->
+    <div id="root">
+      <p style="margin:0;padding:24px;text-align:center;font:13px/1.4 system-ui,sans-serif;color:#5e6270">
+        <a href="https://sandcorp.co.kr/?utm_source=daypage&amp;utm_medium=footer" style="color:inherit">Made by Sandcorp</a>
+      </p>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
