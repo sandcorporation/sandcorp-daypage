@@ -103,6 +103,10 @@ function Landing() {
           </div>
         ))}
       </section>
+
+      <footer className="home-footer">
+        <a href="https://sandcorp.co.kr/?utm_source=daypage&utm_medium=footer">Made by Sandcorp</a>
+      </footer>
     </div>
   )
 }

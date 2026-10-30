@@ -351,3 +351,16 @@
 .suspended-reason {
   color: var(--muted);
 }
+
+.home-footer {
+  padding: 0 24px 32px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted-2);
+}
+.home-footer a {
+  color: inherit;
+}
+.home-footer a:hover {
+  text-decoration: underline;
+}

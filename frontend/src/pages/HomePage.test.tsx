@@ -34,6 +34,14 @@ test('비로그인 사용자에게 카카오로 시작하기를 보여준다', a
   expect(link).toHaveAttribute('href', '/auth/kakao/login?next=%2F')
 })
 
+test('비로그인 홈 하단에 Sandcorp 링크가 rel 없이 걸린다', async () => {
+  mockApi(() => ({ authenticated: false, notes: [] }))
+  renderHome()
+  const link = await screen.findByRole('link', { name: 'Made by Sandcorp' })
+  expect(link).toHaveAttribute('href', 'https://sandcorp.co.kr/?utm_source=daypage&utm_medium=footer')
+  expect(link).not.toHaveAttribute('rel')
+})
+
 test('로그인 사용자는 참여한 노트 목록을 보고 내가 만든 노트를 구분한다', async () => {
   mockApi(() => ({
     authenticated: true,
