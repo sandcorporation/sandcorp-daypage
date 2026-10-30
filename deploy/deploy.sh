@@ -2,7 +2,7 @@
 # Jenkins(oracle 에이전트)에서 부른다. 워크스페이스의 .env를 쓴다(저장소에는 없음).
 #
 # 무중단 배포: 한꺼번에 내리지 않고 하나씩 바꾼다.
-#   1) 새 이미지 빌드 → 2) migrate(옛 백엔드가 계속 받는 중) → 3) backend, backend2를 하나씩 교체
+#   1) 이미지 준비(Jenkins: ghcr에서 pull만, oracle에서 굽지 않는다 #99 / 변수가 없으면 로컬 빌드) → 2) migrate(옛 백엔드가 계속 받는 중) → 3) backend, backend2를 하나씩 교체
 #   (다음 것을 바꾸기 전에 앞의 것이 헬스를 통과할 때까지 기다린다. 그동안 Caddy가 다른 쪽으로 보낸다)
 #   → 4) 정적 파일을 볼륨에 넣고 index.html만 바꿔 끼움 → 5) Caddy 설정 reload(컨테이너는 그대로)
 #   → 6) worker·beat 교체(사용자 요청과 무관)
@@ -35,9 +35,18 @@ wait_healthy() {
   return 1
 }
 
-echo "== 이미지 빌드"
-compose build backend
-compose --profile deploy build web-dist
+if [ -n "${DAYPAGE_BACKEND_IMAGE:-}" ] && [ -n "${DAYPAGE_WEB_DIST_IMAGE:-}" ]; then
+  # ghcr 읽기 로그인은 oracle 호스트의 docker 설정에 있다. 빌드하지 않는다.
+  echo "== 이미지 pull ($DAYPAGE_BACKEND_IMAGE, $DAYPAGE_WEB_DIST_IMAGE)"
+  docker pull "$DAYPAGE_BACKEND_IMAGE"
+  docker pull "$DAYPAGE_WEB_DIST_IMAGE"
+  BUILD_FLAG=--no-build
+else
+  echo "== 이미지 빌드"
+  compose build backend
+  compose --profile deploy build web-dist
+  BUILD_FLAG=
+fi
 
 echo "== DB·Redis (이미 떠 있으면 그대로)"
 compose up -d --no-recreate postgres redis
@@ -48,7 +57,7 @@ compose run --rm --no-deps backend python manage.py migrate --noinput
 
 echo "== 백엔드 하나씩 교체"
 for svc in backend backend2; do
-  compose up -d --no-deps "$svc"
+  compose up -d --no-deps $BUILD_FLAG "$svc"
   wait_healthy "$svc"
 done
 
@@ -60,7 +69,7 @@ compose up -d --no-deps web
 compose exec -T web caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
 echo "== worker·beat"
-compose up -d --no-deps worker beat
+compose up -d --no-deps $BUILD_FLAG worker beat
 
 # Django는 ALLOWED_HOSTS에 없는 Host를 거부하므로 운영 도메인을 Host로 보낸다.
 HOST=$(grep -E '^DJANGO_ALLOWED_HOSTS=' .env | cut -d= -f2 | cut -d, -f1 || true)
@@ -71,6 +80,12 @@ for i in $(seq 1 40); do
   if compose exec -T web wget -qO- --header "Host: $HOST" http://127.0.0.1/api/health 2>/dev/null | grep -q '"ok"'; then
     echo "헬스 OK (${i}회째)"
     compose ps
+    if [ -n "${DAYPAGE_BACKEND_IMAGE:-}" ]; then
+      # pull 한 옛 sha 이미지는 dangling 이 아니라 prune 에 안 걸린다 — 이미지마다 최신 3개만 남긴다(롤백은 다시 pull).
+      for img in "${DAYPAGE_BACKEND_IMAGE%:*}" "${DAYPAGE_WEB_DIST_IMAGE%:*}"; do
+        docker image ls --format '{{.Repository}}:{{.Tag}}' "$img" | tail -n +4 | xargs -r docker rmi >/dev/null 2>&1 || true
+      done
+    fi
     exit 0
   fi
   sleep 3

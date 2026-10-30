@@ -18,7 +18,11 @@ Single-context: 루트 `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ### 메트릭 스니펫
 
-`frontend/index.html` head 끝의 메트릭 스크립트는 빌드 env `VITE_METRICS_SNIPPET_URL`이 비어 있지 않을 때만 들어간다(`frontend/metricsSnippet.ts`, 비면 태그 없음; admin에는 없음). 운영은 워크스페이스 `.env` → compose build args → `deploy/web.Dockerfile` ARG로 전달된다(#51).
+`frontend/index.html` head 끝의 메트릭 스크립트는 빌드 env `VITE_METRICS_SNIPPET_URL`이 비어 있지 않을 때만 들어간다(`frontend/metricsSnippet.ts`, 비면 태그 없음; admin에는 없음). 운영은 워크스페이스 `.env` → compose `web-dist` 환경변수 → 배포 때 `deploy/publish-static.sh`가 `index.html`에 넣는다(이미지를 oracle 밖에서 굽기 때문에 빌드 인자가 아니다, #99, `docs/ops/offhost-build.md`).
+
+### 배포 이미지
+
+main 병합 뒤 Jenkins(`sandcorp-daypage`)가 이미지를 macos(못 잡으면 sub)에서 굽고 ghcr에 올리며, oracle은 pull만 한다. 파라미터·되돌리기는 `docs/ops/offhost-build.md`.
 
 ### 시험 시간 한도
 
