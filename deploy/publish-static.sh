@@ -14,6 +14,14 @@ for f in /dist/*; do
   cp -R "$f" "/srv/$name"
 done
 cp /dist/index.html /srv/.index.html.new
+# 메트릭 스니펫(#51): 환경변수 VITE_METRICS_SNIPPET_URL이 있으면 head 끝에 태그를 넣는다(없으면 그대로). admin에는 넣지 않는다.
+# frontend/metricsSnippet.ts와 같은 규칙(&, ", <를 이스케이프). 이미 들어 있으면 다시 넣지 않는다.
+if [ -n "$(echo "${VITE_METRICS_SNIPPET_URL:-}" | tr -d ' ')" ] && ! grep -q 'data-site="daypage"' /srv/.index.html.new; then
+  SNIPPET_SRC=$(printf '%s' "$VITE_METRICS_SNIPPET_URL" | sed -e 's/^ *//' -e 's/ *$//' -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' -e 's/</\&lt;/g') \
+    awk '{ i = index($0, "</head>"); if (!done && i) { print substr($0, 1, i - 1) "    <script defer src=\"" ENVIRON["SNIPPET_SRC"] "\" data-site=\"daypage\"></script>"; print "  " substr($0, i); done=1 } else print }' \
+    /srv/.index.html.new > /srv/.index.html.tmp
+  mv -f /srv/.index.html.tmp /srv/.index.html.new
+fi
 mv -f /srv/.index.html.new /srv/index.html
 # 이번 빌드의 assets는 시각을 새로 찍어 정리 대상에서 빠지게 한다.
 for f in /dist/assets/*; do touch "/srv/assets/$(basename "$f")"; done

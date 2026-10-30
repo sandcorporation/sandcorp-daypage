@@ -2,8 +2,9 @@
 # oracle 서버(NPMplus 뒤)에서는 docker-compose.oracle.yml을 덧붙인다(Jenkinsfile 참고).
 # 자원 예산: daypage 전체 약 3.1 CPU / 약 4.4 GB(oracle 4코어·23 GB를 다른 서비스와 함께 쓴다). 백엔드 하나에 1 CPU를 주고 나머지는 그 비율로 나눈다.
 x-backend: &backend
-  # 네 서비스가 같은 이미지를 쓴다. backend만 빌드하고 나머지는 이 태그를 그대로 쓴다.
-  image: daypage-backend:latest
+  # 네 서비스가 같은 이미지를 쓴다. Jenkins는 DAYPAGE_BACKEND_IMAGE=ghcr…:<sha>를 줘서 oracle이 pull만 한다(#99).
+  # 변수가 없으면(make prod-local 등) 로컬에서 backend만 빌드하고 나머지는 이 태그를 그대로 쓴다.
+  image: ${DAYPAGE_BACKEND_IMAGE:-daypage-backend:latest}
   build: ./backend
   env_file: ${ENV_FILE:-.env}
   environment:
@@ -51,12 +52,13 @@ services:
   # 프론트 빌드 결과를 web_static에 넣고 끝나는 일회성 작업(deploy/publish-static.sh).
   # 평소 `up`에는 뜨지 않고 배포 스크립트가 `--profile deploy run`으로 부른다.
   web-dist:
-    image: daypage-web-dist:latest
+    image: ${DAYPAGE_WEB_DIST_IMAGE:-daypage-web-dist:latest}
     build:
       context: .
       dockerfile: deploy/web.Dockerfile
-      args:
-        VITE_METRICS_SNIPPET_URL: ${VITE_METRICS_SNIPPET_URL:-}
+    environment:
+      # 메트릭 스니펫 주소(#51)는 빌드가 아니라 배포 때 index.html에 넣는다(deploy/publish-static.sh). 이미지를 oracle 밖에서 굽기 때문이다(#99).
+      VITE_METRICS_SNIPPET_URL: ${VITE_METRICS_SNIPPET_URL:-}
     profiles: ["deploy"]
     volumes:
       - web_static:/srv

@@ -7,8 +7,7 @@ RUN corepack enable
 WORKDIR /src
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
-# 메트릭 스니펫 주소(#51). 비면 태그가 안 들어간다. 운영 값은 워크스페이스 .env의 VITE_METRICS_SNIPPET_URL.
-ARG VITE_METRICS_SNIPPET_URL=
+# 메트릭 스니펫(#51)은 여기서 넣지 않는다. 이미지를 oracle 밖에서 구워 .env가 없으므로 배포 때 publish-static.sh가 넣는다(#99).
 COPY frontend/ ./
 RUN pnpm build
 
