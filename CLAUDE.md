@@ -14,7 +14,7 @@ Single-context: 루트 `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ### Suggestion automation
 
-운영 건의함은 sub2의 Orca 자동화가 10분마다 살펴 새 건의를 브랜치로 작업하고 검토 대기로 올린다. See `docs/agents/suggestion-automation.md`.
+운영 건의함은 work의 Orca 자동화가 10분마다 살펴 새 건의를 브랜치로 작업하고 검토 대기로 올린다. See `docs/agents/suggestion-automation.md`.
 
 ### 메트릭 스니펫
 
@@ -22,7 +22,7 @@ Single-context: 루트 `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ### 배포 이미지
 
-main 병합 뒤 Jenkins(`sandcorp-daypage`)가 이미지를 macos(못 잡으면 sub)에서 굽고 ghcr에 올리며, oracle은 pull만 한다. 파라미터·되돌리기는 `docs/ops/offhost-build.md`.
+main 병합 뒤 Jenkins(`sandcorp-daypage`)가 이미지를 macos(못 잡으면 home)에서 굽고 ghcr에 올리며, oracle은 pull만 한다. 파라미터·되돌리기는 `docs/ops/offhost-build.md`.
 
 ### 시험 시간 한도
 

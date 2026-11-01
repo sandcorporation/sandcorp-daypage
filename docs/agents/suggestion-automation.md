@@ -1,6 +1,6 @@
-# 건의함 자동 처리 (sub2의 Orca 자동화)
+# 건의함 자동 처리 (work의 Orca 자동화)
 
-운영 건의함(`daypage_suggestion`)에 새 건의가 들어오면 sub2의 Orca가 새 worktree(브랜치)를 만들고 Claude 워커가
+운영 건의함(`daypage_suggestion`)에 새 건의가 들어오면 work의 Orca가 새 worktree(브랜치)를 만들고 Claude 워커가
 구현한 뒤 **검토 중(in-review)** 으로 올려 두고 멈춘다. 사람이 그 worktree 터미널에서 "승인"이라고 답해야 main에
 push(=운영 배포)된다.
 
@@ -10,20 +10,20 @@ push(=운영 배포)된다.
 |---|---|
 | 건의 조회·상태 스크립트 | `scripts/suggestions.sh` (조회는 읽기 전용 SELECT, ssh `oracle` → `daypage-postgres-1`. `status`만 `daypage-backend-1`의 관리 명령으로 상태 칸을 바꾼다) |
 | 디스코드 알림 | 새 건의·검토 중·반영함이 되면 `daypage-suggestion` 채널 웹훅으로 알린다. 운영 `.env`의 `DISCORD_SUGGESTION_WEBHOOK`(비밀값, 저장소에 없음). 비면 알리지 않는다 |
-| 배정 기록 | sub2 `~/.daypage/suggestions-dispatched` (한 줄에 건의 id 하나) |
+| 배정 기록 | work `~/.daypage/suggestions-dispatched` (한 줄에 건의 id 하나) |
 | 워커 프롬프트 | `docs/agents/suggestion-worker-prompt.md` (자동화에 넣은 본문과 같게 유지한다) |
-| Orca 자동화 | sub2, 이름 "건의함 자동 처리", 10분마다, precheck = `scripts/suggestions.sh check`, provider claude, repo daypage(실행마다 새 worktree) |
+| Orca 자동화 | work, 이름 "건의함 자동 처리", 10분마다, precheck = `scripts/suggestions.sh check`, provider claude, repo daypage(실행마다 새 worktree) |
 
 흐름: 10분마다 precheck가 돈다 → 새 건의(status=new, 아직 배정 안 됨)가 없으면 0이 아닌 코드로 끝나 **아무것도 안 한다**(에이전트도 안 뜬다) → 있으면 main에서 worktree를 만들고 워커가 `take`로 건의를 받아 작업한다.
 
-## sub2 쪽 준비물(한 번만)
+## work 쪽 준비물(한 번만)
 
 - Claude Code는 처음 보는 폴더마다 "이 폴더를 신뢰합니까?"를 묻고 멈춘다. 실행마다 새 worktree가
   `~/orca/workspaces/daypage/auto-run-N-…`에 생기므로 **부모 폴더를 미리 신뢰**해 둔다:
   `~/.claude.json`의 `projects["/home/sandring/orca/workspaces/daypage"].hasTrustDialogAccepted = true`.
   (2026-10-21에 해 두었다. 신뢰 대화가 다시 뜨면 이것부터 확인한다.)
 - 개발용 DB: `docker compose up -d postgres redis` (백엔드 테스트용).
-- sub2 → oracle ssh(Tailscale)와 `gh`·GitHub ssh 키가 있어야 한다.
+- work → oracle ssh(Tailscale)와 `gh`·GitHub ssh 키가 있어야 한다.
 
 ## 승인·반려
 
@@ -46,4 +46,4 @@ scripts/suggestions.sh mark 7 8                       # 자동화가 건드리�
 scripts/suggestions.sh status 5 done "PR #50"         # 상태 바꾸기(검토 중·반영함은 디스코드에 알림)
 ```
 
-sub2 밖(예: Windows)에서 같은 건의를 손으로 처리하면, 자동화가 또 잡지 않게 `mark`로 걸러 두거나 운영 페이지에서 상태를 바꾼다.
+work 밖(예: Windows)에서 같은 건의를 손으로 처리하면, 자동화가 또 잡지 않게 `mark`로 걸러 두거나 운영 페이지에서 상태를 바꾼다.
