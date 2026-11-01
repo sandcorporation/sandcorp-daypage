@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# linux/arm64 배포 이미지 둘(backend, web-dist)을 굽고 ghcr 에 올린다(#99). Jenkinsfile 의 「이미지 빌드」 단계가 macos 또는 sub 에서 부른다.
+# linux/arm64 배포 이미지 둘(backend, web-dist)을 굽고 ghcr 에 올린다(#99). Jenkinsfile 의 「이미지 빌드」 단계가 macos 또는 home 에서 부른다.
 #
-#   scripts/ci/build-image.sh <macos|sub>
+#   scripts/ci/build-image.sh <macos|home>
 #
 # 환경변수: GHCR_TOKEN(ghcr 쓰기 토큰, Jenkins `ghcr-push-token`), DAYPAGE_IMAGE_PREFIX(기본 ghcr.io/sandcorporation/daypage),
 #           DAYPAGE_BUILDER(buildx 빌더 이름)
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 where="${1:-}"
-case "$where" in macos|sub) ;; *) echo "쓰는 법: $0 <macos|sub>" >&2; exit 2 ;; esac
+case "$where" in macos|home) ;; *) echo "쓰는 법: $0 <macos|home>" >&2; exit 2 ;; esac
 
 cd "$(dirname "$0")/../.."
 prefix="${DAYPAGE_IMAGE_PREFIX:-ghcr.io/sandcorporation/daypage}"
