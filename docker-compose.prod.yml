@@ -85,10 +85,10 @@ services:
         - python
         - -c
         - "import os, urllib.request as u; h = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')[0]; u.urlopen(u.Request('http://127.0.0.1:8000/api/health', headers={'Host': h}), timeout=2)"
-      # 검사마다 Python을 새로 띄워 CPU를 0.3초쯤 쓴다. 평소에는 드물게 보고,
-      # 뜨는 동안(start_period)에만 촘촘히 봐서 배포(deploy.sh)가 빨리 healthy를 알아챈다.
-      interval: 30s
-      start_period: 120s
+      # 검사마다 Python을 새로 띄워 CPU를 0.3초쯤 쓴다. 평소에는 1분마다 보고,
+      # 뜨는 동안(start_period 60초)에만 2초마다 봐서 배포(deploy.sh)가 빨리 healthy를 알아챈다.
+      interval: 60s
+      start_period: 60s
       start_interval: 2s
       retries: 3
 
@@ -128,7 +128,10 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-daypage}"]
-      interval: 3s
+      interval: 60s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 2s
       retries: 30
     restart: unless-stopped
 
