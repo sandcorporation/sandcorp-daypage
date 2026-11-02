@@ -23,7 +23,20 @@ class ApiError(Exception):
         self.detail = detail
 
 
-api = NinjaAPI(title="Daypage API", urls_namespace="api", auth=django_auth)
+def docs_kwargs(debug: bool) -> dict[str, str | None]:
+    """운영(DEBUG=False)에서는 /api/docs·/api/openapi.json을 끈다(#110)."""
+    return {
+        "docs_url": "/docs" if debug else None,
+        "openapi_url": "/openapi.json" if debug else None,
+    }
+
+
+api = NinjaAPI(
+    title="Daypage API",
+    urls_namespace="api",
+    auth=django_auth,
+    **docs_kwargs(settings.DEBUG),
+)
 
 
 @api.exception_handler(ApiError)
