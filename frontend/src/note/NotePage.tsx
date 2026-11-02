@@ -1011,22 +1011,24 @@ export function NotePage({ initial }: Props) {
           <ShortcutsButton open={keysOpen} onOpen={setKeysOpen} />
         </div>
       )}
-      <ViewControl
-        fingerMoves={fingerMoves}
-        onFingerMoves={chooseFingerMoves}
-        locked={viewLock}
-        onLocked={chooseViewLock}
-        addSelect={tool === "select" ? selectAdd : undefined}
-        onAddSelect={setSelectAdd}
-      />
-      <RotateControl
-        view={view}
-        keymap={keymap}
-        onRotate={(dir) => setView((v) => rotateView(v, dir))}
-        onMirror={() => setView(mirrorView)}
-        onReset={() => setView(VIEW_IDENTITY)}
-      />
-      <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
+      <div className="view-dock">
+        <ViewControl
+          fingerMoves={fingerMoves}
+          onFingerMoves={chooseFingerMoves}
+          locked={viewLock}
+          onLocked={chooseViewLock}
+          addSelect={tool === "select" ? selectAdd : undefined}
+          onAddSelect={setSelectAdd}
+        />
+        <RotateControl
+          view={view}
+          keymap={keymap}
+          onRotate={(dir) => setView((v) => rotateView(v, dir))}
+          onMirror={() => setView(mirrorView)}
+          onReset={() => setView(VIEW_IDENTITY)}
+        />
+        <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
+      </div>
       {confirmDelete && (
         <ConfirmDialog
           title={`‘${note.name}’을 지울까요?`}

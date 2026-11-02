@@ -674,11 +674,17 @@
 }
 
 /* 확대·축소 */
-.zoom-control {
+.view-dock {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 30;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.zoom-control {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -708,12 +714,8 @@
   cursor: not-allowed;
 }
 
-/* 손가락·화면 고정: 터치 기기에서만, 확대·축소 바로 위 */
+/* 손가락·화면 고정: 터치 기기에서만 */
 .view-control {
-  position: fixed;
-  right: 16px;
-  bottom: 72px;
-  z-index: 30;
   display: none;
   gap: 2px;
   padding: 4px;
@@ -787,13 +789,10 @@
     font-size: 12px;
     padding: 6px 10px;
   }
-  .zoom-control {
+  .view-dock {
     right: 12px;
     bottom: 12px;
-  }
-  .view-control {
-    right: 12px;
-    bottom: 68px;
+    gap: 6px;
   }
 }
 
@@ -2518,12 +2517,8 @@
   transform-origin: 0 0;
 }
 
-/* 보기 돌리기·뒤집기: 확대·축소 바로 위(터치 기기에서는 손가락·화면 고정 위) */
+/* 보기 돌리기·뒤집기 */
 .rotate-control {
-  position: fixed;
-  right: 16px;
-  bottom: 72px;
-  z-index: 30;
   display: inline-flex;
   gap: 2px;
   padding: 4px;
@@ -2531,11 +2526,6 @@
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   box-shadow: 0 4px 12px rgba(31, 33, 40, 0.08);
-}
-@media (any-pointer: coarse) {
-  .rotate-control {
-    bottom: 128px;
-  }
 }
 .rotate-control button {
   display: grid;
@@ -2557,15 +2547,4 @@
 .rotate-control button[aria-pressed='true'] {
   background: var(--accent-soft);
   color: var(--accent);
-}
-@media (max-width: 720px) {
-  .rotate-control {
-    right: 12px;
-    bottom: 68px;
-  }
-  @media (any-pointer: coarse) {
-    .rotate-control {
-      bottom: 124px;
-    }
-  }
 }
