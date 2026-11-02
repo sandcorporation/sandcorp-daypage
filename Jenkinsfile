@@ -5,7 +5,7 @@
 // 배포 순서는 라이브러리 것이 아니라 deploy/deploy.sh(무중단: migrate → backend·backend2 하나씩 → 정적 파일 → Caddy reload
 // → worker·beat → 헬스)다(deployScript). 실패하면 라이브러리가 직전 성공 sha 이미지로 같은 스크립트를 SANDCORP_ROLLBACK=1로
 // 다시 부르고, 스크립트는 그때 migrate를 건너뛰고 같은 순서로 되돌린다. 시험: deploy/deploy_test.sh.
-@Library('sandcorp') _
+@Library('sandcorp@js-7') _
 
 sandcorpDeploy(
   name: 'Daypage',
