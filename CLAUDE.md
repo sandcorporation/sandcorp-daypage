@@ -26,7 +26,7 @@ main 병합 뒤 Jenkins(`sandcorp-daypage`)가 공용 라이브러리 `sandcorp`
 
 ### PR 검사
 
-PR을 열면 Jenkins `sandcorp-daypage-pr`(멀티브랜치, `Jenkinsfile.pr` → 라이브러리 `sandcorpPrCheck`)가 빌드 노드에서 PR 머지 결과로 파괴적 migrate 검사와 `scripts/ci/check.sh`(배포 스크립트 시험·백엔드 ruff·pytest·프론트 lint·typecheck·vitest·admin typecheck·vitest를 도커 안에서)를 돌려 PR head 커밋 상태 `continuous-integration/jenkins/pr-merge`로 올린다. 작업자는 로컬 시험 뒤 PR을 열고 `wait-ci.py <PR>`가 SUCCESS일 때만 병합한다(main 직접 push 금지, 보호 규칙이 없어 이 규칙과 배포 전 검사가 강제다). migrate는 옛 백엔드가 도는 동안 돌고 롤백은 migrate를 되돌리지 않으므로, 지우기·이름 바꾸기·null 불가 전환·`db_default` 없는 null 불가 새 열은 PR 검사가 막는다 — expand/contract 두 배포로 나누고 contract 쪽 파일에 `# sandcorp: destructive-ok — <이유>`(jenkins-shared README 「파괴적 migrate 검사」).
+PR을 열면 Jenkins `sandcorp-daypage-pr`(멀티브랜치, `Jenkinsfile.pr` → 라이브러리 `sandcorpPrCheck`)가 빌드 노드에서 PR 머지 결과로 파괴적 migrate 검사와 `scripts/ci/check.sh`(배포 스크립트 시험·백엔드 ruff·pytest·프론트 lint·typecheck·vitest·admin typecheck·vitest를 도커 안에서)를 돌려 PR head 커밋 상태 `continuous-integration/jenkins/pr-merge`로 올린다. 시험이 실패하면 그 시험만 좁혀(`-k`, 파일 지정, vitest 파일 지정) 다시 돌린다. 시험 묶음 전체(`make check`·`make test` 전체·`scripts/ci/check.sh`)는 로컬에서 돌리지 않는다. 로컬에서는 바꾼 부분과 관련된 시험·lint·typecheck만 돌리고, PR을 열어 `wait-ci.py <PR>`로 PR 검사 잡 결과를 기다린다. CI가 실패하면 실패한 시험만 로컬에서 좁혀 고친 뒤 다시 push한다(작업자가 시험 하나 실패에 전체 묶음을 다시 돌려 시간을 썼다, 2026-11-02 대표 지적). 작업자는 `wait-ci.py <PR>`가 SUCCESS일 때만 병합한다(main 직접 push 금지, 보호 규칙이 없어 이 규칙과 배포 전 검사가 강제다). migrate는 옛 백엔드가 도는 동안 돌고 롤백은 migrate를 되돌리지 않으므로, 지우기·이름 바꾸기·null 불가 전환·`db_default` 없는 null 불가 새 열은 PR 검사가 막는다 — expand/contract 두 배포로 나누고 contract 쪽 파일에 `# sandcorp: destructive-ok — <이유>`(jenkins-shared README 「파괴적 migrate 검사」).
 
 ### 시험 시간 한도
 
