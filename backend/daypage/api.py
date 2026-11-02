@@ -23,7 +23,14 @@ class ApiError(Exception):
         self.detail = detail
 
 
-api = NinjaAPI(title="Daypage API", urls_namespace="api", auth=django_auth)
+# 운영(DEBUG=False)에서는 /api/docs·/api/openapi.json을 끈다(#110).
+api = NinjaAPI(
+    title="Daypage API",
+    urls_namespace="api",
+    auth=django_auth,
+    docs_url="/docs" if settings.DEBUG else None,
+    openapi_url="/openapi.json" if settings.DEBUG else None,
+)
 
 
 @api.exception_handler(ApiError)
