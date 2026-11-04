@@ -13,7 +13,7 @@ sandcorpDeploy(
     [repo: 'ghcr.io/sandcorporation/daypage-backend', envVar: 'DAYPAGE_BACKEND_IMAGE', dockerfile: 'backend/Dockerfile', context: 'backend'],
     [repo: 'ghcr.io/sandcorporation/daypage-web-dist', envVar: 'DAYPAGE_WEB_DIST_IMAGE', dockerfile: 'deploy/web.Dockerfile', context: '.'],
   ],
-  sourceUrl: 'https://github.com/sandcorporation/daypasge',   // 저장소 이름이 daypasge다(오타 아님)
+  sourceUrl: 'https://github.com/sandcorporation/sandcorp-daypage',
   check: 'bash scripts/ci/check.sh',    // 배포 스크립트 시험 + 백엔드·프론트·admin 시험을 도커 안에서. 실패하면 굽지도 배포하지도 않는다
   composeProject: 'daypage',
   composeFiles: ['docker-compose.prod.yml', 'docker-compose.oracle.yml'],
