@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-GitHub Issues(sandcorporation/daypasge)에서 `gh` CLI로 관리. See `docs/agents/issue-tracker.md`.
+GitHub Issues(sandcorporation/sandcorp-daypage)에서 `gh` CLI로 관리. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

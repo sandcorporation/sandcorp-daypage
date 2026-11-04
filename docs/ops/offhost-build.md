@@ -23,7 +23,7 @@ GitHub push ─▶ 배포할 커밋 확인 ─▶ 이미지 빌드 ────�
 - **노드를 못 잡았을 때만** home으로 넘어간다. macos에서 검사·빌드가 실패하면 실패로 끝낸다.
 - 빌드 노드는 콘솔(`== 빌드 노드: macos (...)`)과 빌드 설명(`<sha12> · 빌드 macos · oracle pull`)·디스코드 알림(`[Daypage]`)에 남는다.
 - **배포 결과는 main 커밋 상태 `sandcorp/deploy`에도 남는다**(시작 `pending`, 끝 `success`/`failure`; 실패하면 병합된 PR에 「배포 실패 — 」 댓글). Jenkins 자격이 없는 작업자는 `wait-deploy.py --job sandcorp-daypage --pr <N>`이 이 상태를 기다린다(jenkins-shared README 「배포 결과(GitHub)」).
-- 이미지 둘: `ghcr.io/sandcorporation/daypage-backend:<커밋 sha 40자>`(backend·backend2·worker·beat가 같이 쓴다, `backend/Dockerfile`·문맥 `backend`), `ghcr.io/sandcorporation/daypage-web-dist:<sha>`(정적 파일·Caddy 설정을 볼륨에 넣는 일회성 작업, `deploy/web.Dockerfile`·문맥 저장소 루트). 빌드 캐시는 `<이미지>-buildcache:arm64`(레지스트리, `mode=max`, buildx 빌더 `daypage-images`). `source` 레이블은 저장소 이름 그대로 `sandcorporation/daypasge`다.
+- 이미지 둘: `ghcr.io/sandcorporation/daypage-backend:<커밋 sha 40자>`(backend·backend2·worker·beat가 같이 쓴다, `backend/Dockerfile`·문맥 `backend`), `ghcr.io/sandcorporation/daypage-web-dist:<sha>`(정적 파일·Caddy 설정을 볼륨에 넣는 일회성 작업, `deploy/web.Dockerfile`·문맥 저장소 루트). 빌드 캐시는 `<이미지>-buildcache:arm64`(레지스트리, `mode=max`, buildx 빌더 `daypage-images`). `source` 레이블은 저장소 주소 `sandcorporation/sandcorp-daypage`다(2026-11-04에 `daypasge`에서 이름을 바꿨다).
 - 자격: ghcr 쓰기 `ghcr-push-token`, 디스코드 `discord-deploy-webhook`. oracle은 호스트 docker 설정에 있는 ghcr **읽기** 로그인을 쓴다. 비공개 의존성이 없어 SSH 키는 쓰지 않는다.
 - Jenkins 잡 이름은 `sandcorp-daypage`, oracle 워크스페이스는 `/home/jenkins/agent/workspace/sandcorp-daypage`(`.env`가 여기 있다).
 
