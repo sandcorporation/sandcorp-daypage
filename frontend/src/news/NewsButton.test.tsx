@@ -41,3 +41,12 @@ test('다 본 뒤에는 점이 없다', () => {
   render(<NewsButton entries={entries} />)
   expect(screen.getByRole('button', { name: /새 소식/ })).toHaveAccessibleName('새 소식')
 })
+
+test('창 아래쪽에 개인정보·오류 기록 링크가 있다', async () => {
+  render(<NewsButton entries={entries} />)
+  await userEvent.click(screen.getByRole('button', { name: /새 소식/ }))
+  const link = screen.getByRole('link', { name: '개인정보·오류 기록' })
+  expect(link).toHaveAttribute('href', 'https://sandcorporation.github.io/privacy-and-terms/errors/')
+  expect(link).toHaveAttribute('target', '_blank')
+  expect(link).toHaveAttribute('rel', 'noopener')
+})

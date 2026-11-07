@@ -1,3 +1,4 @@
+import { PRIVACY_LABEL, PRIVACY_URL } from '../privacyLink'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, ApiError } from '../api/client'
@@ -106,6 +107,10 @@ function Landing() {
 
       <footer className="home-footer">
         <a href="https://sandcorp.co.kr/?utm_source=daypage&utm_medium=footer">Made by Sandcorp</a>
+        {' · '}
+        <a href={PRIVACY_URL} target="_blank" rel="noopener">
+          {PRIVACY_LABEL}
+        </a>
       </footer>
     </div>
   )

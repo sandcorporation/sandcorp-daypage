@@ -1623,6 +1623,15 @@
   display: flex;
   flex-direction: column;
 }
+.news-privacy {
+  margin: 8px 0 0;
+  font-size: 12px;
+  text-align: center;
+  color: var(--muted-2);
+}
+.news-privacy a {
+  color: inherit;
+}
 .news-entry {
   padding: 12px 0;
   border-bottom: 1px dashed var(--line);

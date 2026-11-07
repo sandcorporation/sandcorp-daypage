@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-11-07-privacy-link',
+    date: '11월 7일 오후',
+    items: [
+      {
+        kind: 'new',
+        title: '개인정보·오류 기록 안내',
+        text: '서비스에서 어떤 오류 기록을 남기는지 알려 드리는 문서를 홈 아래쪽과 이 소식 창 아래쪽에 달았어요.',
+      },
+    ],
+  },
+  {
     id: '2026-10-29-view-rotate-mirror',
     date: '10월 29일 오후',
     items: [

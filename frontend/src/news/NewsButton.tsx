@@ -1,3 +1,4 @@
+import { PRIVACY_LABEL, PRIVACY_URL } from '../privacyLink'
 import { useRef, useState } from 'react'
 import { ToolPopover } from '../components/ToolPopover'
 import { KIND_LABEL, NEWS, loadSeen, markSeen, unreadIds, type NewsEntry } from './news'
@@ -67,6 +68,11 @@ export function NewsButton({ entries = NEWS }: Props) {
               </article>
             ))}
           </div>
+          <p className="news-privacy">
+            <a href={PRIVACY_URL} target="_blank" rel="noopener">
+              {PRIVACY_LABEL}
+            </a>
+          </p>
         </ToolPopover>
       )}
     </div>
