@@ -1,3 +1,4 @@
+import { PRIVACY_LABEL, PRIVACY_URL } from '../privacyLink'
 import { Brand, KakaoIcon, kakaoLoginHref } from '../components/Brand'
 import './invite.css'
 
@@ -66,6 +67,11 @@ export function InvitePage({ noteId, noteName, online, isFull, loggedIn = false 
             들어가면 랜덤 닉네임(예: 푸른 펭귄)으로 표시돼요.
             <br />
             카카오 프로필 이름은 공개되지 않아요.
+          </p>
+          <p className="invite-foot">
+            <a href={PRIVACY_URL} target="_blank" rel="noopener">
+              {PRIVACY_LABEL}
+            </a>
           </p>
         </div>
       </main>

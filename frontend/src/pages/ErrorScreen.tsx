@@ -1,3 +1,4 @@
+import { PRIVACY_LABEL, PRIVACY_URL } from '../privacyLink'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Brand } from '../components/Brand'
@@ -106,6 +107,11 @@ export function MessageCard({
           <h1>{title}</h1>
           <p className="invite-desc">{desc}</p>
           {children}
+          <p className="invite-foot">
+            <a href={PRIVACY_URL} target="_blank" rel="noopener">
+              {PRIVACY_LABEL}
+            </a>
+          </p>
         </div>
       </main>
     </div>

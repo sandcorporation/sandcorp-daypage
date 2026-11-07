@@ -107,3 +107,11 @@ test('삭제 확인 창에서 취소하면 지우지 않는다', async () => {
   expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
 })
+
+test('푸터에 개인정보·오류 기록 링크가 있다', async () => {
+  mockApi(() => ({ authenticated: false, notes: [] }))
+  renderHome()
+  const link = await screen.findByRole('link', { name: '개인정보·오류 기록' })
+  expect(link).toHaveAttribute('href', 'https://sandcorporation.github.io/privacy-and-terms/errors/')
+  expect(link).toHaveAttribute('rel', 'noopener')
+})
