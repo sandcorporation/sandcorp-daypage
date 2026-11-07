@@ -43,6 +43,10 @@ GitHub push ─▶ 배포할 커밋 확인 ─▶ 이미지 빌드 ────�
 
 예전에는 `VITE_METRICS_SNIPPET_URL`을 프론트 빌드 인자로 받았다. 이미지를 oracle 밖에서 구우면 그 노드에는 워크스페이스 `.env`가 없으므로, 주소를 **빌드가 아니라 배포 때** `deploy/publish-static.sh`가 `index.html` head 끝에 넣는다(compose가 `.env`의 값을 `web-dist` 컨테이너 환경변수로 준다). 비어 있으면 태그가 없고, admin에는 넣지 않는다. 동작 규칙은 `frontend/metricsSnippet.ts`와 같다.
 
+## 오류 수집 release는 배포 sha다(#119)
+
+`sandcorpDeploy`가 배포 스크립트에 주는 `SANDCORP_IMAGE_SHA`(커밋 sha 40자, 롤백이면 직전 sha)를 `docker-compose.prod.yml`이 backend·worker·beat에 `SENTRY_RELEASE`로 넘긴다. 백엔드 GlitchTip 이벤트와 `/api/client-config`의 `release`(프론트 이벤트)가 이 값을 쓴다. 연동 확인은 운영 backend 컨테이너에서 `python manage.py glitchtip_test "연동 시험 daypage <날짜>"`(이벤트 id를 찍는다, SDK가 꺼져 있으면 0이 아닌 코드). 규칙은 `backend/config/sentry.py` 머리말.
+
 ## 파라미터
 
 | 이름 | 기본 | 뜻 |

@@ -82,6 +82,8 @@ def client_config(request):
     return {
         "sentryDsn": settings.SENTRY_FRONTEND_DSN or None,
         "environment": settings.SENTRY_ENVIRONMENT,
+        # 배포 커밋 sha(백엔드 이벤트와 같은 release). 없으면 프론트가 번들 이름으로 물러난다.
+        "release": settings.SENTRY_RELEASE or None,
         # 사진 저장소가 설정돼 있을 때만 사진 붙이기를 보인다
         "photos": photos.configured(),
     }

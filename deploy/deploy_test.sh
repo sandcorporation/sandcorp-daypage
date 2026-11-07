@@ -18,6 +18,9 @@ OLD_B=ghcr.io/x/daypage-backend:old
 OLD_W=ghcr.io/x/daypage-web-dist:old
 NEW_B=ghcr.io/x/daypage-backend:new
 NEW_W=ghcr.io/x/daypage-web-dist:new
+# sandcorpDeploy가 배포 스크립트에 주는 SANDCORP_IMAGE_SHA(새 배포·롤백). compose가 SENTRY_RELEASE로 넘긴다.
+NEW_SHA=1111111111111111111111111111111111111111
+OLD_SHA=2222222222222222222222222222222222222222
 pass=0
 fail=0
 
@@ -56,8 +59,8 @@ once() {
 
 # sandcorpDeploy.deployHere 와 같은 순서: 새 이미지로 → 실패하면 직전 이미지로 SANDCORP_ROLLBACK=1. 종료: 0 · 3(롤백 성공) · 4(롤백 실패)
 deploy_like_library() {
-  once "$NEW_B" "$NEW_W" 0 "$@" && return 0
-  if once "$OLD_B" "$OLD_W" 1 "$@"; then return 3; fi
+  once "$NEW_B" "$NEW_W" 0 SANDCORP_IMAGE_SHA="$NEW_SHA" "$@" && return 0
+  if once "$OLD_B" "$OLD_W" 1 SANDCORP_IMAGE_SHA="$OLD_SHA" "$@"; then return 3; fi
   return 4
 }
 
@@ -99,6 +102,8 @@ check "migrate 한 번, backend 교체보다 먼저" awk '/MIGRATE/{m=NR} /^RECR
 check "Caddy 는 다시 만들지 않는다(reload 만)" bash -c "! grep -q '^RECREATE web ' '$WS/log' && grep -q 'caddy reload' '$WS/log'"
 check "무중단(OUTAGE 없음)" no_outage
 check "backend 하나씩" one_by_one
+check "compose 가 배포 sha(SANDCORP_IMAGE_SHA)를 받는다" bash -c "! grep '^RECREATE ' '$WS/log' | grep -v 'sha=$NEW_SHA\$'"
+check "docker-compose.prod.yml 이 그 sha 를 SENTRY_RELEASE 로 넘긴다" grep -q 'SENTRY_RELEASE: \${SANDCORP_IMAGE_SHA:-}' "$root/docker-compose.prod.yml"
 
 CASE="SANDCORP_ROLLBACK=1 은 migrate 를 건너뛴다"
 fresh rb-only
@@ -126,6 +131,7 @@ rc=$?
 check "롤백 성공 종료 3 (실제 $rc)" test "$rc" = 3
 check "backend·backend2·worker·beat 옛 이미지" test "$(img backend)$(img backend2)$(img worker)$(img beat)" = "$OLD_B$OLD_B$OLD_B$OLD_B"
 check "정적 파일도 옛 이미지" test "$(img static)" = "$OLD_W"
+check "롤백은 직전 sha 로 다시 만든다(release 도 되돌아간다)" bash -c "sed -n '/SANDCORP_ROLLBACK=1/,\$p' '$WS/log' | grep '^RECREATE backend ' | grep -q 'sha=$OLD_SHA\$'"
 check "롤백도 backend 를 하나씩 바꾼다" test "$(sed -n '/SANDCORP_ROLLBACK=1/,$p' "$WS/log" | grep -c '^RECREATE backend')" = 2
 check "무중단(OUTAGE 없음)" no_outage
 check "롤백은 migrate 를 건너뛴다" no_migrate_in_rollback
