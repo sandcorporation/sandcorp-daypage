@@ -64,7 +64,7 @@ case "${1:-}" in
         other=backend2; [ "$s" = backend2 ] && other=backend
         [ "$(get "$other" status)" = healthy ] || echo "OUTAGE: $s 를 다시 만들 때 $other 가 $(get "$other" status)" >> "$FAKE_LOG"
       fi
-      echo "RECREATE $s $want" >> "$FAKE_LOG"
+      echo "RECREATE $s $want sha=${SANDCORP_IMAGE_SHA:-}" >> "$FAKE_LOG"
       put "$s" image "$want"
       put "$s" status starting
     done

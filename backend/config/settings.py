@@ -171,7 +171,11 @@ LOGGING = {
 from .sentry import init_sentry  # noqa: E402
 
 SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", "production")
-SENTRY_ENABLED = init_sentry(env("SENTRY_DSN"), debug=DEBUG, environment=SENTRY_ENVIRONMENT)
+# 배포 커밋 sha 40자. compose가 SENTRY_RELEASE: ${SANDCORP_IMAGE_SHA:-}로 넣는다(비면 release 없이 보낸다).
+SENTRY_RELEASE = env("SENTRY_RELEASE").strip()
+SENTRY_ENABLED = init_sentry(
+    env("SENTRY_DSN"), debug=DEBUG, environment=SENTRY_ENVIRONMENT, release=SENTRY_RELEASE
+)
 # 프론트 오류 수집 DSN(/api/client-config로 내려준다). 백엔드와 같이 운영에서만 준다.
 SENTRY_FRONTEND_DSN = "" if DEBUG else env("SENTRY_FRONTEND_DSN")
 

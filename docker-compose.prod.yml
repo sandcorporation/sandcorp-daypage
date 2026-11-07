@@ -11,6 +11,9 @@ x-backend: &backend
     DJANGO_DEBUG: "false"
     POSTGRES_HOST: postgres
     REDIS_URL: redis://redis:6379/0
+    # 오류 수집 release = 배포 커밋 sha 40자. Jenkins sandcorpDeploy가 배포 스크립트에 SANDCORP_IMAGE_SHA를 준다
+    # (롤백이면 직전 sha). 변수가 없으면(make prod-local 등) 비어 release 없이 보낸다(backend/config/sentry.py).
+    SENTRY_RELEASE: ${SANDCORP_IMAGE_SHA:-}
     # glibc가 스레드마다 힙(arena)을 따로 만들어 놓은 메모리가 흩어진 채 남는 것을 줄인다(daypage/memory.py 참고)
     MALLOC_ARENA_MAX: "2"
     # 큰 덩어리(장 문서·동기화 버퍼, 128KB 넘음)는 늘 따로 받아 놓자마자 돌려주고, 힙 꼭대기가 128KB 넘게 비면 바로 줄인다.

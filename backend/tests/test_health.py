@@ -31,3 +31,11 @@ def test_docs_urls_follow_debug():
 
     assert docs_kwargs(True) == {"docs_url": "/docs", "openapi_url": "/openapi.json"}
     assert docs_kwargs(False) == {"docs_url": None, "openapi_url": None}
+
+
+def test_client_config_hands_out_release(client, settings):
+    """프론트 이벤트도 백엔드와 같은 release(배포 sha)로 묶이게 내려준다."""
+    settings.SENTRY_RELEASE = "0123456789abcdef0123456789abcdef01234567"
+    assert client.get("/api/client-config").json()["release"] == "0123456789abcdef0123456789abcdef01234567"
+    settings.SENTRY_RELEASE = ""
+    assert client.get("/api/client-config").json()["release"] is None
