@@ -19,7 +19,7 @@ JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 100
 
 @pytest.fixture(autouse=True)
 def store(settings):
-    settings.PHOTO_S3_ENDPOINT = "https://ns.compat.objectstorage.ap-chuncheon-1.oraclecloud.com"
+    settings.PHOTO_S3_ENDPOINT = "https://ns.compat.objectstorage.us-example-1.oraclecloud.com"
     settings.PHOTO_S3_BUCKET = "daypage-photos"
     settings.PHOTO_S3_ACCESS_KEY = "key"
     settings.PHOTO_S3_SECRET_KEY = "secret"
@@ -209,3 +209,8 @@ def test_photo_of_closed_note_is_hidden():
     photo_id = upload(owner, note_id).json()["id"]
     Note.objects.filter(pk=note_id).update(closed_at=clock.now(), closed_reason="신고")
     assert owner.get(f"/api/notes/{note_id}/photos/{photo_id}").status_code == 403
+
+
+def test_region_is_taken_from_the_endpoint_when_unset():
+    assert photos.region_from_endpoint("https://ns.compat.objectstorage.us-example-1.oraclecloud.com") == "us-example-1"
+    assert photos.region_from_endpoint("") == "us-east-1"

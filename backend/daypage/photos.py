@@ -6,6 +6,7 @@
 """
 
 import logging
+import re
 import secrets
 from typing import Protocol
 
@@ -49,6 +50,12 @@ class Store(Protocol):
     def delete(self, keys: list[str]) -> None: ...
 
 
+def region_from_endpoint(endpoint: str) -> str:
+    """PHOTO_S3_REGION이 비었을 때 https://<ns>.compat.objectstorage.<region>.oraclecloud.com 에서 리전을 뽑는다."""
+    m = re.search(r"\.compat\.objectstorage\.([a-z0-9-]+)\.oraclecloud\.com", endpoint)
+    return m.group(1) if m else "us-east-1"
+
+
 class S3Store:
     """Oracle Object Storage의 S3 호환 API. 경로 방식 주소(bucket이 경로에)여야 한다."""
 
@@ -60,7 +67,7 @@ class S3Store:
         self.client = boto3.client(
             "s3",
             endpoint_url=settings.PHOTO_S3_ENDPOINT,
-            region_name=settings.PHOTO_S3_REGION,
+            region_name=settings.PHOTO_S3_REGION or region_from_endpoint(settings.PHOTO_S3_ENDPOINT),
             aws_access_key_id=settings.PHOTO_S3_ACCESS_KEY,
             aws_secret_access_key=settings.PHOTO_S3_SECRET_KEY,
             config=Config(

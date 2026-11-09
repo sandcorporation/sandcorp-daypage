@@ -187,7 +187,7 @@ DISCORD_SUGGESTION_WEBHOOK = env("DISCORD_SUGGESTION_WEBHOOK", "")
 # 사진(daypage/photos.py): Oracle Object Storage의 S3 호환 API에 둔다. 넷 다 있어야 켜지고, 비면 사진을 쓸 수 없다.
 # 엔드포인트는 https://<namespace>.compat.objectstorage.<region>.oraclecloud.com. 키는 비밀값이라 .env에만 둔다.
 PHOTO_S3_ENDPOINT = env("PHOTO_S3_ENDPOINT", "")
-PHOTO_S3_REGION = env("PHOTO_S3_REGION", "ap-chuncheon-1")
+PHOTO_S3_REGION = env("PHOTO_S3_REGION", "")  # 비우면 엔드포인트 주소에서 뽑는다(photos.region_from_endpoint)
 PHOTO_S3_BUCKET = env("PHOTO_S3_BUCKET", "")
 PHOTO_S3_ACCESS_KEY = env("PHOTO_S3_ACCESS_KEY", "")
 PHOTO_S3_SECRET_KEY = env("PHOTO_S3_SECRET_KEY", "")

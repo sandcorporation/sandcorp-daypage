@@ -1,0 +1,121 @@
+# PR 검사(GitHub 호스팅 Actions). scripts/ci/check.sh(Jenkins sandcorp-daypage-pr)와 같은 검사를 job으로 나눠 병렬로 돈다.
+# 보안: pull_request만(pull_request_target 금지), ubuntu-latest만(self-hosted 금지), 읽기 권한만, secrets 없음, 시험용 가짜 값만,
+# 액션은 공식 액션을 커밋 SHA로 고정(뒤에 태그).
+name: pr-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrate-guard:
+    # 파괴적 migrate 검사: PR 기준 대비 새 migration. scripts/ci/migrate-guard.{sh,py}는 jenkins-shared 복사본.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - run: bash scripts/ci/migrate-guard.sh "origin/${{ github.base_ref }}"
+
+  deploy-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: bash deploy/deploy_test.sh
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: daypage
+          POSTGRES_USER: daypage
+          POSTGRES_PASSWORD: daypage
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U daypage -d daypage"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: daypage
+      POSTGRES_USER: daypage
+      POSTGRES_PASSWORD: daypage
+      REDIS_URL: redis://localhost:6379/0
+      DAYPAGE_TEST_CPU_LIMIT: "1.0"
+      UV_LINK_MODE: copy
+      UV_PYTHON_DOWNLOADS: never
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v5
+        with:
+          python-version-file: backend/.python-version
+      - run: pip install 'uv>=0.9,<0.10'
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+      - run: uv sync --frozen
+      - run: uv run ruff check
+      - run: uv run pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: npm install -g pnpm@10.33.0 # package.json의 packageManager와 맞춘다
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-frontend-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-frontend-
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  admin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: npm install -g pnpm@10.33.0 # package.json의 packageManager와 맞춘다
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-admin-${{ hashFiles('admin/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-admin-
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
