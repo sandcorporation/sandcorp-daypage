@@ -21,7 +21,7 @@
 
 ## work 쪽 준비물(한 번만)
 
-- 워커는 `~/workspace/daypage`(이미 신뢰된 폴더)에서 돈다. 신뢰 대화가 뜨면 `~/.claude.json`의 `projects["/home/sandring/workspace/daypage"].hasTrustDialogAccepted`를 확인한다.
+- 워커는 `~/workspace/daypage`(이미 신뢰된 폴더)에서 돈다. 신뢰 대화가 뜨면 `~/.claude.json`의 `projects["~/workspace/daypage"].hasTrustDialogAccepted`를 확인한다.
 - work의 `orca`가 `windows` 환경과 짝지어져 있어야 대장 메일함에 닿는다.
 - work → oracle ssh(Tailscale)와 `gh`·GitHub ssh 키가 있어야 한다.
 
