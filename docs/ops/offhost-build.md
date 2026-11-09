@@ -16,16 +16,16 @@ sandcorp-metrics에서 검증한 흐름(#32)을 그대로 옮겼다.
 PR ─▶ pr-check(Actions) ─▶ main 병합
 main push ─▶ Actions release.yml
                check   pr-check.yml을 workflow_call — PR과 같은 검사(deploy-test·backend·frontend·admin·승격 스크립트 시험)
-               image   needs check — image.yml(workflow_call, ubuntu-24.04-arm matrix 두 줄)
+               image   check와 병렬 — image.yml(workflow_call, ubuntu-24.04-arm matrix 두 줄)
                        ─▶ ghcr.io/sandcorporation/daypage-backend:<sha>, daypage-web-dist:<sha>
-               promote needs check·image — production 브랜치를 <sha>로 fast-forward(GITHUB_TOKEN, contents: write는 이 잡만)
+               promote needs check·image(둘 다 초록일 때만) — production 브랜치를 <sha>로 fast-forward(GITHUB_TOKEN, contents: write는 이 잡만)
 production push(웹훅) ─▶ Jenkins sandcorp-daypage(잡 브랜치 */production)
                굽지 않음·검사 없음 → oracle: 이미지 둘이 ghcr에 있는지(상한 5분) → pull → deploy/deploy.sh
                (migrate → backend·backend2 하나씩 → 정적 파일 → Caddy reload → worker·beat → 헬스)
                실패 → 직전 성공 이미지로 같은 스크립트(SANDCORP_ROLLBACK=1)
 ```
 
-- **production 브랜치 머리 = 운영 버전.** main 검사가 깨지면 이미지도 승격도 없다. production은 bbfeb57에서 시작했다.
+- **production 브랜치 머리 = 운영 버전.** check와 image는 병렬로 돈다. main 검사가 깨지면 승격이 없다(그 sha 이미지는 ghcr에 오를 수 있지만 production이 안 움직이니 배포되지 않는다). production은 bbfeb57에서 시작했다.
 - 승격은 `scripts/ci/promote.sh ff <sha>`: fast-forward만(강제 없음). production이 이미 더 새 판이면(옛 실행이 늦게 끝남) 실패가 아니라 「건너뜀」. 승격은 concurrency 그룹 `production-branch`로 하나씩. 시험은 `scripts/ci/promote_test.sh`(pr-check의 deploy-test 잡이 돌린다). 세 파일은 sandcorp-metrics에서 그대로 복사했다.
 - GITHUB_TOKEN의 push는 다른 워크플로를 깨우지 않는다(production push로 Actions가 다시 돌지 않는다). 저장소 웹훅은 깨운다 — Jenkins `githubPush`가 그것을 받는다.
 - main push·작업 브랜치 push도 웹훅으로 Jenkins를 깨우지만, production이 직전 성공 배포 뒤로 움직이지 않았으면 `NOT_BUILT`(디스코드 알림 없음).
@@ -89,7 +89,7 @@ production ─▶ 이미지 빌드 ───────────────
 
 production은 앞으로만 간다(강제 push 금지). 그래서 되돌리기도 「앞으로 가는 커밋」으로 한다. production을 옛 sha로 옮기는 워크플로는 두지 않는다.
 
-**정석: main에 revert PR.** `git revert <나쁜 커밋>` → PR → pr-check 초록 → 병합. release.yml이 검사 → 이미지 → 승격(fast-forward)을 그대로 밟고 Jenkins가 그 sha를 배포한다. 운영과 main이 어긋나지 않는다.
+**정석: main에 revert PR.** `git revert <나쁜 커밋>` → PR → pr-check 초록 → 병합. release.yml이 검사·이미지(병렬) → 승격(fast-forward)을 그대로 밟고 Jenkins가 그 sha를 배포한다. 운영과 main이 어긋나지 않는다.
 
 **급할 때(검사·이미지를 기다릴 수 없을 때): Jenkins `ROLLBACK_SHA`.** `sandcorp-daypage` 「Build with Parameters」 → `ROLLBACK_SHA=<되돌릴 커밋 sha 40자>`. 굽기·검사 없이 ghcr에 그 sha 이미지 둘이 있는지 보고(상한 5분) oracle이 pull해 `deploy/deploy.sh`의 같은 migrate·교체·헬스 절차를 밟는다(compose 파일·스크립트는 지금 production 것).
 - production은 그대로라 다음 승격(main 병합)이 다시 앞으로 간다 — 곧바로 revert PR을 넣어 main을 맞춘다.

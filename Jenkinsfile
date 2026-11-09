@@ -1,5 +1,5 @@
 // 운영 = production 브랜치 머리(#126). 이 잡은 production만 배포한다(잡 브랜치 지정자 */production).
-//   main push → GitHub Actions release.yml: 검사(pr-check) → 이미지(image.yml, ubuntu-24.04-arm) → production fast-forward
+//   main push → GitHub Actions release.yml: 검사(pr-check)·이미지(image.yml, ubuntu-24.04-arm) 병렬 → 둘 다 초록이면 production fast-forward
 //   production push → 여기: 굽지도 검사하지도 않는다. 이미지 둘이 ghcr에 있는지 짧게(5분) 보고 oracle에서 pull → deploy/deploy.sh
 //   BUILD_ON=jenkins  비상 길: Actions가 못 구울 때 images(dockerfile·context)를 macos/home에서 굽고 check와 함께 배포.
 //   ROLLBACK_SHA      비상 되돌리기: 빌드 없이 그 sha의 이미지로 배포(production은 그대로). 정석은 main에 revert PR.
