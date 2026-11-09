@@ -1,4 +1,4 @@
-# PR 검사(GitHub 호스팅 Actions). scripts/ci/check.sh(Jenkins sandcorp-daypage-pr)와 같은 검사를 job으로 나눠 병렬로 돈다.
+# PR 검사(GitHub 호스팅 Actions). 배포 전 검사 scripts/ci/check.sh와 같은 검사를 job으로 나눠 병렬로 돈다.
 # 보안: pull_request만(pull_request_target 금지), ubuntu-latest만(self-hosted 금지), 읽기 권한만, secrets 없음, 시험용 가짜 값만,
 # 액션은 공식 액션을 커밋 SHA로 고정(뒤에 태그).
 name: pr-check
