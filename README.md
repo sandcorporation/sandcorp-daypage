@@ -33,7 +33,7 @@ Vite 개발 서버가 `/api`, `/auth`, `/ws`를 Django(8000)로 프록시하므�
 
 ## 테스트
 
-로컬에서 돌린 뒤 PR을 연다. 배포 전 검사가 `bash scripts/ci/check.sh`로, PR 검사(GitHub Actions `.github/workflows/pr-check.yml`)가 job으로 나눠 같은 것(+ 배포 스크립트 시험 `bash deploy/deploy_test.sh`)을 도커 안에서 돌린다. 백엔드 테스트는 `docker compose`의 Postgres를 쓴다.
+로컬에서 돌린 뒤 PR을 연다. PR 검사(GitHub Actions `.github/workflows/pr-check.yml`)가 job으로 나눠 돌리고(+ 배포 스크립트 시험 `bash deploy/deploy_test.sh`), main 병합 뒤에는 `release.yml`이 같은 검사 → 이미지 → `production` 승격을 밟는다(`docs/ops/offhost-build.md`). `bash scripts/ci/check.sh`는 같은 검사를 도커 안에서 한 번에 돌린다(Jenkins 비상 길). 백엔드 테스트는 `docker compose`의 Postgres를 쓴다.
 
 ```bash
 cd backend && uv run pytest

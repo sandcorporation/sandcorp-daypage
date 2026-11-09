@@ -1,18 +1,20 @@
 # PR 검사(GitHub 호스팅 Actions). 배포 전 검사 scripts/ci/check.sh와 같은 검사를 job으로 나눠 병렬로 돈다.
 # 보안: pull_request만(pull_request_target 금지), ubuntu-latest만(self-hosted 금지), 읽기 권한만, secrets 없음, 시험용 가짜 값만,
 # 액션은 공식 액션을 커밋 SHA로 고정(뒤에 태그).
+# main push에서는 release.yml이 이 워크플로를 workflow_call로 불러 같은 검사를 돌린다(#126) — 통과해야 이미지·승격으로 간다.
+# 그때 github.event_name은 부른 쪽의 push(migrate-guard는 건너뜀), ref는 main이라 actions/cache는 main 범위로 저장되고 PR이 복원한다.
 name: pr-check
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-check-${{ github.ref }}
+  # PR은 번호마다 새 push가 옛 실행을 끊는다. main(workflow_call)은 커밋마다 따로 — 끊기면 그 sha의 승격 실행이 취소로 끝난다.
+  group: pr-check-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -31,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: bash deploy/deploy_test.sh
+      - run: bash scripts/ci/promote_test.sh
 
   backend:
     runs-on: ubuntu-latest

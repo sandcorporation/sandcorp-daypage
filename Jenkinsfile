@@ -1,4 +1,10 @@
-// main 배포 — 파이프라인은 Jenkins 공용 라이브러리 sandcorp(sandcorporation/jenkins-shared)의 sandcorpDeploy에 있다.
+// 운영 = production 브랜치 머리(#126). 이 잡은 production만 배포한다(잡 브랜치 지정자 */production).
+//   main push → GitHub Actions release.yml: 검사(pr-check) → 이미지(image.yml, ubuntu-24.04-arm) → production fast-forward
+//   production push → 여기: 굽지도 검사하지도 않는다. 이미지 둘이 ghcr에 있는지 짧게(5분) 보고 oracle에서 pull → deploy/deploy.sh
+//   BUILD_ON=jenkins  비상 길: Actions가 못 구울 때 images(dockerfile·context)를 macos/home에서 굽고 check와 함께 배포.
+//   ROLLBACK_SHA      비상 되돌리기: 빌드 없이 그 sha의 이미지로 배포(production은 그대로). 정석은 main에 revert PR.
+//
+// 배포 파이프라인은 Jenkins 공용 라이브러리 sandcorp(sandcorporation/jenkins-shared)의 sandcorpDeploy에 있다.
 // 여기에는 이 저장소가 넘기는 값만 둔다. 동작(작업 브랜치 push 무시·이미 배포한 sha 건너뜀·배포 전 검사·mac 우선 빌드·
 // oracle pull 배포·실패 시 자동 롤백·디스코드 알림)과 인자 목록은 jenkins-shared README, 이 저장소 사정은 docs/ops/offhost-build.md.
 //
@@ -9,12 +15,15 @@
 
 sandcorpDeploy(
   name: 'Daypage',
+  deployFrom: 'production',
   images: [
     [repo: 'ghcr.io/sandcorporation/daypage-backend', envVar: 'DAYPAGE_BACKEND_IMAGE', dockerfile: 'backend/Dockerfile', context: 'backend'],
     [repo: 'ghcr.io/sandcorporation/daypage-web-dist', envVar: 'DAYPAGE_WEB_DIST_IMAGE', dockerfile: 'deploy/web.Dockerfile', context: '.'],
   ],
+  // images는 image.yml matrix와 같은 목록이다(이름·dockerfile·context). 비상 길만 dockerfile·context로 굽는다.
+  imageWaitHint: 'https://github.com/sandcorporation/sandcorp-daypage/actions/workflows/release.yml',
   sourceUrl: 'https://github.com/sandcorporation/sandcorp-daypage',
-  check: 'bash scripts/ci/check.sh',    // 배포 스크립트 시험 + 백엔드·프론트·admin 시험을 도커 안에서. 실패하면 굽지도 배포하지도 않는다
+  check: 'bash scripts/ci/check.sh',    // 비상 길(BUILD_ON=jenkins)에서만: 배포 스크립트 시험 + 백엔드·프론트·admin 시험을 도커 안에서. 실패하면 배포하지 않는다
   composeProject: 'daypage',
   composeFiles: ['docker-compose.prod.yml', 'docker-compose.oracle.yml'],
   deployScript: 'deploy/deploy.sh',
