@@ -21,7 +21,6 @@ sandcorpDeploy(
   ],
   // Actions가 빌드·게시한 이미지 목록. Jenkins는 production sha의 존재만 확인하고 pull·배포한다.
   imageWaitHint: 'https://github.com/sandcorporation/sandcorp-daypage/actions/workflows/release.yml',
-  sourceUrl: 'https://github.com/sandcorporation/sandcorp-daypage',
   composeProject: 'daypage',
   composeFiles: ['docker-compose.prod.yml', 'docker-compose.oracle.yml'],
   deployScript: 'deploy/deploy.sh',
