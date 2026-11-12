@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# 배포 전·PR 검사: 배포 스크립트 시험(무중단·자동 롤백) + 백엔드 ruff·pytest + 프론트·admin lint·typecheck·vitest.
-# Jenkins `sandcorp-daypage`(공용 라이브러리 sandcorpDeploy의 「검사」)가 빌드 노드에서 이미지를 굽기 전에 부르고,
-# 실패하면 이미지를 굽지도 배포하지도 않는다. PR 검사는 GitHub Actions(.github/workflows/pr-check.yml)가 같은 검사를 job으로 나눠 돈다.
-# 노드에 uv·pnpm이 없어도 되고, 로컬에서도 그대로 돈다. 펜·터치 e2e(Playwright)는 돌리지 않는다.
+# 전체 검사 묶음을 로컬에서 한 번에 실행하는 편의 스크립트다: 배포 스크립트 시험 + 백엔드 ruff·pytest + 프론트·admin lint·typecheck·vitest.
+# PR 검사는 GitHub Actions(.github/workflows/pr-check.yml)가 같은 검사를 job으로 나눠 돈다. Jenkins는 빌드나 검사를 하지 않는다.
+# 펜·터치 e2e(Playwright)는 돌리지 않는다.
 #
 #   bash scripts/ci/check.sh
 #
