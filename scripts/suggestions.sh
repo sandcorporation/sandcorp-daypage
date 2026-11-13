@@ -6,7 +6,8 @@
 #   suggestions.sh take      list와 같되, 출력한 건의를 '배정됨'으로 기록한다(다음 check에서 빠진다)
 #                            받은 건의는 forward가 성공할 때까지 '전달 대기'로 남는다. 전달 대기가 STALE초
 #                            (기본 900)를 넘으면 check·list·take에 다시 나온다(받고 나서 실행이 죽어도 사라지지 않는다).
-#   suggestions.sh forward ID 제목   표준 입력의 본문을 대장 메일함으로 보낸다. 「Sent msg_」가 안 나오면
+#   suggestions.sh forward ID 제목   표준 입력의 본문을 대장 메일함(Agent Mail sandcorp/boss)으로 보낸다.
+#                            agent-mail이 0으로 끝나고 「#번호」 줄을 찍어야 보낸 것이다. 아니면
 #                            그 건의를 되돌리고(untake) 0이 아닌 코드로 끝난다. 성공하면 전달 대기에서 뺀다.
 #   suggestions.sh untake ID…  배정 기록을 지운다(다음 check에서 다시 잡힌다)
 #   suggestions.sh mark ID…  해당 id를 배정됨으로 기록만 한다(처음 설치할 때 지난 건의를 거르는 용도)
@@ -23,8 +24,10 @@ DB_CONTAINER="${DAYPAGE_DB_CONTAINER:-daypage-postgres-1}"
 APP_CONTAINER="${DAYPAGE_APP_CONTAINER:-daypage-backend-1}"
 PENDING="${DAYPAGE_SUGGESTION_PENDING:-$STATE.pending}"   # 한 줄에 "id 받은시각(epoch)"
 STALE="${DAYPAGE_SUGGESTION_STALE:-900}"
-RELAY_TO="${DAYPAGE_SUGGESTION_RELAY_TO:-run:run_e083f7b1d874}"   # 대장 회신 주소
-RELAY_ENV="${DAYPAGE_SUGGESTION_RELAY_ENV:-windows}"            # 대장이 있는 Orca 환경
+RELAY_TO="${DAYPAGE_SUGGESTION_RELAY_TO:-sandcorp/boss}"               # 대장 Agent Mail 역할 주소
+RELAY_PROFILE="${DAYPAGE_SUGGESTION_RELAY_PROFILE:-daypage-coordinator}"  # 보내는 쪽 Agent Mail 프로필
+RELAY_TASK="${DAYPAGE_SUGGESTION_RELAY_TASK:-daypage-suggestions}"
+AGENT_MAIL="${DAYPAGE_AGENT_MAIL:-$HOME/.local/bin/agent-mail}"
 
 query_new() {
   # row_to_json으로 한 줄에 하나씩. 본문의 줄바꿈은 JSON 안에서 \n으로 남는다.
@@ -91,10 +94,12 @@ case "${1:-}" in
     [[ "$id" =~ ^[0-9]+$ ]] && [ -n "$subject" ] || { echo "건의 id와 제목이 필요해요" >&2; exit 2; }
     prepare
     body="$(cat)"
-    out="$(orca orchestration send --environment "$RELAY_ENV" --to "$RELAY_TO" --type status \
-             --subject "$subject" --body "$body" 2>&1 || true)"
+    # 프로필은 환경변수로만 고른다(agent-mail v0.2.1은 --profile 옵션을 무시한다).
+    rc=0
+    out="$(AGENT_MAIL_PROFILE="$RELAY_PROFILE" "$AGENT_MAIL" send --to "$RELAY_TO" --task "$RELAY_TASK" \
+             --subject "$subject" --body "$body" 2>&1)" || rc=$?
     printf '%s\n' "$out"
-    if printf '%s' "$out" | grep -q 'Sent msg_'; then
+    if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Eq '^#[0-9]+ '; then
       drop_lines "$PENDING" "$id"
     else
       drop_lines "$STATE" "$id"; drop_lines "$PENDING" "$id"

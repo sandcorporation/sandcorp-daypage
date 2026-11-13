@@ -29,7 +29,7 @@ context: <context JSON 그대로, 비었으면 {}>
 메모: <설정 때문일 가능성 등, 없으면 없음>
 BODY
 ```
-- 이 명령이 `--type status`로 대장 메일함(run:run_e083f7b1d874)에 보낸다. 출력에 「Sent msg_…」가 보이면 보낸 것이다.
+- 이 명령이 Agent Mail로 대장 메일함(`sandcorp/boss`, task `daypage-suggestions`)에 보낸다. 출력에 「#번호」가 보이면 보낸 것이다.
 - 실패하면 스크립트가 그 건의를 되돌려 다음 실행에서 다시 잡힌다. 다시 보내려 하지 말고, 오류 문구를 이 터미널 마지막에 적고 다음 건의로 넘어간다.
 
 ## 4. 끝
