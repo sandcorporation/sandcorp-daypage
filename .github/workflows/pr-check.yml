@@ -34,12 +34,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: bash deploy/deploy_test.sh
       - run: bash scripts/ci/promote_test.sh
+      - run: bash scripts/ci/pinned-images.sh
+      - run: bash scripts/ci/pinned-images_test.sh
 
   backend:
     runs-on: ubuntu-latest
     services:
       db:
-        image: postgres:17-alpine
+        image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
         env:
           POSTGRES_DB: daypage
           POSTGRES_USER: daypage
@@ -49,7 +51,7 @@ jobs:
           --health-cmd "pg_isready -U daypage -d daypage"
           --health-interval 5s --health-timeout 5s --health-retries 20
       redis:
-        image: redis:7-alpine
+        image: redis:7.4.9-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
         ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"

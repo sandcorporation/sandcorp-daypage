@@ -1,0 +1,12 @@
+# 기반 이미지·액션 올리기는 PR로 digest/SHA를 바꾼다(#132). pr-check.yml의 service 이미지는 여기서 못 보니 compose와 같이 바꾼다.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories: ["/backend", "/deploy", "/scripts/ci"]
+    schedule: { interval: weekly }
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly }
