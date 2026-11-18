@@ -106,7 +106,7 @@ check "compose 가 배포 sha(SANDCORP_IMAGE_SHA)를 받는다" bash -c "! grep 
 check "docker-compose.prod.yml 이 그 sha 를 SENTRY_RELEASE 로 넘긴다" grep -q 'SENTRY_RELEASE: \${SANDCORP_IMAGE_SHA:-}' "$root/docker-compose.prod.yml"
 check "스모크는 워커 신호를 빼고 본다(/api/health?scope=ready)" grep -q "api/health?scope=ready' " "$root/deploy/deploy.sh"
 check "backend healthcheck 도 scope=ready" grep -q "api/health?scope=ready'" "$root/docker-compose.prod.yml"
-check "worker 에 생존 신호 healthcheck" grep -q "from daypage.health import worker_alive" "$root/docker-compose.prod.yml"
+check "worker 에 생존 신호 healthcheck(Python 없이 파일 수정 시각, #148)" grep -q "find /tmp/daypage-heartbeat -mmin -2" "$root/docker-compose.prod.yml"
 
 CASE="SANDCORP_ROLLBACK=1 은 migrate 를 건너뛴다"
 fresh rb-only

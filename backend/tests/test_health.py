@@ -1,4 +1,11 @@
+import json
+import logging
+import os
+import re
+import subprocess
+import time
 import uuid
+from pathlib import Path
 
 import pytest
 from django.db import connections
@@ -10,11 +17,15 @@ from daypage import health, tasks
 DEAD_REDIS = "redis://127.0.0.1:1/0"
 
 
+COMPOSE_PROD = Path(__file__).resolve().parents[2] / "docker-compose.prod.yml"
+
+
 @pytest.fixture
-def heartbeat_key(monkeypatch):
-    """시험마다 따로 쓰는 생존 신호 키(같은 redis를 쓰는 개발용 워커의 신호와 섞이지 않게)."""
+def heartbeat_key(monkeypatch, tmp_path):
+    """시험마다 따로 쓰는 생존 신호 키와 파일(같은 redis를 쓰는 개발용 워커의 신호와 섞이지 않게)."""
     key = f"daypage-test:heartbeat:{uuid.uuid4().hex}"
     monkeypatch.setattr(health, "HEARTBEAT_KEY", key)
+    monkeypatch.setattr(health, "HEARTBEAT_FILE", tmp_path / "daypage-heartbeat")
     r = health._redis()  # 시험이 REDIS_URL을 죽은 곳으로 바꿔도 지울 수 있게 미리 잡는다
     yield key
     with r:
@@ -85,10 +96,33 @@ def test_ready_503_when_db_or_redis_down(client, settings, db_down):
     assert res.json() == {"status": "error", "failed": ["db", "redis"]}
 
 
+def _worker_healthcheck(heartbeat_file: Path) -> int:
+    """운영 compose의 worker healthcheck 셸 한 줄을 시험용 파일 경로로 돌려 종료 코드를 돌려준다."""
+    compose = COMPOSE_PROD.read_text()
+    worker = compose[compose.index("\n  worker:\n") : compose.index("\n  beat:\n")]
+    match = re.search(r'test: (\["CMD-SHELL", .*\])', worker)
+    assert match, "worker healthcheck는 CMD-SHELL이어야 한다(Python을 띄우지 않는다, #148)"
+    command = json.loads(match.group(1))[1]
+    assert str(health.HEARTBEAT_FILE.name) in command
+    command = command.replace("/tmp/daypage-heartbeat", str(heartbeat_file))
+    return subprocess.run(["sh", "-c", command], check=False).returncode
+
+
 def test_worker_container_check_follows_heartbeat(heartbeat_key):
-    assert health.worker_alive() is False
+    assert _worker_healthcheck(health.HEARTBEAT_FILE) != 0
     tasks.heartbeat()
+    assert _worker_healthcheck(health.HEARTBEAT_FILE) == 0
+    stale = time.time() - 180  # heartbeat가 3분 멈춘 것과 같다
+    os.utime(health.HEARTBEAT_FILE, (stale, stale))
+    assert _worker_healthcheck(health.HEARTBEAT_FILE) != 0
+
+
+def test_heartbeat_keeps_redis_key_when_file_touch_fails(heartbeat_key, monkeypatch, tmp_path, caplog):
+    monkeypatch.setattr(health, "HEARTBEAT_FILE", tmp_path / "없는-폴더" / "daypage-heartbeat")
+    with caplog.at_level(logging.WARNING, logger="daypage.health"):
+        tasks.heartbeat()
     assert health.worker_alive() is True
+    assert "heartbeat 파일" in caplog.text
 
 
 def test_beat_schedules_heartbeat_every_15s():
