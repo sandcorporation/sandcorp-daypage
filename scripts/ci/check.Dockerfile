@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # 배포 전·PR 검사 이미지(scripts/ci/check.sh가 굽고 지운다). 운영 이미지가 아니다.
 # 빌드 노드(macos·home)의 네이티브 아키텍처로 굽는다 — QEMU를 쓰지 않는다. 의존성 층은 노드의 로컬 캐시에 남는다.
-FROM node:22.23.5-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS node
+FROM node:26.13.1-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 AS node
 
 FROM python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
