@@ -2,7 +2,7 @@
 # Caddy(web)는 이 이미지가 아니라 공식 caddy 이미지로 계속 떠 있고, 배포 때 이 이미지로
 # 정적 파일은 web_static, Caddy 설정은 caddy_etc 볼륨에 넣는다(deploy/publish-static.sh). 그래서 프론트가 바뀌어도
 # Caddy를 내리지 않는다(무중단).
-FROM node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS build
+FROM node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS build
 RUN corepack enable
 WORKDIR /src
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
@@ -12,7 +12,7 @@ COPY frontend/ ./
 RUN pnpm build
 
 # 운영자 페이지(/admin): 따로 빌드해 dist/admin에 둔다
-FROM node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS admin
+FROM node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS admin
 RUN corepack enable
 WORKDIR /src
 COPY admin/package.json admin/pnpm-lock.yaml ./
