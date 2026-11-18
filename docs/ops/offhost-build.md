@@ -80,7 +80,7 @@ compose(`docker-compose.yml`·`docker-compose.prod.yml`)·`pr-check.yml` service
 
 - `GET /api/health`(외부 감시): db(`SELECT 1`)·redis(ping)·워커 생존 신호를 점검마다 1초 안에 본다. 정상이면 200 `{"status":"ok"}`, 하나라도 실패하면 503 `{"status":"error","failed":[...]}`(`db`·`redis`·`worker`). 오류 원문은 로그로만 남긴다.
 - `GET /api/health?scope=ready`: db·redis만 본다. backend·backend2 compose healthcheck와 `deploy/deploy.sh` 스모크가 쓴다. 워커가 죽어도 api가 롤링에서 빠지지 않게 하려는 것이다.
-- 워커 생존 신호: beat가 15초마다 `heartbeat` 작업을 내고 워커가 redis 키(`daypage:celery:heartbeat`, TTL 90초)를 갱신한다. 키가 있으면 beat와 워커가 둘 다 살아 있다. worker 컨테이너 healthcheck(1분마다)도 이 키를 본다.
+- 워커 생존 신호: beat가 15초마다 `heartbeat` 작업을 내고 워커가 redis 키(`daypage:celery:heartbeat`, TTL 90초)를 갱신한다. 키가 있으면 beat와 워커가 둘 다 살아 있다. 워커는 같은 때 컨테이너 안 `/tmp/daypage-heartbeat`도 touch하고, worker 컨테이너 healthcheck(30초마다)는 Python 없이 셸 한 줄로 이 파일이 2분 안에 갱신됐는지 본다(CPU 0.05에서 Python import가 10초 timeout을 넘었다, #148).
 
 ## 메트릭 스니펫 주소(#51)는 배포 때 넣는다
 

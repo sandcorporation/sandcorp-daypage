@@ -2,11 +2,14 @@
 
 beat가 15초마다 heartbeat 작업을 내고 worker가 그것을 실행해 HEARTBEAT_KEY를 TTL과 함께 갱신한다.
 키가 있으면 beat와 worker가 둘 다 살아 있다는 뜻이다.
+worker는 같은 때 컨테이너 안 HEARTBEAT_FILE도 touch한다. worker 컨테이너 healthcheck는 Python을 띄우지 않고
+셸 한 줄로 이 파일의 수정 시각만 본다(docker-compose.prod.yml, #148).
 """
 
 import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, wait
+from pathlib import Path
 from typing import Literal
 
 import redis
@@ -19,6 +22,8 @@ Check = Literal["db", "redis", "worker"]
 
 HEARTBEAT_KEY = "daypage:celery:heartbeat"
 HEARTBEAT_TTL = 90
+# worker 컨테이너 healthcheck가 수정 시각을 보는 파일(docker-compose.prod.yml의 worker healthcheck와 같은 경로).
+HEARTBEAT_FILE = Path("/tmp/daypage-heartbeat")
 # 점검 하나가 이보다 오래 걸리면 실패로 본다(초).
 CHECK_TIMEOUT = 1.0
 
@@ -33,10 +38,15 @@ def beat() -> None:
     """worker가 heartbeat 작업에서 부른다."""
     with _redis() as r:
         r.set(HEARTBEAT_KEY, "1", ex=HEARTBEAT_TTL)
+    # 파일을 못 건드려도(읽기 전용 등) 생존 신호 키는 이미 갱신했다. 로그만 남기고 작업은 성공으로 끝낸다.
+    try:
+        HEARTBEAT_FILE.touch()
+    except OSError as exc:
+        logger.warning("heartbeat 파일 %s를 갱신하지 못했다: %r", HEARTBEAT_FILE, exc)
 
 
 def worker_alive() -> bool:
-    """worker 컨테이너 healthcheck가 부른다."""
+    """/api/health의 worker 점검이 부른다."""
     with _redis() as r:
         return bool(r.exists(HEARTBEAT_KEY))
 

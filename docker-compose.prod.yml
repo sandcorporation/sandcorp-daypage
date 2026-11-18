@@ -113,12 +113,12 @@ services:
     cpus: "0.05"
     mem_limit: 384m
     command: celery -A config worker -l info --concurrency 2
-    # beat가 15초마다 내는 heartbeat를 이 워커가 실행해 갱신하는 생존 신호 키(TTL 90초)가 있는지 본다(daypage/health.py).
-    # 검사마다 Python을 띄우므로(CPU 0.05) 1분마다만 본다.
+    # beat가 15초마다 내는 heartbeat를 이 워커가 실행할 때 touch하는 파일이 2분 안에 갱신됐는지 본다(daypage/health.py HEARTBEAT_FILE).
+    # Python을 띄우지 않는다: CPU 0.05에서 django·redis import가 10초 timeout을 넘었다(#148).
     healthcheck:
-      test: ["CMD", "python", "-c", "import os, sys; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings'); from daypage.health import worker_alive; sys.exit(0 if worker_alive() else 1)"]
-      interval: 60s
-      timeout: 10s
+      test: ["CMD-SHELL", "find /tmp/daypage-heartbeat -mmin -2 2>/dev/null | grep -q ."]
+      interval: 30s
+      timeout: 5s
       start_period: 60s
       retries: 3
 
