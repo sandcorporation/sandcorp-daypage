@@ -5,7 +5,7 @@
 #
 #   bash scripts/ci/check.sh
 #
-# 시험 DB·Redis는 이 실행만의 컨테이너(postgres:17-alpine·redis:7-alpine)를 이 실행만의 네트워크에 띄운다 — 호스트 포트를
+# 시험 DB·Redis는 이 실행만의 컨테이너(docker-compose.yml과 같은 digest 고정 postgres·redis)를 이 실행만의 네트워크에 띄운다 — 호스트 포트를
 # 열지 않아 다른 작업(docker compose의 5432·6379 등)과 겹치지 않는다. 끝나면 컨테이너·네트워크·검사 이미지 태그를 지운다.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -27,14 +27,17 @@ trap 'exit 130' INT TERM
 echo "== 배포 스크립트 시험 (가짜 docker)"
 bash deploy/deploy_test.sh
 
+echo "== 이미지 digest 고정 검사"
+bash scripts/ci/pinned-images.sh
+
 echo "== 검사 이미지"
 DOCKER_BUILDKIT=1 docker build -f scripts/ci/check.Dockerfile -t "$image" .
 
 echo "== 시험 DB·Redis (네트워크 $net)"
 docker network create "$net" >/dev/null
 docker run -d --name "$db" --network "$net" --network-alias db \
-  -e POSTGRES_DB=daypage -e POSTGRES_USER=daypage -e POSTGRES_PASSWORD=daypage postgres:17-alpine >/dev/null
-docker run -d --name "$redis" --network "$net" --network-alias redis redis:7-alpine >/dev/null
+  -e POSTGRES_DB=daypage -e POSTGRES_USER=daypage -e POSTGRES_PASSWORD=daypage postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73 >/dev/null
+docker run -d --name "$redis" --network "$net" --network-alias redis redis:7.4.9-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99 >/dev/null
 ready=0
 for _ in $(seq 1 60); do
   # pg_isready 는 초기화 중 임시 서버에도 답한다 — 실제로 질의가 되는지 본다.

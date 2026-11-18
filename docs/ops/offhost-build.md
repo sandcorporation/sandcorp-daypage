@@ -46,6 +46,24 @@ Jenkins는 이미지 빌드나 CI 검사를 하지 않는다. `pr-check.yml`은 
 
 Jenkins 빌드 노드와 배포 전 검사는 사용하지 않는다. `scripts/ci/check.sh`는 로컬에서 검사 묶음을 Docker 안에서 한 번에 실행할 때만 쓴다.
 
+## 외부 기반 이미지는 digest로 고정한다 (#132)
+
+compose(`docker-compose.yml`·`docker-compose.prod.yml`)·`pr-check.yml` service의 `image:`와 Dockerfile(`backend/Dockerfile`·`deploy/web.Dockerfile`·`scripts/ci/check.Dockerfile`)의 `FROM`은 `이름:정확한버전@sha256:<index digest>`로 적는다. 떠다니는 태그는 상류가 옮기면 다음 `up` 때 postgres·redis가 재생성될 수 있다(`deploy/deploy.sh`는 둘을 `--no-recreate`로 올리지만 image 문자열이 바뀌면 다르다). 운영 postgres·redis·caddy 값은 oracle에서 도는 이미지 그대로다.
+
+| 이미지 | 버전 |
+|---|---|
+| postgres | 17.11-alpine |
+| redis | 7.4.9-alpine |
+| caddy | 2.11.7-alpine |
+| python (backend·check) | 3.14.10-slim |
+| node (web-dist) | 22.23.5-alpine |
+| node (check) | 22.23.5-bookworm-slim |
+| alpine (web-dist 결과) | 3.22.8 |
+
+- 올리기는 PR로 digest를 바꾼다. `.github/dependabot.yml`이 docker(`/backend`·`/deploy`·`/scripts/ci`)·docker-compose(`/`)·github-actions를 주마다 본다. `pr-check.yml`의 service 이미지는 dependabot이 못 보니 compose를 올릴 때 같이 바꾼다. postgres 주 버전 올리기는 데이터 이전이 필요하니 따로 한다.
+- digest 구하기: `docker buildx imagetools inspect <이름:버전>`의 `Digest`(index). Docker Hub 요청 한도에 걸리면 `https://hub.docker.com/v2/repositories/library/<이름>/tags/<버전>`의 `digest`.
+- 검사: `bash scripts/ci/pinned-images.sh`(pr-check의 deploy-test 잡, 시험 `scripts/ci/pinned-images_test.sh`). `${DAYPAGE_…}` 같은 환경변수 이미지, 앞에서 `AS`로 이름 붙인 단계, `scratch`는 예외다.
+
 ## 무중단과 자동 롤백
 
 `deploy/deploy.sh`는 한꺼번에 내리지 않는다. migrate는 옛 backend가 요청을 받는 동안 돌고, backend를 바꾼 뒤 healthy가 되어야 backend2를 바꾼다(그동안 Caddy가 살아 있는 쪽으로 보낸다). Caddy는 다시 만들지 않고 설정만 reload한다.
