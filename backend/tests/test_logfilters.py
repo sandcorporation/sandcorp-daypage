@@ -12,6 +12,7 @@ def access_record(path: str) -> logging.LogRecord:
 
 def test_health_check_is_not_logged():
     assert skip_health(access_record("/api/health")) is False
+    assert skip_health(access_record("/api/health?scope=ready")) is False
 
 
 def test_other_requests_are_still_logged():

@@ -87,7 +87,7 @@ HOST=${HOST:-localhost}
 
 echo "== 헬스 확인 (Host: $HOST)"
 for i in $(seq 1 "${DEPLOY_HEALTH_TRIES:-40}"); do
-  if compose exec -T web wget -qO- --header "Host: $HOST" http://127.0.0.1/api/health 2>/dev/null | grep -q '"ok"'; then
+  if compose exec -T web wget -qO- --header "Host: $HOST" 'http://127.0.0.1/api/health?scope=ready' 2>/dev/null | grep -q '"status": *"ok"'; then
     echo "헬스 OK (${i}회째)"
     compose ps
     if [ -n "${DAYPAGE_BACKEND_IMAGE:-}" ]; then

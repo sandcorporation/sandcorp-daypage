@@ -81,13 +81,14 @@ services:
     # 내릴 때(SIGTERM) 새 연결을 받지 않고 열린 연결을 정리할 시간을 준다. 그동안 Caddy가 다른 쪽으로 보낸다.
     command: &backend-command ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*", "--timeout-graceful-shutdown", "10"]
     stop_grace_period: 20s
-    # 소켓이 열린 것만이 아니라 Django가 실제로 답하는지 본다(ALLOWED_HOSTS의 첫 도메인을 Host로 보낸다).
+    # 소켓이 열린 것만이 아니라 Django가 실제로 답하고 db·redis가 붙는지 본다(ALLOWED_HOSTS의 첫 도메인을 Host로 보낸다).
+    # scope=ready는 워커 신호를 보지 않는다 — 워커가 죽어도 api가 롤링에서 빠지지 않는다(#146).
     healthcheck: &backend-health
       test:
         - CMD
         - python
         - -c
-        - "import os, urllib.request as u; h = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')[0]; u.urlopen(u.Request('http://127.0.0.1:8000/api/health', headers={'Host': h}), timeout=2)"
+        - "import os, urllib.request as u; h = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')[0]; u.urlopen(u.Request('http://127.0.0.1:8000/api/health?scope=ready', headers={'Host': h}), timeout=3)"
       # 검사마다 Python을 새로 띄워 CPU를 0.3초쯤 쓴다. 평소에는 1분마다 보고,
       # 뜨는 동안(start_period 60초)에만 2초마다 봐서 배포(deploy.sh)가 빨리 healthy를 알아챈다.
       interval: 60s
@@ -112,6 +113,14 @@ services:
     cpus: "0.05"
     mem_limit: 384m
     command: celery -A config worker -l info --concurrency 2
+    # beat가 15초마다 내는 heartbeat를 이 워커가 실행해 갱신하는 생존 신호 키(TTL 90초)가 있는지 본다(daypage/health.py).
+    # 검사마다 Python을 띄우므로(CPU 0.05) 1분마다만 본다.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings'); from daypage.health import worker_alive; sys.exit(0 if worker_alive() else 1)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
 
   beat:
     <<: *backend

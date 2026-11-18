@@ -10,7 +10,10 @@ QUIET_PATHS = {"/api/health"}
 def skip_health(record: logging.LogRecord) -> bool:
     """남길 기록이면 True. uvicorn 접근 로그의 args는 (클라이언트, 메서드, 경로, HTTP 버전, 상태)."""
     args = record.args
-    return not (isinstance(args, tuple) and len(args) >= 3 and args[2] in QUIET_PATHS)
+    if not (isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str)):
+        return True
+    # uvicorn은 쿼리 문자열을 붙여 넘긴다(/api/health?scope=ready).
+    return args[2].split("?", 1)[0] not in QUIET_PATHS
 
 
 def install_access_log_filter() -> None:

@@ -72,12 +72,14 @@ case "${1:-}" in
   exec)
     case "$*" in
       *caddy\ reload*) exit 0 ;;
-      *api/health*)
+      # 배포 스모크는 워커 신호를 빼고 db·redis만 본다(#146). 전체 /api/health는 워커 신호가 없어 503이라 친다.
+      *api/health\?scope=ready*)
         for b in backend backend2; do
           has "$(get "$b" image)" "${FAKE_BAD_HEALTH:-}" && exit 1
           [ "$(get "$b" status)" = healthy ] || exit 1
         done
-        echo '{"status":"ok"}'; exit 0 ;;
+        echo '{"status": "ok"}'; exit 0 ;;
+      *api/health*) echo '{"status": "error", "failed": ["worker"]}'; exit 8 ;;
     esac
     exit 0 ;;
 esac

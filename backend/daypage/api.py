@@ -6,12 +6,13 @@ from typing import Any, Literal
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
+from . import health as health_checks
 from . import clock, membership, moderation, pages, paper, photos, rooms, sealing, shortcuts, suggestions
 from .models import Note, NoteBan, NoteMember, Page, Photo, Suggestion
 
@@ -72,8 +73,16 @@ def page_info(page: Page) -> dict:
 
 
 @api.get("/health", auth=None)
-def health(request):
-    return {"ok": True}
+def health(request, scope: Literal["ready"] | None = None):
+    """외부 감시(전체)와 compose healthcheck·배포 스모크(scope=ready: db·redis만)가 본다.
+
+    워커 신호는 ready에서 빼서, 워커가 죽어도 api가 롤링에서 빠지지 않게 한다. 오류 원문은 로그로만 남긴다.
+    """
+    names: list[health_checks.Check] = ["db", "redis"] if scope == "ready" else ["db", "redis", "worker"]
+    failed = health_checks.failed_checks(names)
+    if failed:
+        return JsonResponse({"status": "error", "failed": failed}, status=503)
+    return JsonResponse({"status": "ok"})
 
 
 @api.get("/client-config", auth=None)

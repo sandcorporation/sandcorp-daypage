@@ -76,6 +76,12 @@ compose(`docker-compose.yml`·`docker-compose.prod.yml`)·`pr-check.yml` service
 - 운영에서 일부러 깨뜨려 시험하지 않는다. `bash deploy/deploy_test.sh`가 가짜 docker로 이 두 번 부르기를 그대로 흉내 내어 성공·healthy 실패·헬스 실패·migrate 실패를 돌리고, 「backend를 다시 만드는 순간 다른 backend가 healthy가 아니면 실패」(무중단)와 「롤백 때 migrate 없음」을 본다.
 - 같은 sha는 push가 다시 깨워도 배포하지 않는다(깨진 커밋이 브랜치 push마다 배포·롤백을 되풀이하지 않게). 다시 해 보려면 「Build Now」.
 
+## 헬스 확인 두 갈래 (#146)
+
+- `GET /api/health`(외부 감시): db(`SELECT 1`)·redis(ping)·워커 생존 신호를 점검마다 1초 안에 본다. 정상이면 200 `{"status":"ok"}`, 하나라도 실패하면 503 `{"status":"error","failed":[...]}`(`db`·`redis`·`worker`). 오류 원문은 로그로만 남긴다.
+- `GET /api/health?scope=ready`: db·redis만 본다. backend·backend2 compose healthcheck와 `deploy/deploy.sh` 스모크가 쓴다. 워커가 죽어도 api가 롤링에서 빠지지 않게 하려는 것이다.
+- 워커 생존 신호: beat가 15초마다 `heartbeat` 작업을 내고 워커가 redis 키(`daypage:celery:heartbeat`, TTL 90초)를 갱신한다. 키가 있으면 beat와 워커가 둘 다 살아 있다. worker 컨테이너 healthcheck(1분마다)도 이 키를 본다.
+
 ## 메트릭 스니펫 주소(#51)는 배포 때 넣는다
 
 예전에는 `VITE_METRICS_SNIPPET_URL`을 프론트 빌드 인자로 받았다. 이미지를 oracle 밖에서 구우면 그 노드에는 워크스페이스 `.env`가 없으므로, 주소를 **빌드가 아니라 배포 때** `deploy/publish-static.sh`가 `index.html` head 끝에 넣는다(compose가 `.env`의 값을 `web-dist` 컨테이너 환경변수로 준다). 비어 있으면 태그가 없고, admin에는 넣지 않는다. 동작 규칙은 `frontend/metricsSnippet.ts`와 같다.
