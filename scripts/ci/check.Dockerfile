@@ -3,7 +3,7 @@
 # 빌드 노드(macos·home)의 네이티브 아키텍처로 굽는다 — QEMU를 쓰지 않는다. 의존성 층은 노드의 로컬 캐시에 남는다.
 FROM node:22.23.5-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS node
 
-FROM python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
+FROM python:3.15.2-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 # pnpm 버전은 package.json의 packageManager(pnpm@10.33.0)와 맞춘다.
