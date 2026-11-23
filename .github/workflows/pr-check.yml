@@ -26,6 +26,16 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+      - name: exp/ 갈래 차단
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            exp/*)
+              echo "::error::exp/ 갈래는 실험용이라 병합하지 않는다 — 운영에 들이기로 정해졌으면 평소 갈래에서 PR을 다시 낸다"
+              exit 1
+              ;;
+          esac
       - run: bash scripts/ci/migrate-guard.sh "origin/${{ github.base_ref }}"
 
   deploy-test:
