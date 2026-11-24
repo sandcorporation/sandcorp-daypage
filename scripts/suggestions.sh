@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 운영 건의함(daypage_suggestion)을 읽기 전용으로 살핀다. Orca 자동화(docs/agents/suggestion-automation.md)가 쓴다.
+# 운영 건의함(daypage_suggestion)을 읽기 전용으로 살핀다. 건의 알림을 받은 사람·담당이 쓴다(list·status).
+# check·take·forward는 꺼 둔 예전 매분 자동화용이다(docs/agents/suggestion-automation.md).
 #
 #   suggestions.sh check     새 건의(status=new, 아직 배정 안 됨)가 있으면 0, 없으면 1  ← Orca 자동화의 precheck
 #   suggestions.sh list      새 건의를 JSON 한 줄씩 출력 {"id","at"(KST),"nickname","text","context"(보낼 때의 화면 상태)}

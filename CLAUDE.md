@@ -14,7 +14,7 @@ Single-context: 루트 `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ### Suggestion automation
 
-운영 건의함은 work의 Orca 자동화가 10분마다 살펴 새 건의를 브랜치로 작업하고 검토 대기로 올린다. See `docs/agents/suggestion-automation.md`.
+새 건의는 둘째 알림 목적지(#155) 웹훅으로 조율 담당에게 바로 오고, 담당이 `scripts/suggestions.sh list`로 전문을 읽어 분류·처리한 뒤 `status`로 상태를 바꾼다. 매분 자동화는 꺼 두었다(다시 켜기 전에 `mark`로 처리한 건의를 거른다). See `docs/agents/suggestion-automation.md`.
 
 ### 메트릭 스니펫
 
