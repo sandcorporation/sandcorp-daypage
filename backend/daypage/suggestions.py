@@ -5,9 +5,12 @@
 알림은 커밋 뒤 Celery로 보내 요청을 붙잡지 않고, 보내지 못해도 건의 저장에는 영향이 없다.
 같은 본문을 둘째 알림 목적지(SUGGESTION_NOTICE_WEBHOOK, 디스코드와 같은 {"content": …} 꼴)에도 보낸다.
 두 주소가 다 없으면 아무것도 보내지 않고, 한쪽만 있으면 그쪽에만 보낸다.
+디스코드는 한 번만 보낸다. 둘째 알림 목적지가 다시 보낼 만한 실패(연결 오류·타임아웃·5xx·429)를 내면
+처음 만든 본문 그대로 그 목적지에만 Celery로 다시 보낸다(NOTICE_RETRY_DELAYS 간격).
 """
 
 import logging
+from typing import Literal
 
 import httpx
 from django.conf import settings
@@ -106,32 +109,52 @@ def message(s: Suggestion, event: str, note: str = "") -> str:
 
 # 둘째 알림 목적지는 디스코드(10초)보다 오래 기다리지 않는다.
 NOTICE_TIMEOUT = 5
+NOTICE_NAME = "둘째 알림 목적지"
+# 둘째 알림 목적지를 다시 보낼 간격(초). 길이가 최대 재시도 횟수다.
+NOTICE_RETRY_DELAYS = (30, 120, 480, 1800)
+
+# 보낸 결과: 성공, 다시 보낼 만한 실패(연결 오류·타임아웃·5xx·429), 다시 보내도 소용없는 실패(그 밖의 4xx 등)
+Outcome = Literal["ok", "retry", "fail"]
+Payload = dict[str, object]
 
 
 def _destinations() -> list[tuple[str, str, float]]:
     """(로그에 쓸 이름, 주소, 타임아웃). 주소는 비밀값이라 로그에는 이름만 남긴다."""
     found = [
         ("디스코드", settings.DISCORD_SUGGESTION_WEBHOOK, 10),
-        ("둘째 알림 목적지", settings.SUGGESTION_NOTICE_WEBHOOK, NOTICE_TIMEOUT),
+        (NOTICE_NAME, settings.SUGGESTION_NOTICE_WEBHOOK, NOTICE_TIMEOUT),
     ]
     return [d for d in found if d[1]]
 
 
-def _post(name: str, url: str, timeout: float, payload: dict, suggestion_id: int, event: str) -> bool:
+def _post(name: str, url: str, timeout: float, payload: Payload, suggestion_id: int, event: str) -> Outcome:
     try:
         res = httpx.post(url, json=payload, timeout=timeout)
     except httpx.HTTPError as exc:
         log.warning("건의 알림 실패(%s) #%s %s: %s", name, suggestion_id, event, exc.__class__.__name__)
-        return False
+        return "retry" if isinstance(exc, httpx.TransportError) else "fail"
     if res.status_code >= 300:
         log.warning("건의 알림 실패(%s) #%s %s: HTTP %s", name, suggestion_id, event, res.status_code)
-        return False
-    return True
+        return "retry" if res.status_code >= 500 or res.status_code == 429 else "fail"
+    return "ok"
+
+
+def _schedule_notice_retry(suggestion_id: int, event: str, payload: Payload, attempt: int) -> None:
+    """attempt번째 재시도를 예약한다(1부터). 예약이 안 되면 로그만 남긴다."""
+    from .tasks import resend_suggestion_notice
+
+    try:
+        resend_suggestion_notice.apply_async(
+            (suggestion_id, event, payload, attempt), countdown=NOTICE_RETRY_DELAYS[attempt - 1]
+        )
+    except Exception as exc:  # 브로커가 없어도 알림 실패가 호출한 쪽을 깨지 않게 한다
+        log.error("건의 알림 재시도 예약 실패(%s) #%s %s: %s", NOTICE_NAME, suggestion_id, event, exc.__class__.__name__)
 
 
 def send(suggestion_id: int, event: str, note: str = "") -> bool:
     """설정된 곳마다 따로 보낸다. 한쪽이 실패해도 다른 쪽은 가고, 예외를 던지지 않는다(로그만).
 
+    둘째 알림 목적지가 다시 보낼 만한 실패를 내면 그곳에만 재시도를 예약한다.
     모든 곳에 보냈으면 True.
     """
     destinations = _destinations()
@@ -139,6 +162,27 @@ def send(suggestion_id: int, event: str, note: str = "") -> bool:
     if not destinations or s is None:
         return False
     # 건의 글은 사용자가 쓴 것이다. @everyone 같은 멘션이 울리지 않게 막는다.
-    payload = {"content": message(s, event, note), "allowed_mentions": {"parse": []}}
-    results = [_post(name, url, timeout, payload, suggestion_id, event) for name, url, timeout in destinations]
+    payload: Payload = {"content": message(s, event, note), "allowed_mentions": {"parse": []}}
+    results = []
+    for name, url, timeout in destinations:
+        outcome = _post(name, url, timeout, payload, suggestion_id, event)
+        if name == NOTICE_NAME and outcome == "retry":
+            _schedule_notice_retry(suggestion_id, event, payload, 1)
+        results.append(outcome == "ok")
     return all(results)
+
+
+def resend_notice(suggestion_id: int, event: str, payload: Payload, attempt: int) -> bool:
+    """둘째 알림 목적지에만 같은 본문을 다시 보낸다(attempt번째 재시도). 또 실패하면 다음 재시도를 예약하고,
+    다 써도 못 보냈으면 error로 남긴다. 보냈으면 True.
+    """
+    url = settings.SUGGESTION_NOTICE_WEBHOOK
+    if not url:
+        return False
+    outcome = _post(NOTICE_NAME, url, NOTICE_TIMEOUT, payload, suggestion_id, event)
+    if outcome == "retry":
+        if attempt < len(NOTICE_RETRY_DELAYS):
+            _schedule_notice_retry(suggestion_id, event, payload, attempt + 1)
+        else:
+            log.error("건의 알림 재시도를 다 써도 못 보냄(%s) #%s %s", NOTICE_NAME, suggestion_id, event)
+    return outcome == "ok"

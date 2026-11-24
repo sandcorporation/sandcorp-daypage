@@ -12,6 +12,14 @@ def send_suggestion_alert(suggestion_id: int, event: str, note: str = "") -> Non
     send(suggestion_id, event, note)
 
 
+@shared_task(ignore_result=True)
+def resend_suggestion_notice(suggestion_id: int, event: str, payload: dict[str, object], attempt: int) -> None:
+    """둘째 알림 목적지에만 처음 만든 본문을 다시 보낸다(daypage/suggestions.py의 NOTICE_RETRY_DELAYS)."""
+    from .suggestions import resend_notice
+
+    resend_notice(suggestion_id, event, payload, attempt)
+
+
 @shared_task
 def seal_pages() -> int:
     """지난 장을 봉인하고 접속자에게 자정 교체를 알린다."""

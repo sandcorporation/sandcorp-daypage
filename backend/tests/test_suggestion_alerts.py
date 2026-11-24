@@ -152,6 +152,24 @@ def posts(settings, monkeypatch):
     return calls, outcome
 
 
+@pytest.fixture
+def retries(monkeypatch):
+    """예약된 둘째 알림 목적지 재시도 (인자, countdown). 실제로 기다리지 않는다."""
+    scheduled = []
+    monkeypatch.setattr(tasks.resend_suggestion_notice, "apply_async", lambda args, countdown: scheduled.append((args, countdown)))
+    return scheduled
+
+
+def run_retries(scheduled):
+    """예약된 재시도를 차례로 바로 돌린다(돌리다 새로 예약된 것까지). countdown 목록을 돌려준다."""
+    done = 0
+    while done < len(scheduled):
+        args, _ = scheduled[done]
+        tasks.resend_suggestion_notice(*args)
+        done += 1
+    return [countdown for _, countdown in scheduled]
+
+
 def test_second_notice_gets_the_same_payload(posts, django_capture_on_commit_callbacks):
     calls, _ = posts
     with django_capture_on_commit_callbacks(execute=True):
@@ -187,7 +205,7 @@ def test_discord_failure_still_sends_second_notice(posts, failure):
 
 
 @pytest.mark.parametrize("failure", [httpx.ReadTimeout("slow"), httpx.Response(503)], ids=["error", "http503"])
-def test_second_notice_failure_does_not_break_discord_or_caller(posts, failure, django_capture_on_commit_callbacks):
+def test_second_notice_failure_does_not_break_discord_or_caller(posts, retries, failure, django_capture_on_commit_callbacks):
     calls, outcome = posts
     outcome[NOTICE] = failure
     with django_capture_on_commit_callbacks(execute=True):
@@ -196,7 +214,7 @@ def test_second_notice_failure_does_not_break_discord_or_caller(posts, failure, 
     assert [c[0] for c in calls] == [HOOK, NOTICE]
 
 
-def test_second_notice_address_is_not_logged(settings, monkeypatch, caplog):
+def test_second_notice_address_is_not_logged(settings, monkeypatch, caplog, retries):
     import logging
 
     settings.DISCORD_SUGGESTION_WEBHOOK = HOOK
@@ -209,3 +227,55 @@ def test_second_notice_address_is_not_logged(settings, monkeypatch, caplog):
         suggestions.send(s.id, "new")
     assert "둘째 알림 목적지" in caplog.text
     assert "example.invalid" not in caplog.text and "webhook" not in caplog.text
+
+
+def test_second_notice_recovers_on_retry_and_discord_gets_one(posts, retries, django_capture_on_commit_callbacks):
+    calls, outcome = posts
+    outcome[NOTICE] = httpx.Response(503)
+    with django_capture_on_commit_callbacks(execute=True):
+        s = leave()
+    first = calls[0][1]
+    # 그 사이 건의가 바뀌어도 다시 보내는 본문은 처음 것 그대로다
+    Suggestion.objects.filter(pk=s.id).update(text="바뀐 글")
+    outcome[NOTICE] = httpx.Response(204)
+    assert run_retries(retries) == [suggestions.NOTICE_RETRY_DELAYS[0]]
+    assert [c[0] for c in calls] == [HOOK, NOTICE, NOTICE]
+    assert calls[2][1] == first
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [httpx.ConnectError("down"), httpx.ReadTimeout("slow"), httpx.Response(500), httpx.Response(429)],
+    ids=["connect", "timeout", "http500", "http429"],
+)
+def test_second_notice_gives_up_after_all_retries_and_logs_without_address(posts, retries, failure, caplog):
+    import logging
+
+    calls, outcome = posts
+    s = leave()
+    outcome[NOTICE] = failure
+    with caplog.at_level(logging.WARNING):
+        suggestions.send(s.id, "new")
+        assert run_retries(retries) == list(suggestions.NOTICE_RETRY_DELAYS)
+    assert [c[0] for c in calls] == [HOOK] + [NOTICE] * (1 + len(suggestions.NOTICE_RETRY_DELAYS))
+    gave_up = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(gave_up) == 1
+    assert "둘째 알림 목적지" in gave_up[0].getMessage() and f"#{s.id} new" in gave_up[0].getMessage()
+    assert "example.invalid" not in caplog.text and "discord.test" not in caplog.text
+
+
+@pytest.mark.parametrize("status", [400, 404, 410])
+def test_second_notice_client_error_is_not_retried(posts, retries, status):
+    calls, outcome = posts
+    s = leave()
+    outcome[NOTICE] = httpx.Response(status)
+    assert suggestions.send(s.id, "new") is False
+    assert retries == []
+
+
+def test_discord_failure_is_not_retried(posts, retries):
+    _, outcome = posts
+    s = leave()
+    outcome[HOOK] = httpx.Response(503)
+    suggestions.send(s.id, "new")
+    assert retries == []
