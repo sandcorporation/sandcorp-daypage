@@ -127,3 +127,85 @@ def test_webhook_address_is_not_logged(settings, monkeypatch, caplog):
     with caplog.at_level(logging.INFO):
         assert suggestions.send(s.id, "new") is True
     assert "webhook" not in caplog.text
+
+
+NOTICE = "https://example.invalid/notice"
+
+
+@pytest.fixture
+def posts(settings, monkeypatch):
+    """(주소, 본문, 타임아웃) 기록. 주소마다 돌려줄 응답이나 던질 예외를 고른다."""
+    settings.DISCORD_SUGGESTION_WEBHOOK = HOOK
+    settings.SUGGESTION_NOTICE_WEBHOOK = NOTICE
+    calls = []
+    outcome = {}
+
+    def post(url, json, timeout):
+        calls.append((url, json, timeout))
+        result = outcome.get(url, httpx.Response(204))
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(suggestions.httpx, "post", post)
+    monkeypatch.setattr(tasks.send_suggestion_alert, "delay", lambda *a: suggestions.send(*a))
+    return calls, outcome
+
+
+def test_second_notice_gets_the_same_payload(posts, django_capture_on_commit_callbacks):
+    calls, _ = posts
+    with django_capture_on_commit_callbacks(execute=True):
+        leave()
+    assert [c[0] for c in calls] == [HOOK, NOTICE]
+    assert calls[0][1] == calls[1][1]
+    assert calls[0][2] == 10 and calls[1][2] <= 10
+
+
+def test_no_second_notice_means_discord_only(posts, settings, django_capture_on_commit_callbacks):
+    calls, _ = posts
+    settings.SUGGESTION_NOTICE_WEBHOOK = ""
+    with django_capture_on_commit_callbacks(execute=True):
+        leave()
+    assert [c[0] for c in calls] == [HOOK]
+
+
+def test_second_notice_alone_is_announced(posts, settings, django_capture_on_commit_callbacks):
+    calls, _ = posts
+    settings.DISCORD_SUGGESTION_WEBHOOK = ""
+    with django_capture_on_commit_callbacks(execute=True):
+        leave()
+    assert [c[0] for c in calls] == [NOTICE]
+
+
+@pytest.mark.parametrize("failure", [httpx.ConnectError("down"), httpx.Response(500)], ids=["error", "http500"])
+def test_discord_failure_still_sends_second_notice(posts, failure):
+    calls, outcome = posts
+    s = leave()
+    outcome[HOOK] = failure
+    assert suggestions.send(s.id, "new") is False
+    assert [c[0] for c in calls] == [HOOK, NOTICE]
+
+
+@pytest.mark.parametrize("failure", [httpx.ReadTimeout("slow"), httpx.Response(503)], ids=["error", "http503"])
+def test_second_notice_failure_does_not_break_discord_or_caller(posts, failure, django_capture_on_commit_callbacks):
+    calls, outcome = posts
+    outcome[NOTICE] = failure
+    with django_capture_on_commit_callbacks(execute=True):
+        s = leave()
+    assert s.pk is not None
+    assert [c[0] for c in calls] == [HOOK, NOTICE]
+
+
+def test_second_notice_address_is_not_logged(settings, monkeypatch, caplog):
+    import logging
+
+    settings.DISCORD_SUGGESTION_WEBHOOK = HOOK
+    settings.SUGGESTION_NOTICE_WEBHOOK = NOTICE
+    s = leave()
+    transport = httpx.MockTransport(lambda request: httpx.Response(500 if "notice" in str(request.url) else 204))
+    real_client = httpx.Client
+    monkeypatch.setattr(suggestions.httpx, "post", lambda url, **k: real_client(transport=transport).post(url, **k))
+    with caplog.at_level(logging.INFO):
+        suggestions.send(s.id, "new")
+    assert "둘째 알림 목적지" in caplog.text
+    assert "example.invalid" not in caplog.text and "webhook" not in caplog.text

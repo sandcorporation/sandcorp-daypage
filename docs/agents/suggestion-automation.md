@@ -8,6 +8,7 @@
 |---|---|
 | 건의 조회·상태 스크립트 | `scripts/suggestions.sh` (조회는 읽기 전용 SELECT, ssh `oracle` → `daypage-postgres-1`. `status`만 `daypage-backend-1`의 관리 명령으로 상태 칸을 바꾼다) |
 | 디스코드 알림 | 새 건의·검토 중·반영함이 되면 `daypage-suggestion` 채널 웹훅으로 알린다. 운영 `.env`의 `DISCORD_SUGGESTION_WEBHOOK`(비밀값, 저장소에 없음). 비면 알리지 않는다 |
+| 둘째 알림 목적지 | 디스코드에 가는 알림과 같은 본문(`{"content": …}`)을 운영 `.env`의 `SUGGESTION_NOTICE_WEBHOOK`(비밀값, 저장소에 없음)에도 보낸다. 따로 보내 한쪽이 실패해도 다른 쪽은 가고, 타임아웃 5초. 비면 건너뛴다 |
 | 배정 기록 | work `~/.daypage/suggestions-dispatched` (한 줄에 건의 id 하나), 전달 대기 `~/.daypage/suggestions-dispatched.pending` (`id 받은시각`) |
 | 워커 프롬프트 | `docs/agents/suggestion-worker-prompt.md` (자동화에 넣은 본문과 같게 유지한다) |
 | Orca 자동화 | work, 이름 "건의함 자동 처리", 매분, precheck = `scripts/suggestions.sh check`, provider claude, workspace = 기존 `~/workspace/daypage` main 체크아웃(새 worktree를 만들지 않는다, 워커는 읽기만 한다) |

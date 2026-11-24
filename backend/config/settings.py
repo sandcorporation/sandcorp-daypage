@@ -183,6 +183,8 @@ SENTRY_FRONTEND_DSN = "" if DEBUG else env("SENTRY_FRONTEND_DSN")
 SUGGESTIONS_PER_DAY = int(env("SUGGESTIONS_PER_DAY", "20"))
 # 새 건의·검토 중·반영함을 알릴 디스코드 웹훅(daypage/suggestions.py). 비면 알리지 않는다. 비밀값이라 .env에만 둔다.
 DISCORD_SUGGESTION_WEBHOOK = env("DISCORD_SUGGESTION_WEBHOOK", "")
+# 같은 알림을 받는 둘째 알림 목적지(디스코드와 같은 {"content": …} 꼴). 비면 건너뛴다. 비밀값이라 .env에만 둔다.
+SUGGESTION_NOTICE_WEBHOOK = env("SUGGESTION_NOTICE_WEBHOOK", "")
 
 # 사진(daypage/photos.py): Oracle Object Storage의 S3 호환 API에 둔다. 넷 다 있어야 켜지고, 비면 사진을 쓸 수 없다.
 # 엔드포인트는 https://<namespace>.compat.objectstorage.<region>.oraclecloud.com. 키는 비밀값이라 .env에만 둔다.
