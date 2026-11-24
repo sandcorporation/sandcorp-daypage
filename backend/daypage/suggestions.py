@@ -3,7 +3,8 @@
 새 건의가 들어오거나 건의가 '검토 중'·'반영함'이 되면 운영 채널(디스코드 웹훅)에 알린다.
 상태는 운영 페이지(사람)나 관리 명령 suggestion_status(건의 자동 처리 워커)가 바꾼다.
 알림은 커밋 뒤 Celery로 보내 요청을 붙잡지 않고, 보내지 못해도 건의 저장에는 영향이 없다.
-웹훅 주소(DISCORD_SUGGESTION_WEBHOOK)가 없으면 아무것도 보내지 않는다.
+같은 본문을 둘째 알림 목적지(SUGGESTION_NOTICE_WEBHOOK, 디스코드와 같은 {"content": …} 꼴)에도 보낸다.
+두 주소가 다 없으면 아무것도 보내지 않고, 한쪽만 있으면 그쪽에만 보낸다.
 """
 
 import logging
@@ -68,7 +69,7 @@ def change_status(s: Suggestion, status: str, note: str = "") -> bool:
 
 def announce(suggestion_id: int, event: str, note: str = "") -> None:
     """커밋된 뒤 알림을 보낸다. event는 'new' 또는 바뀐 상태."""
-    if not settings.DISCORD_SUGGESTION_WEBHOOK:
+    if not _destinations():
         return
     from .tasks import send_suggestion_alert
 
@@ -103,20 +104,41 @@ def message(s: Suggestion, event: str, note: str = "") -> str:
     return "\n".join(parts)
 
 
+# 둘째 알림 목적지는 디스코드(10초)보다 오래 기다리지 않는다.
+NOTICE_TIMEOUT = 5
+
+
+def _destinations() -> list[tuple[str, str, float]]:
+    """(로그에 쓸 이름, 주소, 타임아웃). 주소는 비밀값이라 로그에는 이름만 남긴다."""
+    found = [
+        ("디스코드", settings.DISCORD_SUGGESTION_WEBHOOK, 10),
+        ("둘째 알림 목적지", settings.SUGGESTION_NOTICE_WEBHOOK, NOTICE_TIMEOUT),
+    ]
+    return [d for d in found if d[1]]
+
+
+def _post(name: str, url: str, timeout: float, payload: dict, suggestion_id: int, event: str) -> bool:
+    try:
+        res = httpx.post(url, json=payload, timeout=timeout)
+    except httpx.HTTPError as exc:
+        log.warning("건의 알림 실패(%s) #%s %s: %s", name, suggestion_id, event, exc.__class__.__name__)
+        return False
+    if res.status_code >= 300:
+        log.warning("건의 알림 실패(%s) #%s %s: HTTP %s", name, suggestion_id, event, res.status_code)
+        return False
+    return True
+
+
 def send(suggestion_id: int, event: str, note: str = "") -> bool:
-    """웹훅으로 보낸다. 실패해도 예외를 던지지 않는다(로그만)."""
-    url = settings.DISCORD_SUGGESTION_WEBHOOK
+    """설정된 곳마다 따로 보낸다. 한쪽이 실패해도 다른 쪽은 가고, 예외를 던지지 않는다(로그만).
+
+    모든 곳에 보냈으면 True.
+    """
+    destinations = _destinations()
     s = Suggestion.objects.filter(pk=suggestion_id).first()
-    if not url or s is None:
+    if not destinations or s is None:
         return False
     # 건의 글은 사용자가 쓴 것이다. @everyone 같은 멘션이 울리지 않게 막는다.
     payload = {"content": message(s, event, note), "allowed_mentions": {"parse": []}}
-    try:
-        res = httpx.post(url, json=payload, timeout=10)
-    except httpx.HTTPError as exc:
-        log.warning("건의 알림 실패 #%s %s: %s", suggestion_id, event, exc.__class__.__name__)
-        return False
-    if res.status_code >= 300:
-        log.warning("건의 알림 실패 #%s %s: HTTP %s", suggestion_id, event, res.status_code)
-        return False
-    return True
+    results = [_post(name, url, timeout, payload, suggestion_id, event) for name, url, timeout in destinations]
+    return all(results)

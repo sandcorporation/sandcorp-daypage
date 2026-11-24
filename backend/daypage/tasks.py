@@ -6,7 +6,7 @@ from .sealing import seal_and_announce
 
 @shared_task(ignore_result=True)
 def send_suggestion_alert(suggestion_id: int, event: str, note: str = "") -> None:
-    """건의 알림을 디스코드로 보낸다(daypage/suggestions.py)."""
+    """건의 알림을 디스코드와 둘째 알림 목적지로 보낸다(daypage/suggestions.py)."""
     from .suggestions import send
 
     send(suggestion_id, event, note)
