@@ -16,7 +16,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:7.4.9-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+    image: redis:8.0.0-alpine@sha256:0779069b3c24a47a2f681855c1c01d046793e7c5f7d2b079c2aa0652c42eaf0e
     ports:
       - "6379:6379"
 
