@@ -115,3 +115,29 @@ test('푸터에 개인정보·오류 기록 링크가 있다', async () => {
   expect(link).toHaveAttribute('href', 'https://sandcorporation.github.io/privacy-and-terms/errors/')
   expect(link).toHaveAttribute('rel', 'noopener')
 })
+
+test('삭제가 운영 조치로 막히면 서버가 준 글을 보인다', async () => {
+  const detail = '운영 정책에 따라 닫힌 노트예요. 사유: 광고 글'
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'DELETE'
+        ? new Response(JSON.stringify({ code: 'note_closed', detail }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        : new Response(
+            JSON.stringify({
+              authenticated: true,
+              notes: [{ id: 'mine', name: '우리집 노트', isOwner: true, memberCount: 1, memberLimit: null }],
+            }),
+            { headers: { 'Content-Type': 'application/json' } },
+          ),
+    ),
+  )
+  renderHome()
+  await userEvent.click(await screen.findByRole('button', { name: '노트 삭제: 우리집 노트' }))
+  await userEvent.click(screen.getByRole('button', { name: '삭제' }))
+  expect(await screen.findByText(detail)).toBeInTheDocument()
+  expect(screen.getByText('우리집 노트')).toBeInTheDocument()
+})
