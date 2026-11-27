@@ -70,7 +70,12 @@ describe('레이어 목록', () => {
     const doc = createPageDoc('2026-10-16')
     for (let i = 1; i < MAX_LAYERS; i++) addLayer(doc)
     setup(doc)
-    expect(screen.getByRole('button', { name: '+ 새 레이어' })).toBeDisabled()
+    // disabled면 마지막 레이어를 만든 초점이 body로 빠진다
+    const add = screen.getByRole('button', { name: '+ 새 레이어' })
+    expect(add).not.toBeDisabled()
+    expect(add).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(add)
+    expect(rows()).toHaveLength(MAX_LAYERS)
     expect(screen.getByText(new RegExp(`${MAX_LAYERS}개까지`))).toBeInTheDocument()
   })
 

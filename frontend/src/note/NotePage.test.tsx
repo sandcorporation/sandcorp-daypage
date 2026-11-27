@@ -95,6 +95,8 @@ test('자리를 비워 내보내지면 자동으로 다시 붙지 않고, 다시
   await userEvent.click(screen.getByRole('button', { name: '다시 들어가기' }))
   expect(latest()).not.toBe(first)
   expect(screen.queryByText(/자리를 비워 나갔어요/)).not.toBeInTheDocument()
+  expect(document.activeElement).not.toBe(document.body)
+  expect(screen.getByRole('heading', { level: 1, name: NOTE.name })).toHaveFocus()
 })
 
 test('노트 색이 바뀌었다는 알림(102)을 받으면 도구 막대가 바로 바뀐다', async () => {

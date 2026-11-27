@@ -252,8 +252,9 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
           ref={addRef}
           type="button"
           className="btn"
-          disabled={full}
+          aria-disabled={full || undefined}
           onClick={() => {
+            if (full) return
             const id = addLayer(doc, origin)
             if (id) onCurrent(id)
           }}

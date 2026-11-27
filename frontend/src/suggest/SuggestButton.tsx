@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { ToolPopover } from '../components/ToolPopover'
 
@@ -32,6 +32,13 @@ export function SuggestButton({ noteId, context }: Props) {
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLButtonElement>(null)
+  const thanksRef = useRef<HTMLParagraphElement>(null)
+  const sent = open && state === 'sent'
+
+  // 폼이 감사 글로 바뀌면 초점이 있던 단추가 사라진다
+  useEffect(() => {
+    if (sent) thanksRef.current?.focus()
+  }, [sent])
 
   function close() {
     setOpen(false)
@@ -76,7 +83,9 @@ export function SuggestButton({ noteId, context }: Props) {
         <ToolPopover title="기능 건의" anchor={ref} align="bottom" className="suggest-pop" onClose={close}>
           {state === 'sent' ? (
             <div className="suggest-done" role="status">
-              <p>보내 주셔서 고마워요!</p>
+              <p ref={thanksRef} tabIndex={-1}>
+                보내 주셔서 고마워요!
+              </p>
               <p className="tool-pop-caption">하나하나 읽어 보고, 반영되면 ‘새 소식’에서 알려 드릴게요.</p>
               <button type="button" className="btn" onClick={close}>
                 닫기
@@ -106,7 +115,13 @@ export function SuggestButton({ noteId, context }: Props) {
                 <span className="suggest-count">
                   {text.length}/{MAX}
                 </span>
-                <button type="submit" className="btn btn-primary" disabled={!text.trim() || state === 'sending'}>
+                {/* 보내는 동안 disabled를 쓰면 초점이 body로 빠진다 */}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={!text.trim()}
+                  aria-disabled={state === 'sending' || undefined}
+                >
                   {state === 'sending' ? '보내는 중…' : '보내기'}
                 </button>
               </div>

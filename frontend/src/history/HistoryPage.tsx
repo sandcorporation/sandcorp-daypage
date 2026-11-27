@@ -43,7 +43,10 @@ export function HistoryPage() {
   const [blocked, setBlocked] = useState<{ kind: BlockedKind; detail: string } | null>(null)
   const [full, setFull] = useState<Preview | null>(null)
   const [binding, setBinding] = useState<{ done: number; total: number } | null>(null)
+  const [bindingNotice, setBindingNotice] = useState('')
   const bindingAbort = useRef<AbortController | null>(null)
+  const bookRef = useRef<HTMLButtonElement>(null)
+  const cancelBookRef = useRef<HTMLButtonElement>(null)
   const { toast, show } = useToast()
 
   // 화면을 떠나면 엮던 책을 멈춘다
@@ -87,6 +90,7 @@ export function HistoryPage() {
     const abort = new AbortController()
     bindingAbort.current = abort
     setBinding({ done: 0, total: pages.length })
+    setBindingNotice('책을 엮기 시작했어요')
     try {
       const sources: BookSource[] = pages
         .filter((p) => p.key !== note.page.key)
@@ -130,9 +134,16 @@ export function HistoryPage() {
         onProgress: (done, total) => setBinding({ done, total }),
       })
       downloadBlob(blob, bookFileName(note.name, ordered[0].date, ordered[ordered.length - 1].date))
+      setBindingNotice('책을 내려받았어요')
     } catch (e) {
-      if (!abort.signal.aborted && !isBookCancelled(e)) show('책을 만들지 못했어요')
+      // 실패는 토스트가 알린다
+      const cancelled = abort.signal.aborted || isBookCancelled(e)
+      setBindingNotice(cancelled ? '책 엮기를 취소했어요' : '')
+      if (!cancelled) show('책을 만들지 못했어요')
     } finally {
+      // ‘취소’는 곧 사라진다. 그 사이 다른 자리로 옮겨 간 초점은 빼앗지 않는다.
+      const at = document.activeElement
+      if (at === document.body || at === cancelBookRef.current) bookRef.current?.focus()
       bindingAbort.current = null
       setBinding(null)
     }
@@ -174,20 +185,24 @@ export function HistoryPage() {
             <div className="history-list-head">
               <h1 id="history-title">지난 페이지</h1>
               <button
+                ref={bookRef}
                 type="button"
                 className="btn"
                 onClick={saveBook}
-                disabled={binding !== null}
+                aria-disabled={binding !== null || undefined}
                 title="지난 페이지와 오늘 페이지를 날짜순으로 엮은 PDF를 내려받아요"
               >
                 {binding ? `엮는 중… ${binding.done}/${binding.total}` : '책으로 저장 (PDF)'}
               </button>
               {binding && (
-                <button type="button" className="btn" onClick={() => bindingAbort.current?.abort()}>
+                <button ref={cancelBookRef} type="button" className="btn" onClick={() => bindingAbort.current?.abort()}>
                   취소
                 </button>
               )}
             </div>
+            <p className="visually-hidden" role="status">
+              {bindingNotice}
+            </p>
             <ol>
               {pages.map((p) => (
                 <li key={p.key}>

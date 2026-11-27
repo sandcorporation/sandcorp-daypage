@@ -184,7 +184,8 @@
   background: var(--accent-soft);
   color: var(--accent);
 }
-.tool-btn:disabled {
+.tool-btn:disabled,
+.tool-btn[aria-disabled='true'] {
   opacity: 0.35;
   cursor: not-allowed;
 }
@@ -730,7 +731,8 @@
 .zoom-control button:hover {
   background: var(--paper-dark);
 }
-.zoom-control button:disabled {
+.zoom-control button:disabled,
+.zoom-control button[aria-disabled='true'] {
   opacity: 0.35;
   cursor: not-allowed;
 }

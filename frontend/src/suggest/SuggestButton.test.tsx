@@ -53,3 +53,32 @@ test('서버가 거절하면 이유를 보여 주고 쓴 글은 남겨 둔다', 
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('내일 다시'))
   expect(screen.getByRole('textbox', { name: '건의 내용' })).toHaveValue('하나 더')
 })
+
+test('보내는 동안에도, 보낸 뒤와 닫은 뒤에도 초점이 body로 빠지지 않는다', async () => {
+  let respond = (_: Response) => {}
+  const fetchMock = vi.fn(() => new Promise<Response>((resolve) => (respond = resolve)))
+  vi.stubGlobal('fetch', fetchMock)
+  render(<SuggestButton />)
+  const opener = screen.getByRole('button', { name: '기능 건의' })
+  await userEvent.click(opener)
+  await userEvent.type(screen.getByRole('textbox', { name: '건의 내용' }), '하나')
+  await userEvent.click(screen.getByRole('button', { name: '보내기' }))
+  // disabled면 브라우저가 초점을 body로 보낸다(jsdom은 그러지 않아 속성으로 본다)
+  const busy = screen.getByRole('button', { name: '보내는 중…' })
+  expect(busy).not.toBeDisabled()
+  expect(busy).toHaveAttribute('aria-disabled', 'true')
+  expect(busy).toHaveFocus()
+  await userEvent.click(busy)
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+
+  respond(new Response('{}', { status: 201, headers: { 'Content-Type': 'application/json' } }))
+  const thanks = await screen.findByText('보내 주셔서 고마워요!')
+  await waitFor(() => expect(thanks).toHaveFocus())
+  expect(document.activeElement).not.toBe(document.body)
+
+  // 머리의 ×와 이름이 같아 감사 글 아래 단추를 고른다
+  await userEvent.click(screen.getByText('닫기', { selector: 'button' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(document.activeElement).not.toBe(document.body)
+  expect(opener).toHaveFocus()
+})

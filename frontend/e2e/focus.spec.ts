@@ -71,3 +71,33 @@ test('#173 「이 장 모두 지우기」 확인 창이 닫히면 지우개 창�
   await page.keyboard.press('Escape')
   await expect(opener).toBeFocused()
 })
+
+test('#183 건의를 보내고 닫는 동안 초점이 body로 빠지지 않는다', async ({ page }) => {
+  await openNote(page)
+  await page.route('**/api/suggestions', (route) => route.fulfill({ status: 201, json: { id: 1 } }))
+  const opener = page.getByRole('button', { name: '기능 건의' })
+  await opener.click()
+  await page.getByRole('textbox', { name: '건의 내용' }).fill('하나')
+  await page.getByRole('button', { name: '보내기' }).press('Enter')
+  await expect(page.getByText('보내 주셔서 고마워요!')).toBeFocused()
+  await page.getByRole('dialog').getByRole('button', { name: '닫기' }).last().press('Enter')
+  await expect(opener).toBeFocused()
+})
+
+test('#183 도구 창에서 고르거나 내용이 바뀌어도, 한계에 닿아도 초점이 남는다', async ({ page }) => {
+  await openNote(page)
+  const ink = page.getByRole('button', { name: /^잉크:/ })
+  await ink.press('Enter')
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: '+ 새 색 만들기' }).press('Enter')
+  await expect(dialog).toBeFocused()
+  await dialog.getByRole('button', { name: '잉크 목록으로' }).press('Enter')
+  await expect(dialog).toBeFocused()
+  await dialog.locator('.ink-option').nth(1).press('Enter')
+  await expect(page.getByRole('button', { name: /^잉크:/ })).toBeFocused()
+
+  const zoomOut = page.getByRole('button', { name: '축소' })
+  for (let i = 0; i < 6; i++) await zoomOut.press('Enter')
+  await expect(zoomOut).toHaveAttribute('aria-disabled', 'true')
+  await expect(zoomOut).toBeFocused()
+})

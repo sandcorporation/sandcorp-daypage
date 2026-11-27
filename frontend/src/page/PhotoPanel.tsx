@@ -146,7 +146,7 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
         </ul>
       )}
       <div className="layer-foot">
-        <button type="button" className="btn" disabled={!!addBlocked} title={addBlocked ?? undefined} onClick={onAdd}>
+        <button type="button" className="btn" aria-disabled={!!addBlocked || undefined} title={addBlocked ?? undefined} onClick={() => addBlocked || onAdd()}>
           + 사진 붙이기
         </button>
         <p className="tool-pop-caption">
