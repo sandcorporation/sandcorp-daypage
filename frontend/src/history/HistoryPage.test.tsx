@@ -162,6 +162,23 @@ test('오늘 장에 내용이 있으면 지금 종이로 맨 뒤에 넣고, 파�
   expect(todayPage.paper).toEqual({ pattern: 'lined', margin: true, color: 'white' })
 })
 
+test('바로 보관한 장 다음의 오늘 장은 지난 경계가 아니라 앞 장을 보관한 때부터로 적는다', async () => {
+  todayHasStroke = true
+  const rolled = { ...sealed[0], key: '2026-10-23', date: '2026-10-23', openedAt: '2026-10-23T00:00:00+09:00', closedAt: '2026-10-23T14:00:30+09:00' }
+  const today = { key: '2026-10-23-2', date: '2026-10-23', seq: 2, openedAt: '2026-10-23T08:00:00+09:00', dueAt: '2026-10-24T08:00:00+09:00' }
+  const base = vi.mocked(fetch).getMockImplementation()!
+  vi.mocked(fetch).mockImplementation(async (url, init) => {
+    if (url === '/api/notes/n1') return json({ ...note, page: today })
+    if (url === '/api/notes/n1/pages') return json([rolled, ...sealed])
+    return base(url, init)
+  })
+  open()
+  await userEvent.click(await screen.findByRole('button', { name: '책으로 저장 (PDF)' }))
+  await waitFor(() => expect(renderNoteBook).toHaveBeenCalled())
+  const last = vi.mocked(renderNoteBook).mock.calls[0][0].pages.at(-1)!.page
+  expect(last).toMatchObject({ key: '2026-10-23-2', openedAt: rolled.closedAt, closedAt: today.dueAt })
+})
+
 test('오늘 장이 비어 있으면 건너뛴다', async () => {
   open()
   await userEvent.click(await screen.findByRole('button', { name: '책으로 저장 (PDF)' }))

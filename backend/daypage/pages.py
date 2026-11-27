@@ -10,6 +10,10 @@ from . import clock
 from .models import Note, Page, PageUpdate
 
 
+# 봉인이 예정보다 이만큼 안에서 늦은 것은 제때 봉인으로 본다(봉인 작업이 몇 초 늦게 돈다)
+SEAL_DELAY_GRACE = dt.timedelta(minutes=1)
+
+
 class PageSealed(Exception):
     """봉인된 장이거나 봉인 시각이 지나 더는 쓸 수 없는 장."""
 
@@ -106,6 +110,34 @@ def current_key(note: Note, now: dt.datetime | None = None) -> str:
     date = clock.boundary_before(now, note.seal_hour).date()
     seq = (Page.objects.filter(note=note, date=date).aggregate(models.Max("seq"))["seq__max"] or 0) + 1
     return page_key(date, seq)
+
+
+def _closed_at(page: Page) -> dt.datetime:
+    """봉인된 장이 실제로 닫힌 순간.
+
+    대개 due_at이다(그 뒤의 쓰기는 거부한다). 주인이 봉인 시각을 이미 지난 시각으로 바꿔 바로 봉인한 장만
+    due_at이 지난 경계로 당겨져 있어 sealed_at까지 열려 있었다. 꼬박 하루짜리 장은 바로 봉인될 수 없으므로
+    봉인 작업이 오래 밀렸어도 due_at이다.
+    """
+    if page.due_at - page.opened_at == dt.timedelta(days=1) or page.sealed_at - page.due_at < SEAL_DELAY_GRACE:
+        return page.due_at
+    return page.sealed_at
+
+
+def recorded_pages(note: Note) -> list[tuple[Page, dt.datetime, dt.datetime]]:
+    """기록에 보이는 장(봉인됐고 비지 않음)과 실제로 열려 있던 (시작, 끝). 새 것부터.
+
+    바로 봉인한 뒤의 장은 opened_at이 지난 경계지만 앞 장이 닫힌 때부터 쓸 수 있었다. 앞 장이 비어 기록에
+    없어도 따져야 하므로 빈 장까지 읽는다.
+    """
+    result = []
+    previous_closed = None
+    for page in Page.objects.filter(note=note, sealed_at__isnull=False).defer("state").order_by("date", "seq"):
+        opened = page.opened_at if previous_closed is None else max(page.opened_at, previous_closed)
+        previous_closed = _closed_at(page)
+        if not page.is_empty:
+            result.append((page, opened, previous_closed))
+    return result[::-1]
 
 
 def load_updates(page_id: int) -> list[bytes]:
