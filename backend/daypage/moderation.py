@@ -138,10 +138,15 @@ def is_kicked(note_id: str, user: User) -> bool:
 # ── 노트를 쓸 수 있는지 ────────────────────────────────────────
 
 
-def check_note(note: Note, user: User) -> None:
-    """닫힌 노트, 정지된 사용자, 내보낸 사람이면 Blocked."""
+def check_open(note: Note) -> None:
+    """닫힌 노트면 NoteClosed. 로그인 전 미리보기도 쓴다."""
     if note.closed_at is not None:
         raise NoteClosed(f"운영 정책에 따라 닫힌 노트예요. 사유: {note.closed_reason}")
+
+
+def check_note(note: Note, user: User) -> None:
+    """닫힌 노트, 정지된 사용자, 내보낸 사람이면 Blocked."""
+    check_open(note)
     check_user(user)
     if is_kicked(note.id, user):
         raise Kicked("노트를 만든 사람이 이 노트에서 내보냈어요.")

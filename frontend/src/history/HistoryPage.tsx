@@ -15,6 +15,8 @@ import { TextLayer } from '../page/TextLayer'
 import { PhotoImages } from '../page/PhotoLayer'
 import { photoBase } from '../page/photos'
 import { blockedKind, ErrorScreen, type BlockedKind } from '../pages/ErrorScreen'
+import { InvitePage } from '../pages/InvitePage'
+import { fetchFullPreview, type Preview } from '../pages/preview'
 import '../note/note.css'
 import './history.css'
 
@@ -39,6 +41,7 @@ export function HistoryPage() {
   const [pages, setPages] = useState<SealedPage[] | null>(null)
   const [error, setError] = useState<'missing' | 'server' | null>(null)
   const [blocked, setBlocked] = useState<{ kind: BlockedKind; detail: string } | null>(null)
+  const [full, setFull] = useState<Preview | null>(null)
   const [binding, setBinding] = useState<{ done: number; total: number } | null>(null)
   const bindingAbort = useRef<AbortController | null>(null)
   const { toast, show } = useToast()
@@ -48,16 +51,23 @@ export function HistoryPage() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([api<NoteDetail>(`/api/notes/${noteId}`), api<SealedPage[]>(`/api/notes/${noteId}/pages`)])
-      .then(([n, p]) => {
+    // 노트를 먼저 부른다. 여기서 참여하게 되고, 같이 부르면 기록 목록의 not_member가 먼저 와서 까닭을 가린다.
+    api<NoteDetail>(`/api/notes/${noteId}`)
+      .then(async (n) => {
+        const p = await api<SealedPage[]>(`/api/notes/${noteId}/pages`)
         if (cancelled) return
         setNote(n)
         setPages(p)
       })
-      .catch((e) => {
+      .catch(async (e) => {
         if (cancelled) return
         if (e instanceof ApiError && e.status === 401) {
           window.location.href = `/note/${noteId}`
+          return
+        }
+        if (e instanceof ApiError && e.code === 'note_full') {
+          const preview = await fetchFullPreview(noteId)
+          if (!cancelled) setFull(preview)
           return
         }
         const kind = e instanceof ApiError ? blockedKind(e.code) : null
@@ -130,6 +140,8 @@ export function HistoryPage() {
 
   if (blocked) return <ErrorScreen kind={blocked.kind} detail={blocked.detail} />
   if (error) return <ErrorScreen kind={error} />
+  if (full)
+    return <InvitePage noteId={noteId} noteName={full.name} online={full.online} isFull={full.isFull} loggedIn />
   if (!note || !pages) return <div className="grid-bg" />
 
   return (

@@ -6,8 +6,7 @@ import { NotePage } from '../note/NotePage'
 import type { NoteDetail } from '../note/types'
 import { blockedKind, ErrorScreen, LoadingScreen, type BlockedKind } from './ErrorScreen'
 import { InvitePage } from './InvitePage'
-
-type Preview = { name: string; online: number; isFull: boolean }
+import { fetchFullPreview, fetchPreview, type Preview } from './preview'
 
 type State =
   | { kind: 'loading' }
@@ -30,7 +29,7 @@ export function NoteRoute() {
     async function load() {
       try {
         if (!me!.authenticated) {
-          set({ kind: 'invite', preview: await api<Preview>(`/api/notes/${noteId}/preview`), loggedIn: false })
+          set({ kind: 'invite', preview: await fetchPreview(noteId), loggedIn: false })
           return
         }
         set({ kind: 'note', note: await api<NoteDetail>(`/api/notes/${noteId}`) })
@@ -39,12 +38,7 @@ export function NoteRoute() {
         const blocked = e instanceof ApiError ? blockedKind(e.code) : null
         if (blocked) return set({ kind: 'blocked', reason: blocked, detail: (e as ApiError).message })
         if (e instanceof ApiError && e.code === 'note_full') {
-          const preview = await api<Preview>(`/api/notes/${noteId}/preview`).catch(() => null)
-          return set({
-            kind: 'invite',
-            preview: preview ?? { name: '노트', online: 0, isFull: true },
-            loggedIn: true,
-          })
+          return set({ kind: 'invite', preview: await fetchFullPreview(noteId), loggedIn: true })
         }
         set({ kind: 'error' })
       }
