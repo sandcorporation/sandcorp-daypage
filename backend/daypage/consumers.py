@@ -150,6 +150,8 @@ class PageConsumer(AsyncWebsocketConsumer):
         # 이 연결이 받은 clock에 더해 퍼뜨리는 값. 다시 연결한 클라이언트는 provider를 새로 만들어 clock을 처음부터
         # 세는데, 남의 화면은 옛 clock보다 작은 것을 버린다. 방이 본 마지막 clock 뒤로 잇는다(#230).
         self.clock_shift = 0
+        # 들어올 때 미뤄 둔 지금 커서의 clientID. 이 연결의 clientID가 정해지면 그것만 빼고 보낸다(#233).
+        self.presence_later: set[int] | None = None
         # 방이 넘겨준 메시지를 순서대로 보낸다. 느린 연결이 방 전체를 붙잡지 않게 연결마다 따로 보낸다.
         self.outbox: asyncio.Queue[bytes] = asyncio.Queue(OUTBOX_LIMIT)
         self.sender: asyncio.Task | None = None
@@ -278,9 +280,19 @@ class PageConsumer(AsyncWebsocketConsumer):
         self.room = await hub.hub().join(page.id, self, lambda: db(pages.load_updates)(page.id))
         # 들어오는 사이 클라이언트가 떠났어도 send는 조용히 끝난다. 방에서 나가는 건 disconnect가 한다.
         await self.send(bytes_data=create_sync_message(self.room.ydoc))
-        # 이미 있는 사람들의 커서를 보낸다.
-        if (present := self.room.presence_message()) is not None:
-            self.push(present, volatile=True)
+        # 이미 있는 사람들의 커서를 보낸다. 클라이언트(y-protocols)는 자기 clientID라도 clock이 더 크면 받아들이므로,
+        # 다시 연결한 새 provider가 자기 옛 항목을 받으면 옛 커서·editingBoxId로 자기 상태를 덮는다(#233). 이 연결이
+        # 쓸 clientID는 첫 awareness에서야 정해진다(_owns). 다른 사용자가 쥔 것만 바로 보내고, 자기 것일 수 있는 것
+        # (같은 사용자가 쥔 것, 다른 프로세스에서 온 것)은 clientID가 정해진 뒤 자기 것을 빼고 보낸다.
+        now: list[awareness.Entry] = []
+        self.presence_later = set()
+        for entry in self.room.presence_entries():
+            if self.room.held_by_other_user(entry[0], self.member.user_id):
+                now.append(entry)
+            else:
+                self.presence_later.add(entry[0])
+        if now:
+            self.push(awareness.encode_message(now), volatile=True)
         self.entering = False
         # 기다리는 동안 받아 둔 sync step1·커서를 이제 처리한다.
         held, self.held = self.held, []
@@ -535,6 +547,10 @@ class PageConsumer(AsyncWebsocketConsumer):
             }
             self.client_clock = clk
             cleaned.append((client_id, clk, state))
+        if self.presence_later is not None and self.client_id is not None:
+            later, self.presence_later = self.presence_later - {self.client_id}, None
+            if rest := [e for e in self.room.presence_entries() if e[0] in later]:
+                self.push(awareness.encode_message(rest), volatile=True)
         if cleaned:
             await self.room.local_awareness(self, cleaned)
         if moved:

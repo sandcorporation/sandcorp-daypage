@@ -180,7 +180,6 @@ async def test_reconnect_of_same_person_takes_over_client_id_from_half_open_conn
     assert [(cid, clk) for cid, clk, _ in await next_awareness(b)] == [(111, 50)]
     # A는 끊긴 줄 모른 채 남아 있고, 같은 사람이 새 연결로 같은 clientID를 다시 보낸다
     a2 = await join(owner, note_id, "2026-10-15")
-    await next_awareness(a2)  # 들어올 때 받는 지금 커서
     await a2.ws.send_to(bytes_data=awareness_message(111, 1, {"cursor": {"x": 2, "y": 2}}))
     [(client_id, clock_value, state)] = await next_awareness(b)
     assert client_id == 111
@@ -201,6 +200,38 @@ async def test_reconnect_of_same_person_takes_over_client_id_from_half_open_conn
         got += await next_awareness(b)
     assert {cid for cid, _, _ in got} == {333}
     for y in (a2, b, c):
+        await y.close()
+
+
+async def test_reconnect_does_not_hand_back_own_old_presence_on_entry():
+    """#233 들어올 때 받는 지금 커서에 자기 옛 항목이 있으면 클라이언트(y-protocols)는 clock이 더 크니 옛 상태(옛 커서·
+    editingBoxId)를 자기 상태로 받아들이고, 다음에 커서만 바꿔 보낼 때 옛 「이어 쓰는 중」을 남에게 다시 퍼뜨린다.
+    다른 사람의 커서는 바로 받고, 같은 사람의 것은 이 연결의 clientID가 정해진 뒤 그것만 빼고 받는다."""
+    note_id, owner, (guest,), _ = await setup_note(2)
+    a = await join(owner, note_id, "2026-10-15")
+    tab = await join(owner, note_id, "2026-10-15")
+    b = await join(guest, note_id, "2026-10-15")
+    await b.ws.send_to(bytes_data=awareness_message(222, 1, {"cursor": None}))
+    await tab.ws.send_to(bytes_data=awareness_message(112, 1, {"cursor": None}))
+    await a.ws.send_to(bytes_data=awareness_message(111, 50, {"cursor": {"x": 1, "y": 1}, "editingBoxId": "box1"}))
+    got = await next_awareness(b)
+    while 111 not in {cid for cid, _, _ in got}:
+        got += await next_awareness(b)
+    # A는 끊긴 줄 모른 채 남고, 같은 사람이 새 provider(clock 처음부터)로 다시 들어온다
+    a2 = await join(owner, note_id, "2026-10-15")
+    assert [cid for cid, _, _ in await next_awareness(a2)] == [222]
+    await a2.ws.send_to(bytes_data=awareness_message(111, 1, {"cursor": None, "editingBoxId": None}))
+    got = await next_awareness(b)
+    while 111 not in {cid for cid, _, _ in got}:
+        got += await next_awareness(b)
+    assert [state["editingBoxId"] for cid, _, state in got if cid == 111] == [None]
+    # 표지: B가 커서를 바꾼다. 그 전까지 A2가 받은 것에 자기 clientID(111)가 없다
+    await b.ws.send_to(bytes_data=awareness_message(222, 2, {"cursor": {"x": 3, "y": 3}}))
+    got = await next_awareness(a2)
+    while (222, 2) not in {(cid, clk) for cid, clk, _ in got}:
+        got += await next_awareness(a2)
+    assert {cid for cid, _, _ in got} == {112, 222}
+    for y in (a, tab, a2, b):
         await y.close()
 
 

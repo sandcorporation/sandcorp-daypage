@@ -182,11 +182,20 @@ class Room:
             elif rest := [e for e in entries if e[0] not in skip]:
                 m.push(awareness.encode_message(rest), volatile=True)
 
-    def presence_message(self) -> bytes | None:
-        """새로 온 사람에게 보낼 지금 커서들."""
+    def presence_entries(self) -> list[awareness.Entry]:
+        """방에 살아 있는 지금 커서들."""
         now = time.monotonic()
-        entries = [(cid, clk, state) for cid, (clk, state, at) in self.presence.items() if now - at < PRESENCE_TTL]
+        return [(cid, clk, state) for cid, (clk, state, at) in self.presence.items() if now - at < PRESENCE_TTL]
+
+    def presence_message(self) -> bytes | None:
+        """지금 커서들을 담은 메시지(다른 프로세스에 들어올 때 넘긴다)."""
+        entries = self.presence_entries()
         return awareness.encode_message(entries) if entries else None
+
+    def held_by_other_user(self, client_id: int, user_id: int) -> bool:
+        """이 clientID를 이 프로세스에서 다른 사용자의 연결이 쥐고 있는가(그러면 user_id의 것일 수 없다)."""
+        holder = self.holders.get(client_id)
+        return holder is not None and holder[1] != user_id
 
     def claimed(self, client_id: int) -> bool:
         """이 clientID의 커서가 방에 살아 있는가(다른 연결이 이미 쓰고 있다)."""
