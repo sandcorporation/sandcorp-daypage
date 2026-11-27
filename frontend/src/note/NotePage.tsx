@@ -74,6 +74,7 @@ import { ShortcutsButton } from "./ShortcutsButton";
 import { uniquePeople, usePresence } from "./usePresence";
 import { useNewVersion } from "./useNewVersion";
 import { useRealtime, type FatalReason, type NoteInfo } from "./useRealtime";
+import { useLeaveWarning, useUnsentChanges } from "./unsent";
 import { useRolledNotice } from "./useRolledNotice";
 import type { NoteDetail } from "./types";
 import "./note.css";
@@ -551,6 +552,13 @@ export function NotePage({ initial }: Props) {
   });
   reconnectRef.current = reconnect;
   abandonSwitchRef.current = abandonSwitch;
+  // 끊긴 채 쓴 것이 남아 있으면 탭을 떠나기 전에 묻는다(#250). 이 화면은 늘 쓸 수 있는 오늘 장이다.
+  const unsent = useUnsentChanges(doc, provider, status === "connected" && synced, {
+    switching,
+    readOnly: false,
+    blocked: fatal !== null || queuePosition !== null,
+  });
+  useLeaveWarning(unsent);
   // ‘다시 연결’ 단추는 화면과 함께 사라지므로 노트로 돌아오면 제목에 초점을 둔다
   const rejoined = useRef(false);
   useEffect(() => {

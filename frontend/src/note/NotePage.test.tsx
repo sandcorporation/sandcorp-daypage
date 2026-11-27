@@ -629,7 +629,7 @@ describe('새 페이지 알림', () => {
 
   test.each([
     ['새 장에 붙다가 끊김', () => drop(1006), DOWN],
-    ['네트워크 끊김', () => act(() => void window.dispatchEvent(new Event('offline'))), '오프라인 · 다시 연결되면 맞춰져요'],
+    ['네트워크 끊김', () => act(() => void window.dispatchEvent(new Event('offline'))), '오프라인 · 이 탭에서 다시 연결되면 맞춰져요'],
   ])('교체 중의 진짜 실패는 숨기지 않는다: %s', async (_, fail, text) => {
     vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
     renderNote()
@@ -748,5 +748,45 @@ describe('새 페이지 알림', () => {
     sessionStorage.setItem('daypage:rolledFrom:n1', NOTE.page.key)
     renderNote()
     expect(heard(NOTICE)).toHaveLength(0)
+  })
+})
+
+// #250 끊긴 채 그린 것이 있으면 탭을 떠나기 전에 묻는다. 막힘 화면에서는 묻지 않는다.
+describe('떠나기 전 확인', () => {
+  const leaving = () => {
+    const e = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(e)
+    return e.defaultPrevented
+  }
+  const live = () =>
+    act(() => {
+      latest().emit('status', [{ status: 'connected' }])
+      latest().emit('sync', [true])
+    })
+  const offline = () => act(() => void window.dispatchEvent(new Event('offline')))
+  const draw = () => act(() => void stroke(latest().doc))
+
+  beforeEach(() => vi.stubGlobal('fetch', async () => new Response('{}', { status: 404 })))
+
+  test('오프라인에서 그리면 묻고, 다시 맞추면 묻지 않는다', () => {
+    renderNote()
+    live()
+    draw()
+    expect(leaving()).toBe(false)
+    offline()
+    draw()
+    expect(leaving()).toBe(true)
+    live()
+    expect(leaving()).toBe(false)
+  })
+
+  test('남은 변경이 있어도 막힘 화면이 되면 묻지 않는다', () => {
+    renderNote()
+    live()
+    offline()
+    draw()
+    expect(leaving()).toBe(true)
+    act(() => latest().emit('connection-close', [{ code: 4410 }]))
+    expect(leaving()).toBe(false)
   })
 })
