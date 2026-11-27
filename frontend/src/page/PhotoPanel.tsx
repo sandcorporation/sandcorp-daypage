@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { useReorder } from './useReorder'
 import * as Y from 'yjs'
+import { useAnnouncer } from '../components/useAnnouncer'
 import { usePhotos } from './PhotoLayer'
 import { deletePhoto, movePhoto, PHOTO_LIMIT, photoUrl, type Photo } from './photos'
 
@@ -55,14 +56,21 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
   const photos = usePhotos(doc)
   const label = names(photos)
   const indexOf = (id: string) => photos.findIndex((p) => p.id === id)
+  const { node: announced, announce } = useAnnouncer()
+  function move(id: string, to: number) {
+    const from = indexOf(id)
+    if (to < 0 || to >= photos.length || to === from) return
+    movePhoto(doc, id, to, origin)
+    announce(`${label.get(id) ?? '사진'} 순서를 바꿨어요`)
+  }
   // 끌어서 순서 바꾸기(손가락은 손잡이로). 놓은 자리의 순서로 옮긴다.
-  const reorder = useReorder((from, to) => movePhoto(doc, from, indexOf(to), origin))
+  const reorder = useReorder((from, to) => move(from, indexOf(to)))
 
   function onPickKey(e: KeyboardEvent, p: Photo) {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
     e.preventDefault()
     // 목록은 위가 앞(높은 순서)이다
-    movePhoto(doc, p.id, indexOf(p.id) + (e.key === 'ArrowUp' ? 1 : -1), origin)
+    move(p.id, indexOf(p.id) + (e.key === 'ArrowUp' ? 1 : -1))
   }
 
   function reveal(id: string) {
@@ -124,6 +132,7 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
                   onClick={() => {
                     onHighlight?.(null)
                     deletePhoto(doc, p.id, origin)
+                    announce(`사진을 뺐어요: ${name}`)
                   }}
                 >
                   <Icon d={TRASH} />
@@ -145,6 +154,7 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
           })}
         </ul>
       )}
+      {announced}
       <div className="layer-foot">
         <button type="button" className="btn" aria-disabled={!!addBlocked || undefined} title={addBlocked ?? undefined} onClick={() => addBlocked || onAdd()}>
           + 사진 붙이기

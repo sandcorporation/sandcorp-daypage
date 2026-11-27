@@ -204,9 +204,11 @@ export function useEditTools(
     eraserMode?: EraserMode
     /** 지울 대상 거르기. 없으면 모두 */
     eraseFilter?: EraseFilter
+    /** 고른 것을 지운 뒤(알림 자리) */
+    onSelectionDeleted?: () => void
   } = {},
 ) {
-  const { additive = false, textHeight = domTextHeight, eraserMode = 'stroke', eraseFilter = 'all' } = options
+  const { additive = false, textHeight = domTextHeight, eraserMode = 'stroke', eraseFilter = 'all', onSelectionDeleted } = options
   const [selected, setSelected] = useState<Selection>(NOTHING)
   // 끄는 동안 자주 바뀌는 미리보기(옮기기 변환·지워질 획·선택 상자). 리액트 상태가 아니라 PageView가 구독한다.
   const live = useMemo(() => new EditPreview(), [])
@@ -600,7 +602,8 @@ export function useEditTools(
   const deleteSelected = useCallback(() => {
     deleteSelection(doc, selected.strokes, selected.texts, origin)
     setSelected(NOTHING)
-  }, [doc, selected, origin])
+    onSelectionDeleted?.()
+  }, [doc, selected, origin, onSelectionDeleted])
 
   const overlay = useCallback(
     (ctx: CanvasRenderingContext2D) => {

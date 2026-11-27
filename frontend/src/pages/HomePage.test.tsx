@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { ARRIVE_AT_TITLE } from '../components/useFocusOnArrival'
 import { HomePage } from './HomePage'
 
@@ -246,4 +246,30 @@ test('로그아웃하면 첫 화면의 제목에 초점을 둔다', async () => 
   expect(await screen.findByRole('link', { name: /카카오로 시작하기/ })).toBeInTheDocument()
   expect(document.activeElement).not.toBe(document.body)
   expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
+})
+
+test('노트를 지우면 어느 노트를 지웠는지 알린다', async () => {
+  mockApi(() => ({ authenticated: true, notes: [{ id: 'n1', name: '우리집 노트', isOwner: true, memberCount: 1, memberLimit: null }] }))
+  renderHome()
+  await userEvent.click(await screen.findByRole('button', { name: '노트 삭제: 우리집 노트' }))
+  await userEvent.click(screen.getByRole('button', { name: '삭제' }))
+  expect(await screen.findByText('‘우리집 노트’ 노트를 지웠어요')).toHaveAttribute('role', 'status')
+})
+
+test('노트 화면에서 지우고 오면 알리고, 방문 기록에서는 알림을 지운다', async () => {
+  mockApi(() => ({ authenticated: true, notes: [] }))
+  const states: unknown[] = []
+  function Spy() {
+    states.push(useLocation().state)
+    return null
+  }
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/', state: { focusTitle: true, notice: '‘모임’ 노트를 지웠어요' } }]}>
+      <HomePage />
+      <Spy />
+    </MemoryRouter>,
+  )
+  expect(await screen.findByText('‘모임’ 노트를 지웠어요')).toHaveAttribute('role', 'status')
+  expect(screen.getByRole('heading', { name: '새 노트 만들기' })).toHaveFocus()
+  expect(states.at(-1)).toEqual({ focusTitle: true })
 })

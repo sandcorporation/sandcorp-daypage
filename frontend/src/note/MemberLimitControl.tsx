@@ -10,8 +10,8 @@ type Props = {
   onChange: (limit: number | null) => Promise<void>
   /** 만든 사람이 노트를 지우려 할 때(확인 창은 부르는 쪽에서) */
   onDelete?: () => void
-  /** 있으면 만든 사람에게 참여자 목록(내보내기·다시 허용)을 보인다 */
-  noteId?: string
+  /** 있으면 만든 사람에게 참여자 목록(내보내기·다시 허용)을 보인다. onNotice는 그 결과를 알리는 자리 */
+  members?: { noteId: string; onNotice: (text: string) => void }
 }
 
 export function memberLabel(count: number, limit: number | null): string {
@@ -20,7 +20,7 @@ export function memberLabel(count: number, limit: number | null): string {
 
 /** 헤더의 정원 표시. 만든 사람은 눌러서 정원을 바꾼다.
  * 키보드 화살표는 한 칸마다 값을 바꾸므로, 고르는 것만으로는 저장하지 않고 저장 단추나 Enter로 바꾼다. */
-export function MemberLimitControl({ memberCount, memberLimit, editable, onChange, onDelete, noteId }: Props) {
+export function MemberLimitControl({ memberCount, memberLimit, editable, onChange, onDelete, members }: Props) {
   const [open, setOpen] = useState(false)
   // 고르고 아직 저장하지 않은 값. undefined면 지금 정원을 보인다(null은 무제한)
   const [picked, setPicked] = useState<number | null | undefined>(undefined)
@@ -83,7 +83,7 @@ export function MemberLimitControl({ memberCount, memberLimit, editable, onChang
           <button type="button" className="btn btn-primary member-save" onClick={() => void save()}>
             저장
           </button>
-          {noteId && <MemberList noteId={noteId} />}
+          {members && <MemberList {...members} memberCount={memberCount} />}
           {onDelete && (
             <button
               type="button"

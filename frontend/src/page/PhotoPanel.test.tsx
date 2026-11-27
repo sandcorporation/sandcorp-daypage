@@ -105,3 +105,16 @@ test('아이패드: 손잡이를 손가락으로 끌어 맨 앞으로 놓는다'
   act(() => void at('pointerUp', window, 10))
   expect(readPhotos(doc).map((p) => p.id)).toEqual([...before].reverse())
 })
+
+test('순서를 바꾸고 빼면 한 일을 알린다', async () => {
+  const { doc, rerender } = setup()
+  addPhoto(doc, photo('a', 1))
+  addPhoto(doc, photo('b', 2))
+  rerender()
+  const said = screen.getByRole('status')
+  screen.getByRole('button', { name: '사진 2 순서 바꾸기' }).focus()
+  await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}')
+  expect(said).toHaveTextContent('사진 2 순서를 바꿨어요')
+  await userEvent.click(screen.getByRole('button', { name: '사진 1 빼기' }))
+  expect(said).toHaveTextContent('사진을 뺐어요: 사진 1')
+})

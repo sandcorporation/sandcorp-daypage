@@ -24,6 +24,7 @@ import {
 } from './tools'
 import { PEN_ONLY_MODES, type PenOnlyMode } from './penOnly'
 import { keyHint, useKeymap } from './shortcuts'
+import { useAnnouncer } from '../components/useAnnouncer'
 
 type Props = {
   tool: ToolKind
@@ -231,6 +232,7 @@ export function Toolbar(props: Props) {
   const penName = lastPen === 'highlighter' ? '형광펜' : brushName
   const dock = props.dock ?? 'left'
   const keymap = useKeymap()
+  const { node: announced, announce } = useAnnouncer()
   return (
     <PopoverSideContext.Provider value={POPOVER_SIDE[dock]}>
     <nav aria-label="도구" className="toolbar" data-dock={dock}>
@@ -656,12 +658,20 @@ export function Toolbar(props: Props) {
           )}
         </div>
       )}
-      <button type="button" className="tool-btn" aria-label="되돌리기" title={`되돌리기${keyHint(keymap, 'undo')}`} aria-disabled={!canUndo || undefined} onClick={() => canUndo && onUndo()}>
+      <button type="button" className="tool-btn" aria-label="되돌리기" title={`되돌리기${keyHint(keymap, 'undo')}`} aria-disabled={!canUndo || undefined} onClick={() => {
+        if (!canUndo) return
+        onUndo()
+        announce('되돌렸어요')
+      }}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M7 5L3 9l4 4M3 9h9a5 5 0 010 10h-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      <button type="button" className="tool-btn" aria-label="다시하기" title={`다시하기${keyHint(keymap, 'redo')}`} aria-disabled={!canRedo || undefined} onClick={() => canRedo && onRedo()}>
+      <button type="button" className="tool-btn" aria-label="다시하기" title={`다시하기${keyHint(keymap, 'redo')}`} aria-disabled={!canRedo || undefined} onClick={() => {
+        if (!canRedo) return
+        onRedo()
+        announce('다시 했어요')
+      }}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M13 5l4 4-4 4M17 9H8a5 5 0 000 10h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -684,6 +694,7 @@ export function Toolbar(props: Props) {
           </svg>
         </button>
       )}
+      {announced}
     </nav>
     </PopoverSideContext.Provider>
   )

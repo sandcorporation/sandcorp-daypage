@@ -145,7 +145,7 @@ test('책을 다 엮었을 때 초점이 ‘취소’에 있었으면 ‘책으�
   await waitFor(() => expect(renderNoteBook).toHaveBeenCalled())
   screen.getByRole('button', { name: '취소' }).focus()
   finish(new Blob(['%PDF']))
-  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('책을 내려받았어요'))
+  expect(await screen.findByText('책을 내려받았어요')).toHaveAttribute('role', 'status')
   expect(document.activeElement).not.toBe(document.body)
   expect(button).toHaveFocus()
 })
@@ -184,7 +184,7 @@ test('엮는 중 ‘취소’를 누르면 신호가 오고, 내려받지 않고
   expect(busy).not.toBeDisabled()
   expect(busy).toHaveAttribute('aria-disabled', 'true')
   expect(busy).toHaveFocus()
-  expect(screen.getByRole('status')).toHaveTextContent('책을 엮기 시작했어요')
+  expect(screen.getByText('책을 엮기 시작했어요')).toHaveAttribute('role', 'status')
   // 누름은 무시한다
   await userEvent.click(busy)
   expect(renderNoteBook).toHaveBeenCalledTimes(1)
@@ -196,7 +196,7 @@ test('엮는 중 ‘취소’를 누르면 신호가 오고, 내려받지 않고
   expect(downloadBlob).not.toHaveBeenCalled()
   expect(document.activeElement).not.toBe(document.body)
   expect(screen.getByRole('button', { name: '책으로 저장 (PDF)' })).toHaveFocus()
-  expect(screen.getByRole('status')).toHaveTextContent('책 엮기를 취소했어요')
+  expect(screen.getByText('책 엮기를 취소했어요')).toHaveAttribute('role', 'status')
 
   await userEvent.click(screen.getByRole('button', { name: '책으로 저장 (PDF)' }))
   await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))

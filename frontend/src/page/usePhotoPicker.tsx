@@ -86,6 +86,7 @@ export function usePhotoPicker({ doc, noteId, author, origin, scale, view = VIEW
         origin,
       )
       onPlaced?.()
+      show('사진을 붙였어요')
     } catch (e) {
       if (e instanceof PhotoTooBig) show('사진을 충분히 줄이지 못했어요. 다른 사진으로 해 주세요.')
       else if (e instanceof ApiError) show(e.message)
