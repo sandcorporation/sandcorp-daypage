@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { onOutsidePress } from './outsidePress'
 import { placePopover, type PopoverSide } from './popoverPlacement'
 import { useIsPhone } from './useIsPhone'
 
@@ -69,18 +70,18 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
         close()
       }
     }
-    const onDown = (e: PointerEvent) => {
-      const t = e.target as Node
-      if (ref.current?.contains(t) || anchorEl?.contains(t)) return
-      outside.current = true
-      closeRef.current()
-    }
+    const offPress = onOutsidePress(
+      (t) => (ref.current?.contains(t) || anchorEl?.contains(t)) ?? false,
+      () => {
+        outside.current = true
+        closeRef.current()
+      },
+    )
     window.addEventListener('keydown', onKey)
-    window.addEventListener('pointerdown', onDown)
     ref.current?.focus()
     return () => {
       window.removeEventListener('keydown', onKey)
-      window.removeEventListener('pointerdown', onDown)
+      offPress()
     }
   }, [anchor])
 

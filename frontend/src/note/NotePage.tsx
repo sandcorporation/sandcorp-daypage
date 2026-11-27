@@ -73,6 +73,7 @@ import { ShortcutsButton } from "./ShortcutsButton";
 import { uniquePeople, usePresence } from "./usePresence";
 import { useNewVersion } from "./useNewVersion";
 import { useRealtime, type FatalReason, type NoteInfo } from "./useRealtime";
+import { useRolledNotice } from "./useRolledNotice";
 import type { NoteDetail } from "./types";
 import "./note.css";
 
@@ -429,12 +430,27 @@ export function NotePage({ initial }: Props) {
     if (n > 0) show(`획 ${n}개를 지웠어요.`, { label: "되돌리기", onClick: undo });
   }, [edit, history, show, undo]);
 
+  const notifyRolled = useCallback(
+    () =>
+      show("새 페이지가 열렸어요. 지난 페이지는 기록에 있어요", {
+        label: "기록 보기",
+        onClick: () => navigate(`/note/${note.id}/history`),
+      }),
+    [note.id, navigate, show],
+  );
+  const { hold: holdRolledNotice, keepForReload } = useRolledNotice(
+    note.id,
+    note.page.key,
+    notifyRolled,
+  );
+
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
   const reconnectRef = useRef<() => void>(() => {});
   const retryTimer = useRef<number | undefined>(undefined);
   const refreshToday = useCallback(async () => {
     window.clearTimeout(retryTimer.current);
     if (newVersionRef.current) {
+      keepForReload();
       window.location.reload();
       return;
     }
@@ -453,7 +469,7 @@ export function NotePage({ initial }: Props) {
       // 네트워크 오류는 화면을 굳히지 않고 다시 시도한다.
       retryTimer.current = window.setTimeout(() => void refreshToday(), 5000);
     }
-  }, [note.id, note.page.key]);
+  }, [note.id, note.page.key, keepForReload]);
   useEffect(() => () => window.clearTimeout(retryTimer.current), []);
 
   const setNoteColors = useCallback(
@@ -710,6 +726,8 @@ export function NotePage({ initial }: Props) {
 
   const changeSealHour = useCallback(
     async (sealHour: number) => {
+      const releaseRolledNotice = holdRolledNotice();
+      let saidKey: string | undefined;
       try {
         const res = await api<{ sealHour: number; page: NoteDetail["page"] }>(
           `/api/notes/${note.id}`,
@@ -718,15 +736,18 @@ export function NotePage({ initial }: Props) {
         setNote((n) => ({ ...n, sealHour: res.sealHour, page: res.page }));
         // 장 키가 바뀌었으면 쓰던 장이 방금 보관된 것이다
         const archived = res.page.key !== note.page.key;
+        if (archived) saidKey = res.page.key;
         show(
           `새 페이지가 열리는 시각을 ${String(res.sealHour).padStart(2, "0")}:00로 바꿨어요` +
             (archived ? ". 지금 페이지를 기록으로 옮겼어요" : ""),
         );
       } catch {
         show("시각을 바꾸지 못했어요. 잠시 뒤 다시 해 주세요.");
+      } finally {
+        releaseRolledNotice(saidKey);
       }
     },
-    [note.id, note.page.key, show],
+    [note.id, note.page.key, show, holdRolledNotice],
   );
   const changeLimit = useCallback(
     async (memberLimit: number | null) => {

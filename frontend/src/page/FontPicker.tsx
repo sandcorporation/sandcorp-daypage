@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { onOutsidePress } from '../components/outsidePress'
 import { FONTS, fontOf } from './fonts'
 
 type Props = { font: string; onFont: (id: string) => void }
@@ -14,11 +15,10 @@ export function FontPicker({ font, onFont }: Props) {
 
   useEffect(() => {
     if (!open) return
-    const close = (e: globalThis.PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false)
-    }
-    window.addEventListener('pointerdown', close)
-    return () => window.removeEventListener('pointerdown', close)
+    return onOutsidePress(
+      (t) => ref.current?.contains(t) ?? false,
+      () => setOpen(false),
+    )
   }, [open])
 
   return (
