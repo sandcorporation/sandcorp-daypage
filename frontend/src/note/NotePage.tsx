@@ -676,12 +676,17 @@ export function NotePage({ initial }: Props) {
           { method: "PATCH", body: JSON.stringify({ sealHour }) },
         );
         setNote((n) => ({ ...n, sealHour: res.sealHour, page: res.page }));
-        show(`새 페이지가 열리는 시각을 ${String(res.sealHour).padStart(2, "0")}:00로 바꿨어요`);
+        // 장 키가 바뀌었으면 쓰던 장이 방금 보관된 것이다
+        const archived = res.page.key !== note.page.key;
+        show(
+          `새 페이지가 열리는 시각을 ${String(res.sealHour).padStart(2, "0")}:00로 바꿨어요` +
+            (archived ? ". 지금 페이지를 기록으로 옮겼어요" : ""),
+        );
       } catch {
         show("시각을 바꾸지 못했어요. 잠시 뒤 다시 해 주세요.");
       }
     },
-    [note.id, show],
+    [note.id, note.page.key, show],
   );
   const changeLimit = useCallback(
     async (memberLimit: number | null) => {
@@ -826,6 +831,8 @@ export function NotePage({ initial }: Props) {
               />
               <SealHourControl
                 sealHour={note.sealHour}
+                openedAt={note.page.openedAt}
+                clockOffset={clockOffset}
                 editable={note.isOwner}
                 onChange={changeSealHour}
               />

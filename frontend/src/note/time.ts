@@ -12,6 +12,16 @@ export function formatCountdown(ms: number): string {
   return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':')
 }
 
+/** 봉인 시각을 sealHour(KST)로 바꾸면 openedAt에 연 장이 nowMs(서버 시각)에 바로 보관되는가.
+ * 서버(`reschedule_open_page`)와 같게, 연 뒤 처음 오는 그 시각이 이미 왔으면 보관된다. */
+export function sealsImmediately(openedAt: string, sealHour: number, nowMs: number): boolean {
+  const kstOffset = 9 * 3600 * 1000
+  const opened = new Date(openedAt).getTime()
+  const sameDay = new Date(opened + kstOffset).setUTCHours(sealHour, 0, 0, 0) - kstOffset
+  const due = sameDay > opened ? sameDay : sameDay + 24 * 3600 * 1000
+  return due <= nowMs
+}
+
 /** `YYYY-MM-DD`(KST 날짜)를 `2026. 10. 15 (목)` 형식으로. */
 export function formatPageDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number)

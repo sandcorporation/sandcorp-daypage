@@ -236,6 +236,35 @@ test('만든 사람에게만 새 페이지 시각 버튼이 보이고, 봉인 �
   expect(screen.getByRole('button', { name: '새 페이지 18:00' })).toBeInTheDocument()
 })
 
+test.each([
+  { moved: true, message: '새 페이지가 열리는 시각을 12:00로 바꿨어요. 지금 페이지를 기록으로 옮겼어요' },
+  { moved: false, message: '새 페이지가 열리는 시각을 12:00로 바꿨어요' },
+])('새 페이지 시각을 저장한 알림은 지금 장이 보관됐는지($moved) 함께 말한다', async ({ moved, message }) => {
+  const page = moved ? { ...NOTE.page, key: '2026-10-15-2', seq: 2 } : NOTE.page
+  const patch = vi.fn()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url !== '/api/notes/n1' || init?.method !== 'PATCH') return new Response('{}', { status: 404 })
+      patch(init.body)
+      return Response.json({ sealHour: 12, page })
+    }),
+  )
+  render(
+    <MemoryRouter>
+      <NotePage initial={{ ...NOTE, isOwner: true }} />
+    </MemoryRouter>,
+  )
+  act(() => latest().emit('sync', [true]))
+  await userEvent.click(screen.getByRole('button', { name: '새 페이지 00:00' }))
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: '새 페이지 시각' }), '12')
+  expect(patch).not.toHaveBeenCalled()
+  await userEvent.click(screen.getByRole('button', { name: '저장' }))
+  expect(await screen.findByText(message)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '새 페이지 12:00' })).toHaveFocus()
+  expect(patch).toHaveBeenCalledExactlyOnceWith('{"sealHour":12}')
+})
+
 test('참여자에게는 새 페이지 시각 버튼이 없다', () => {
   renderNote()
   act(() => latest().emit('sync', [true]))
