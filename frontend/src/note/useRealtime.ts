@@ -34,6 +34,11 @@ export const MESSAGE_NOTE_PAPER = 103
 /** 장의 봉인 예정이 바뀜(주인이 봉인 시각을 바꿈): {type: 'note_page', key, dueAt, sealHour} (MESSAGE_NOTE_PAGE) */
 export const MESSAGE_NOTE_PAGE = 104
 
+/** 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·정원 변경): {type: 'note_info', name, memberCount, memberLimit} (MESSAGE_NOTE_INFO) */
+export const MESSAGE_NOTE_INFO = 105
+
+export type NoteInfo = { name: string; memberCount: number; memberLimit: number | null }
+
 export type NotePageChange = { key: string; dueAt: string; sealHour: number }
 
 /** 다시 연결해도 소용없는 이유. full·away는 사람이 다시 시도할 때까지 접속하지 않는다. */
@@ -65,6 +70,8 @@ type Options = {
   onNotePaper?: (paper: unknown) => void
   /** 장의 봉인 예정 시각이 바뀜(주인이 봉인 시각을 바꿈) */
   onNotePage?: (change: NotePageChange) => void
+  /** 노트 이름·참여 수·정원이 바뀜(누가 바꿨든, 누가 들어왔든) */
+  onNoteInfo?: (info: NoteInfo) => void
 }
 
 export function wsBaseUrl(noteId: string): string {
@@ -72,7 +79,7 @@ export function wsBaseUrl(noteId: string): string {
   return `${proto}//${window.location.host}/ws/notes/${noteId}/pages`
 }
 
-export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteColors, onNotePaper, onNotePage }: Options) {
+export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteColors, onNotePaper, onNotePage, onNoteInfo }: Options) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [synced, setSynced] = useState(false)
@@ -110,6 +117,10 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
     p.messageHandlers[MESSAGE_NOTE_PAGE] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string } & NotePageChange
       if (msg.type === 'note_page') onNotePage?.({ key: msg.key, dueAt: msg.dueAt, sealHour: msg.sealHour })
+    }
+    p.messageHandlers[MESSAGE_NOTE_INFO] = (_encoder, decoder) => {
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string } & NoteInfo
+      if (msg.type === 'note_info') onNoteInfo?.({ name: msg.name, memberCount: msg.memberCount, memberLimit: msg.memberLimit })
     }
     setProvider(p)
     setSynced(false)

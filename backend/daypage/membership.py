@@ -34,15 +34,42 @@ def join(note: Note, user: User) -> NoteMember:
                     raise NoteFull
                 nicknames = [n for n, _ in taken]
                 colors = [c for _, c in taken]
-                return NoteMember.objects.create(
+                member = NoteMember.objects.create(
                     note=locked,
                     user=user,
                     nickname=pick_nickname(nicknames),
                     color=pick_color(colors),
                 )
+                announce_info(locked.pk)
+                return member
         except IntegrityError:
             continue
     raise RuntimeError("참여자 배정에 실패했어요")
+
+
+def announce_info(note_id: str) -> None:
+    """접속해 있는 사람들의 머리말(노트 이름·참여 수·정원)을 바로 바꾸게 알린다.
+
+    저장이 끝난 뒤 그때의 값을 읽어 보낸다(종이·색 알림과 같은 노트 그룹).
+    """
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    from .consumers import note_group
+
+    def send() -> None:
+        note = Note.objects.filter(pk=note_id).first()
+        if note is None:
+            return
+        event = {
+            "type": "note.info",
+            "name": note.name,
+            "memberCount": note.members.count(),
+            "memberLimit": note.member_limit,
+        }
+        async_to_sync(get_channel_layer().group_send)(note_group(note_id), event)
+
+    transaction.on_commit(send)
 
 
 def membership(note_id: str, user: User) -> NoteMember | None:
