@@ -113,6 +113,20 @@ test('#220 열린 목록은 접속자를 따라 바뀌고, 「+N」이 없어지
   expect(screen.getByRole('group', { name: '함께 있는 사람 2명' })).toHaveFocus()
 })
 
+test('#228 목록이 열린 채 한 사람이 나가도 「+N」이 남으면 목록은 열려 있고 초점도 그대로다', async () => {
+  setup(4, 768)
+  const button = screen.getByRole('button', { name: /모두 보기$/ })
+  await userEvent.click(button)
+  const focused = document.activeElement
+  expect(focused?.closest('.people-pop')).not.toBeNull()
+  await act(async () => setPeers(3))
+  expect(screen.getByRole('dialog', { name: '함께 있는 사람 4명' })).toBeInTheDocument()
+  expect(listed()).toEqual(everyone(3))
+  expect(screen.getByRole('button', { name: '함께 있는 사람 4명 모두 보기' })).toBe(button)
+  expect(button).toHaveTextContent('+2')
+  expect(focused).toHaveFocus()
+})
+
 test.each(['{Enter}', ' '])('#220 키보드(%j)로 열고 Esc로 닫으면 초점이 단추로 돌아온다', async (key) => {
   setup(4, 768)
   const button = screen.getByRole('button', { name: /모두 보기$/ })

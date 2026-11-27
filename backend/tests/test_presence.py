@@ -124,3 +124,45 @@ async def test_limit_counts_people_not_tabs(settings):
     assert await expect_close(ws) == 4429
     for y in (a, b, a2, a3):
         await y.close()
+
+
+async def test_leaving_clears_only_own_presence_not_echoed_ones():
+    """#228 y-websocket은 받은 남의 커서도 되돌려 보낸다. 되돌려 보낸 연결이 나가도 그 사람은 지워지지 않는다."""
+    note_id, owner, (g1, g2), _ = await setup_note(2, 3)
+    a = await join(owner, note_id, "2026-10-15")
+    b = await join(g1, note_id, "2026-10-15")
+    c = await join(g2, note_id, "2026-10-15")
+    await a.ws.send_to(bytes_data=awareness_message(111, 1, {"cursor": None}))
+    assert [e[0] for e in await next_awareness(c)] == [111]
+    await b.ws.send_to(bytes_data=awareness_message(222, 3, {"cursor": {"x": 1, "y": 1}}))
+    assert [e[0] for e in await next_awareness(c)] == [222]
+    # A가 B의 상태를 되돌려 보낸 뒤 나간다
+    await a.ws.send_to(bytes_data=awareness_message(222, 3, {"cursor": {"x": 1, "y": 1}}))
+    await a.close()
+    [(client_id, clock_value, state)] = await next_awareness(c)
+    assert (client_id, state) == (111, None)
+    assert clock_value > 1
+    await b.close()
+    await c.close()
+
+
+async def test_connection_cannot_change_or_clear_another_clients_presence():
+    """#228 남의 clientID로 보낸 닉네임·커서·지움은 퍼지지 않는다(처음 보낸 것이 남의 것이어도 가로채지 못한다)."""
+    note_id, owner, (g1, g2), names = await setup_note(2, 3)
+    b = await join(g1, note_id, "2026-10-15")
+    c = await join(g2, note_id, "2026-10-15")
+    await b.ws.send_to(bytes_data=awareness_message(222, 3, {"cursor": None}))
+    assert [e[0] for e in await next_awareness(c)] == [222]
+    a = await join(owner, note_id, "2026-10-15")
+    await next_awareness(a)  # 들어올 때 받는 지금 커서
+    await a.ws.send_to(bytes_data=awareness_message(222, 4, {"nickname": "가짜", "cursor": {"x": 9, "y": 9}}))
+    await a.ws.send_to(bytes_data=awareness_message(111, 1, {"cursor": None}))
+    await a.ws.send_to(bytes_data=awareness_message(222, 5, None))
+    await a.ws.send_to(bytes_data=awareness_message(111, 2, {"cursor": {"x": 2, "y": 2}}))
+    got = await next_awareness(c)
+    while got[-1][1] < 2:
+        got += await next_awareness(c)
+    assert {cid for cid, _, _ in got} == {111}
+    assert got[-1][2]["nickname"] == names[1]["nickname"]
+    for y in (a, b, c):
+        await y.close()

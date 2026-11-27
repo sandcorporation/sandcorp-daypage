@@ -173,6 +173,11 @@ class Room:
         entries = [(cid, clk, state) for cid, (clk, state, at) in self.presence.items() if now - at < PRESENCE_TTL]
         return awareness.encode_message(entries) if entries else None
 
+    def claimed(self, client_id: int) -> bool:
+        """이 clientID의 커서가 방에 살아 있는가(다른 연결이 이미 쓰고 있다)."""
+        entry = self.presence.get(client_id)
+        return entry is not None and time.monotonic() - entry[2] < PRESENCE_TTL
+
     def _remember(self, entries: list[awareness.Entry], now: float) -> None:
         for client_id, clk, state in entries:
             if state is None:
