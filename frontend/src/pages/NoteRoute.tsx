@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useMe } from '../auth/me'
 import { NotePage } from '../note/NotePage'
 import type { NoteDetail } from '../note/types'
-import { blockedKind, ErrorScreen, type BlockedKind } from './ErrorScreen'
+import { blockedKind, ErrorScreen, LoadingScreen, type BlockedKind } from './ErrorScreen'
 import { InvitePage } from './InvitePage'
 import { fetchFullPreview, fetchPreview, type Preview } from './preview'
 
@@ -52,7 +52,7 @@ export function NoteRoute() {
   if (meError) return <ErrorScreen kind="server" />
   switch (state.kind) {
     case 'loading':
-      return <div className="grid-bg" />
+      return <LoadingScreen />
     case 'missing':
       return <ErrorScreen kind="missing" />
     case 'blocked':

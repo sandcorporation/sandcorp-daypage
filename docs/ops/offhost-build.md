@@ -42,7 +42,7 @@ production push(웹훅) ─▶ Jenkins sandcorp-daypage(잡 브랜치 */producti
 
 ## 이미지 빌드와 검사
 
-Jenkins는 이미지 빌드나 CI 검사를 하지 않는다. `pr-check.yml`은 PR 검사 전부를 GitHub 호스팅 Actions에서 실행하고, main push의 `release.yml`은 같은 검사를 `image.yml`과 병렬로 실행한다. `image.yml`은 GitHub 호스팅 `ubuntu-24.04-arm`에서 두 이미지를 빌드해 GHCR에 게시한다. Jenkins의 `sandcorpDeploy(deployFrom: 'production')`는 Actions가 게시한 production 커밋 sha의 이미지를 기다린 뒤 oracle에서 pull·배포한다.
+Jenkins는 이미지 빌드나 CI 검사를 하지 않는다. `pr-check.yml`은 PR 검사 전부를 GitHub 호스팅 Actions에서 실행하고(`staging`으로 가는 PR은 `branches-ignore`로 제외한다), main push의 `release.yml`은 같은 검사를 `image.yml`과 병렬로 실행한다. `image.yml`은 GitHub 호스팅 `ubuntu-24.04-arm`에서 두 이미지를 빌드해 GHCR에 게시한다. Jenkins의 `sandcorpDeploy(deployFrom: 'production')`는 Actions가 게시한 production 커밋 sha의 이미지를 기다린 뒤 oracle에서 pull·배포한다.
 
 Jenkins 빌드 노드와 배포 전 검사는 사용하지 않는다. `scripts/ci/check.sh`는 로컬에서 검사 묶음을 Docker 안에서 한 번에 실행할 때만 쓴다.
 

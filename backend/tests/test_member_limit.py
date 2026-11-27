@@ -78,6 +78,18 @@ def test_limit_must_be_at_least_two(limit):
     assert patch(owner, note_id, {"memberLimit": limit}).status_code in (400, 422)
 
 
+@pytest.mark.parametrize(
+    ("limit", "detail"), [(1, "정원은 2명 이상이어야 해요."), (1001, "정원은 1000명까지예요.")]
+)
+def test_limit_error_says_which_bound(limit, detail):
+    owner = login_as(1)
+    res = owner.post("/api/notes", {"memberLimit": limit}, content_type="application/json")
+    assert res.status_code == 400
+    assert res.json() == {"code": "invalid_limit", "detail": detail}
+    note_id = create_note(owner)
+    assert patch(owner, note_id, {"memberLimit": limit}).json()["detail"] == detail
+
+
 def test_only_owner_can_change_limit():
     owner = login_as(1)
     note_id = create_note(owner)
