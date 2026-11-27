@@ -496,6 +496,13 @@ describe('#189 곡선 중 누를 수 있는 요소의 Enter·Space·Escape는 �
     return { doc, tool, strokes: () => doc.getMap('strokes').size }
   }
 
+  // 키를 누른 뒤에 온 초점(Tab 등). 포인터 뒤의 focus()만으로는 키보드로 온 초점이 아니다
+  function keyboardFocus(el: HTMLElement) {
+    el.blur()
+    fireEvent.keyDown(document.body, { key: 'Tab' })
+    el.focus()
+  }
+
   test.each([
     ['취소', '{Enter}', 0],
     ['취소', ' ', 0],
@@ -504,17 +511,36 @@ describe('#189 곡선 중 누를 수 있는 요소의 Enter·Space·Escape는 �
     ['완료', ' ', 1],
   ])('「%s」에 %s → 획 %i개, 초점은 곡선 도구 단추로', async (name, key, saved) => {
     const { tool, strokes } = curveFrame()
-    screen.getByRole('button', { name }).focus()
+    keyboardFocus(screen.getByRole('button', { name }))
     await userEvent.keyboard(key)
     expect(strokes()).toBe(saved)
     expect(screen.queryByRole('toolbar', { name: '곡선' })).toBeNull()
     expect(tool).toHaveFocus()
   })
 
-  test('다른 단추 위의 Enter·Escape는 곡선을 끝내거나 버리지 않는다', async () => {
+  test('다른 단추 위의 Enter는 곡선을 끝내지 않는다', async () => {
     const { tool, strokes } = curveFrame()
     tool.focus()
-    await userEvent.keyboard('{Enter}{Escape}')
+    await userEvent.keyboard('{Enter}')
+    expect(strokes()).toBe(0)
+    expect(screen.getByRole('toolbar', { name: '곡선' })).toBeInTheDocument()
+  })
+
+  test.each(['도형', '취소', '완료'])('#196 「%s」 단추 위의 Escape는 곡선을 취소한다', async (name) => {
+    const { tool, strokes } = curveFrame()
+    screen.getByRole('button', { name }).focus()
+    await userEvent.keyboard('{Escape}')
+    expect(strokes()).toBe(0)
+    expect(screen.queryByRole('toolbar', { name: '곡선' })).toBeNull()
+    expect(tool).toHaveFocus()
+  })
+
+  test('#196 열린 창이 있으면 Escape는 창의 것이라 곡선을 남긴다', async () => {
+    const { strokes } = curveFrame()
+    const dialog = document.body.appendChild(document.createElement('div'))
+    dialog.setAttribute('role', 'dialog')
+    await userEvent.keyboard('{Escape}')
+    dialog.remove()
     expect(strokes()).toBe(0)
     expect(screen.getByRole('toolbar', { name: '곡선' })).toBeInTheDocument()
   })
@@ -528,7 +554,41 @@ describe('#189 곡선 중 누를 수 있는 요소의 Enter·Space·Escape는 �
 
   test('단추 위의 Space는 화면 끌기가 가로채지 않는다', () => {
     const { tool } = curveFrame(0)
+    keyboardFocus(tool)
     expect(fireEvent.keyDown(tool, { key: ' ' })).toBe(true)
     expect(fireEvent.keyDown(document.body, { key: ' ' })).toBe(false)
+  })
+
+  // fireEvent는 막히지 않았으면 true. false면 화면 끌기가 Space를 가져가 단추가 눌리지 않는다
+  test('#196 마우스로 누른 단추의 Space는 반복·뗌까지 화면 끌기가 가져간다', () => {
+    const { tool } = curveFrame(0)
+    tool.blur()
+    fireEvent.pointerDown(tool)
+    fireEvent.mouseDown(tool)
+    tool.focus()
+    expect(fireEvent.keyDown(tool, { key: ' ' })).toBe(false)
+    expect(fireEvent.keyDown(tool, { key: ' ', repeat: true })).toBe(false)
+    expect(fireEvent.keyUp(tool, { key: ' ' })).toBe(false)
+  })
+
+  test('#196 Tab으로 온 단추를 마우스로 다시 누르면 Space는 화면 끌기의 것이다', async () => {
+    const { tool } = curveFrame(0)
+    tool.blur()
+    await userEvent.tab()
+    expect(tool).toHaveFocus()
+    expect(fireEvent.keyDown(tool, { key: ' ' })).toBe(true)
+    expect(fireEvent.keyUp(tool, { key: ' ' })).toBe(true)
+    fireEvent.pointerDown(tool)
+    expect(fireEvent.keyDown(tool, { key: ' ' })).toBe(false)
+  })
+
+  test('#196 모달 창 안의 단추는 마우스로 초점이 왔어도 Space를 가진다', () => {
+    curveFrame(0)
+    const dialog = document.body.appendChild(document.createElement('div'))
+    dialog.setAttribute('aria-modal', 'true')
+    const button = dialog.appendChild(document.createElement('button'))
+    fireEvent.pointerDown(button)
+    expect(fireEvent.keyDown(button, { key: ' ' })).toBe(true)
+    dialog.remove()
   })
 })

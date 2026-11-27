@@ -137,3 +137,68 @@ test('#189 곡선 중 취소·완료에 Enter를 누르면 그 단추의 일을 
   await expect(bar).toBeHidden()
   await savedStrokes(page, saved, 2)
 })
+
+test('#196 마우스로 누른 도구 단추에 초점이 남아도 Space+끌기는 화면을 옮기고, Tab으로 온 단추의 Space는 그 단추를 누른다', async ({ page }) => {
+  await openNote(page)
+  const view = page.locator('.page-viewport')
+  const zoomIn = page.getByRole('button', { name: '확대' })
+  for (let i = 0; i < 4; i++) await zoomIn.click()
+  const pen = page.getByRole('button', { name: /^펜/ }).first()
+  const eraser = page.getByRole('button', { name: /^지우개/ }).first()
+  await eraser.click()
+  // 누른 채로 도구를 바꿔 두면, Space가 이 단추를 누를 때 지우개로 되돌아가 드러난다
+  await page.evaluate(() => {
+    const w = window as unknown as { eraserClicks: number }
+    w.eraserClicks = 0
+    document.activeElement!.addEventListener('click', () => w.eraserClicks++)
+  })
+  await expect(eraser).toBeFocused()
+
+  const box = (await view.boundingBox())!
+  const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const before = await view.evaluate((el) => el.scrollTop)
+  await page.mouse.move(at.x, at.y)
+  await page.keyboard.down('Space')
+  await page.keyboard.down('Space') // 누르고 있으면 오는 반복
+  await page.mouse.down()
+  await page.mouse.move(at.x, at.y - 120, { steps: 5 })
+  await page.mouse.up()
+  await page.keyboard.up('Space')
+  await expect.poll(() => view.evaluate((el) => el.scrollTop)).toBeGreaterThan(before)
+  expect(await page.evaluate(() => (window as unknown as { eraserClicks: number }).eraserClicks)).toBe(0)
+
+  // 끌지 않고 반복까지 온 Space도 단추를 누르지 않는다
+  await zoomIn.click()
+  await expect(zoomIn).toBeFocused()
+  const zoomed = await page.locator('.page-frame').boundingBox()
+  await page.keyboard.down('Space')
+  await page.keyboard.down('Space')
+  await page.keyboard.up('Space')
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))
+  expect((await page.locator('.page-frame').boundingBox())!.width).toBe(zoomed!.width)
+
+  await pen.focus()
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Shift+Tab')
+  await expect(pen).toBeFocused()
+  await expect(pen).toHaveAttribute('aria-pressed', 'false')
+  await page.keyboard.press('Space')
+  await expect(pen).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('#196 곡선 막대 「취소」에 초점을 두고 Esc를 누르면 곡선이 취소된다', async ({ page }) => {
+  await openNote(page)
+  const box = (await page.locator('.page-frame').boundingBox())!
+  const hands = await Hands.on(page)
+  const tool = page.getByRole('button', { name: /^도형/ })
+  await tool.click()
+  await tool.click()
+  await page.getByRole('button', { name: /^곡선:/ }).click()
+  await page.keyboard.press('Escape')
+  for (const x of [box.x + 100, box.x + 220]) await hands.mouseStroke([{ x, y: box.y + 150 }])
+  const bar = page.getByRole('toolbar', { name: '곡선' })
+  await bar.getByRole('button', { name: '취소' }).focus()
+  await page.keyboard.press('Escape')
+  await expect(bar).toBeHidden()
+  await expect(tool).toBeFocused()
+})
