@@ -567,21 +567,22 @@ export function NotePage({ initial }: Props) {
   const newVersion = useNewVersion(status);
   newVersionRef.current = newVersion;
 
-  // 들어와 동기화가 끝나면, 지난번에 비워 둔 채 나간 내 빈 상자를 정리한다.
-  // 다른 탭에서 쓰고 있는 상자는 남기도록, 접속자 정보가 들어올 틈을 둔다.
+  // 들어와 동기화가 끝나면, 지난번에 비워 둔 채 나간 내 빈 상자를 정리한다. 장(문서)마다 한 번만 한다.
+  // 비워 둔 상자는 새로고침하거나 나갈 때만 남으므로, 다시 연결됐다고 또 돌지 않는다.
+  // 내가 지금 고치는 상자와 다른 탭에서 쓰고 있는 상자(접속자 정보가 들어올 틈을 둔다)는 남긴다.
   const editorsRef = useRef(presence.editors);
   editorsRef.current = presence.editors;
+  const editingBoxIdRef = useRef(editingBoxId);
+  editingBoxIdRef.current = editingBoxId;
+  const cleanedDoc = useRef<Y.Doc | null>(null);
   useEffect(() => {
-    if (!synced) return;
-    const timer = window.setTimeout(
-      () =>
-        removeLeftoverEmptyBoxes(
-          doc,
-          note.me.nickname,
-          new Set(editorsRef.current.keys()),
-        ),
-      1500,
-    );
+    if (!synced || cleanedDoc.current === doc) return;
+    const timer = window.setTimeout(() => {
+      cleanedDoc.current = doc;
+      const editing = new Set(editorsRef.current.keys());
+      if (editingBoxIdRef.current) editing.add(editingBoxIdRef.current);
+      removeLeftoverEmptyBoxes(doc, note.me.nickname, editing);
+    }, 1500);
     return () => window.clearTimeout(timer);
   }, [synced, doc, note.me.nickname]);
 

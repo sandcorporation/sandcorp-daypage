@@ -13,6 +13,7 @@ async function withDroppable(page: Page, browser: Browser, baseURL: string | und
 
   const context = await browser.newContext({ baseURL })
   const other = await context.newPage()
+  await other.clock.install()
   // 오프라인 동안 오가는 것을 끊고, 화면이 닫은 옛 연결은 서버에 알리지 않는다(서버 쪽은 열린 채 남는다).
   let offline = false
   let connections = 0
@@ -68,5 +69,29 @@ test('#240 글 상자를 고치는 중에 끊겼다 이어지면, 다른 사람 
   await restore()
   // 초점은 상자에 그대로라 B는 아무것도 누르지 않는다
   await expect(editing).toBeVisible({ timeout: 1_500 })
+  await context.close()
+})
+
+test('#242 빈 글 상자를 만든 채 끊겼다 이어져도 상자가 남고, 이어 친 글이 들어간다', async ({ page, browser, baseURL }) => {
+  const { context, other, restore } = await withDroppable(page, browser, baseURL)
+  // 들어올 때의 남은 빈 상자 정리(동기화 1.5초 뒤)를 먼저 지나 보낸다
+  await other.clock.runFor(2_000)
+  await other.getByRole('button', { name: '글씨' }).click()
+  const viewport = (await other.locator('.page-viewport').boundingBox())!
+  await other.mouse.click(viewport.x + 200, viewport.y + 200)
+  const box = other.getByRole('textbox', { name: '글 상자' })
+  await expect(box).toBeFocused()
+
+  await context.setOffline(true)
+  await expect(other.getByText('오프라인 · 다시 연결되면 맞춰져요')).toBeVisible()
+  await other.clock.runFor(5_000)
+  await restore()
+  await expect(other.getByText('오프라인 · 다시 연결되면 맞춰져요')).toBeHidden()
+  await other.clock.runFor(3_000)
+
+  await expect(box).toBeFocused()
+  await other.keyboard.type('rv')
+  await expect(box).toHaveText('rv')
+  await expect(page.locator('.page-frame')).toContainText('rv')
   await context.close()
 })
