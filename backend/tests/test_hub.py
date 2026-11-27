@@ -93,12 +93,13 @@ async def test_process_opening_later_gets_unsaved_edits_from_the_other():
     await two.leave(room_two, b)
 
 
-async def test_cursors_are_sent_together_and_not_echoed_to_a_lone_sender():
+async def test_cursors_are_sent_together_and_own_client_id_is_never_echoed():
     page_id = await make_page()
     h = hub.Hub()
     a, b = FakeMember(), FakeMember()
     room = await h.join(page_id, a, load(page_id))
     await h.join(page_id, b, load(page_id))
+    assert room.claim(a, 1, 1) and room.claim(b, 2, 2)
 
     # 첫 커서는 바로, 그 뒤 잠깐 사이에 온 것들은 모아서 한 번에 간다
     await room.local_awareness(a, [(1, 1, {"cursor": {"x": 1, "y": 1}})])
@@ -106,12 +107,12 @@ async def test_cursors_are_sent_together_and_not_echoed_to_a_lone_sender():
     await room.local_awareness(b, [(2, 1, {"cursor": {"x": 9, "y": 9}})])
     await until(lambda: len(b.awareness()) == 2 and len(a.awareness()) == 1)  # 모아 보낸 묶음이 도착할 때까지
 
+    # 묶음에 섞인 자기 clientID 항목은 빼고 받는다(#232). 자기 것만 든 첫 메시지는 받지 않는다.
     assert b.awareness() == [
         [(1, 1, {"cursor": {"x": 1, "y": 1}})],
-        [(1, 2, {"cursor": {"x": 2, "y": 2}}), (2, 1, {"cursor": {"x": 9, "y": 9}})],
+        [(1, 2, {"cursor": {"x": 2, "y": 2}})],
     ]
-    # a는 자기 커서만 든 첫 메시지는 받지 않는다
-    assert a.awareness() == [[(1, 2, {"cursor": {"x": 2, "y": 2}}), (2, 1, {"cursor": {"x": 9, "y": 9}})]]
+    assert a.awareness() == [[(2, 1, {"cursor": {"x": 9, "y": 9}})]]
     await h.leave(room, a)
     await h.leave(room, b)
 

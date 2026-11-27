@@ -4,9 +4,10 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.test import Client
 
-from daypage import clock
+from daypage import clock, hub
 from daypage.awareness import decode_message, encode_message
 from tests.helpers import create_note, login_as
+from tests.waiting import until
 from tests.ws import awareness_message, expect_close, join, next_awareness, open_ws
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.asyncio]
@@ -222,5 +223,38 @@ async def test_reconnect_after_leaving_continues_the_clock_others_have_seen():
     clocks = [clk for _, clk, _ in got]
     assert clocks[0] > removed_at
     assert clocks == sorted(set(clocks))
+    await a2.close()
+    await b.close()
+
+
+async def test_connection_never_gets_its_own_client_id_back(monkeypatch):
+    """#232 다시 연결한 연결은 clock에 shift를 더해 퍼뜨린다. 남과 같은 묶음에 섞인 자기 항목을 되돌려 받으면
+    클라이언트(y-protocols)는 clock이 더 크니 지난 상태를 자기 상태로 받아들이고 clock을 키운다 → 되풀이.
+    받는 연결이 쥔 clientID의 항목은 묶음에서도, 다른 프로세스에서 온 것에서도 빼고 보낸다."""
+    note_id, owner, (guest,), _ = await setup_note(2)
+    a = await join(owner, note_id, "2026-10-15")
+    b = await join(guest, note_id, "2026-10-15")
+    await a.ws.send_to(bytes_data=awareness_message(111, 50, {"cursor": None}))
+    await next_awareness(b)
+    await a.close()
+    await next_awareness(b)  # 지움
+    a2 = await join(owner, note_id, "2026-10-15")
+    await a2.ws.send_to(bytes_data=awareness_message(111, 1, {"cursor": None}))
+    [(_, shifted, _)] = await next_awareness(b)
+    assert shifted > 1
+    # 다음 두 사람의 커서가 한 묶음에 들도록 묶음을 시험이 직접 내보낸다
+    monkeypatch.setattr(hub, "AWARENESS_EVERY", 3600)
+    room = next(iter(hub.hub().rooms.values()))
+    await b.ws.send_to(bytes_data=awareness_message(222, 1, {"cursor": {"x": 1, "y": 1}}))
+    await a2.ws.send_to(bytes_data=awareness_message(111, 2, {"cursor": {"x": 2, "y": 2}}))
+    await until(lambda: set(room.aw_out) == {111, 222})
+    await room.flush_awareness()
+    assert [cid for cid, _, _ in await next_awareness(a2)] == [222]
+    assert [(cid, clk) for cid, clk, _ in await next_awareness(b)] == [(111, shifted + 1)]
+    # 다른 프로세스에서 온 커서에 자기 clientID가 섞여 있어도 빼고 받는다
+    remote = encode_message([(111, shifted + 5, {"cursor": None}), (333, 1, {"cursor": None})])
+    await room.on_remote({"type": "hub.awareness", "from": "다른 프로세스", "message": remote})
+    assert [cid for cid, _, _ in await next_awareness(a2)] == [333]
+    assert [cid for cid, _, _ in await next_awareness(b)] == [111, 333]
     await a2.close()
     await b.close()

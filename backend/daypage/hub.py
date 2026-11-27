@@ -88,7 +88,6 @@ class Room:
         self.flusher: asyncio.Task | None = None
         # 아직 보내지 않은 커서
         self.aw_out: dict[int, tuple[int, dict | None]] = {}
-        self.aw_from: set[Member] = set()
         self.aw_task: asyncio.Task | None = None
         self.aw_last = 0.0
         self.regroup: asyncio.Task | None = None
@@ -144,7 +143,6 @@ class Room:
             prev = self.aw_out.get(client_id)
             if prev is None or clk >= prev[0]:
                 self.aw_out[client_id] = (clk, state)
-        self.aw_from.add(sender)
         if self.aw_task and not self.aw_task.done():
             return
         wait = self.aw_last + AWARENESS_EVERY - now
@@ -161,15 +159,28 @@ class Room:
         if not self.aw_out:
             return
         entries = [(cid, clk, state) for cid, (clk, state) in self.aw_out.items()]
-        senders = self.aw_from
-        self.aw_out, self.aw_from = {}, set()
+        self.aw_out = {}
         self.aw_last = time.monotonic()
         message = awareness.encode_message(entries)
-        for m in self.members:
-            # 자기 커서만 든 메시지는 돌려보내지 않는다(자기 것이 섞여 있어도 클라이언트는 무시한다).
-            if senders != {m}:
-                m.push(message, volatile=True)
+        self._push_awareness(entries, message)
         await self.to_peers({"type": "hub.awareness", "message": message}, volatile=True)
+
+    def _push_awareness(self, entries: list[awareness.Entry], message: bytes) -> None:
+        """커서를 연결들에 보낸다. 받는 연결이 쥔 clientID의 항목은 빼고, 남는 것이 없으면 보내지 않는다.
+
+        클라이언트(y-protocols)는 자기 clientID라도 clock이 더 크면 받아들인다. 다시 연결한 연결은 clock에 shift를
+        더해 퍼뜨리므로(#230), 되돌려 받으면 지난 상태로 자기 커서를 덮고 clock을 키워 되풀이된다(#232).
+        """
+        own: dict[Member, set[int]] = {}
+        for client_id, _, _ in entries:
+            if (holder := self.holders.get(client_id)) is not None:
+                own.setdefault(holder[0], set()).add(client_id)
+        for m in self.members:
+            skip = own.get(m)
+            if not skip:
+                m.push(message, volatile=True)
+            elif rest := [e for e in entries if e[0] not in skip]:
+                m.push(awareness.encode_message(rest), volatile=True)
 
     def presence_message(self) -> bytes | None:
         """새로 온 사람에게 보낼 지금 커서들."""
@@ -299,12 +310,12 @@ class Room:
 
     def _remote_awareness(self, message: bytes) -> None:
         try:
-            self._remember(awareness.decode_message(message), time.monotonic())
+            entries = awareness.decode_message(message)
         except Exception:
             logger.warning("잘못된 awareness 메시지", exc_info=True)
             return
-        for m in self.members:
-            m.push(message, volatile=True)
+        self._remember(entries, time.monotonic())
+        self._push_awareness(entries, message)
 
 
 class Hub:
