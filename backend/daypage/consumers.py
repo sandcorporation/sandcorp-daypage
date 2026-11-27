@@ -65,7 +65,7 @@ MESSAGE_NOTE_COLORS = 102
 MESSAGE_NOTE_PAPER = 103
 # 장의 봉인 예정 시각이 바뀜(주인이 봉인 시각을 바꿈): {"type":"note_page","key","dueAt","sealHour"}
 MESSAGE_NOTE_PAGE = 104
-# 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·정원 변경): {"type":"note_info","name","memberCount","memberLimit"}
+# 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·다시 허용·정원 변경): {"type":"note_info","name","memberCount","memberLimit"}
 MESSAGE_NOTE_INFO = 105
 
 # 대기 중에 받아 두었다가 입장하면 다시 처리할 메시지 수(클라이언트가 연결하자마자 보내는 sync step1·커서)

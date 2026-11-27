@@ -52,6 +52,10 @@ test('#182 정원은 Enter로만 저장하고, 내보내기 확인은 초점을 
   await expect(dialog.getByRole('button', { name: / 다시 허용$/ })).toBeVisible()
   await expect(dialog.getByText('참여자 1명')).toBeFocused()
   await expect(page.getByRole('status').filter({ hasText: /님을 내보냈어요$/ })).toBeAttached()
+  // #197 다시 허용한 뒤 초점은 「내보낸 사람」 제목에 간다
+  await dialog.getByRole('button', { name: / 다시 허용$/ }).press('Enter')
+  await expect(dialog.getByText('내보낸 사람이 없어요.')).toBeVisible()
+  await expect(dialog.getByText('내보낸 사람', { exact: true })).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
   await expect(badge).toBeFocused()

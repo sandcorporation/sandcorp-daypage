@@ -566,6 +566,8 @@ def allow_again(request, note_id: str, ban_id: int):
     """내보낸 사람을 다시 들어올 수 있게 한다(다시 들어오면 새 닉네임을 받는다)."""
     note = owned_note(request, note_id)
     get_object_or_404(NoteBan, pk=ban_id, note=note).delete()
+    # 참여 수는 그대로지만, 열어 둔 참여자 창이 「내보낸 사람」 목록을 다시 읽게 한다
+    membership.announce_info(note.id)
     return HttpResponse(status=204)
 
 

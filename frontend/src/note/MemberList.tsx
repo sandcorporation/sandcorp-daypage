@@ -8,21 +8,23 @@ type Members = { members: Member[]; kicked: Kicked[] }
 const LOAD_FAILED = '참여자를 불러오지 못했어요'
 
 /** 화면이 바뀐 뒤 초점을 둘 자리(data-focus-key). 없으면 목록 제목에 둔다. */
-type FocusKey = 'title' | 'confirm' | `kick:${number}` | `allow:${number}`
+type FocusKey = 'title' | 'kicked-title' | 'confirm' | `kick:${number}` | `allow:${number}`
 
 type Props = {
   noteId: string
   /** 실시간 참여 수. 바뀌면 목록을 다시 읽는다 */
   memberCount: number
+  /** 노트 머리말 알림을 받을 때마다 커진다. 참여 수가 그대로여도(다시 허용) 목록을 다시 읽는다 */
+  infoSeq?: number
   /** 성공한 일을 알린다. 목록을 닫아도 읽히게 부르는 쪽의 알림 자리를 쓴다 */
   onNotice: (text: string) => void
 }
 
 /**
  * 만든 사람이 보는 참여자 목록. 참여자를 내보내면 접속해 있어도 바로 나가고, 다시 허용할 때까지 들어오지 못한다.
- * 내보내기는 한 번 더 확인한다.
+ * 내보내기는 한 번 더 확인한다. 다시 허용은 확인이 없어, 성공한 뒤 초점을 다른 「다시 허용」 단추에 두지 않는다.
  */
-export function MemberList({ noteId, memberCount, onNotice }: Props) {
+export function MemberList({ noteId, memberCount, infoSeq, onNotice }: Props) {
   const [data, setData] = useState<Members | null>(null)
   const [confirming, setConfirming] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -102,7 +104,7 @@ export function MemberList({ noteId, memberCount, onNotice }: Props) {
 
   useEffect(() => {
     void load()
-  }, [load, memberCount])
+  }, [load, memberCount, infoSeq])
 
   /** done은 성공했다고 알릴 글, next는 성공한 뒤 초점을 둘 자리. 실패하면 누른 단추에 남긴다. */
   async function act(run: () => Promise<unknown>, done: string, next: FocusKey) {
@@ -189,12 +191,14 @@ export function MemberList({ noteId, memberCount, onNotice }: Props) {
           내보내면 바로 나가고, 다시 허용할 때까지 이 노트에 들어오지 못해요.
         </p>
       )}
-      <p className="member-list-title">내보낸 사람</p>
+      <p className="member-list-title" data-focus-key="kicked-title" tabIndex={-1}>
+        내보낸 사람
+      </p>
       {data.kicked.length === 0 ? (
         <p className="member-help">내보낸 사람이 없어요.</p>
       ) : (
         <ul>
-          {data.kicked.map((k, index) => (
+          {data.kicked.map((k) => (
             <li key={k.id} className="member-row">
               <span className="member-name muted">{k.nickname}</span>
               <button
@@ -203,14 +207,13 @@ export function MemberList({ noteId, memberCount, onNotice }: Props) {
                 aria-label={`${k.nickname} 다시 허용`}
                 data-focus-key={`allow:${k.id}`}
                 disabled={busy}
-                onClick={() => {
-                  const next = data.kicked[index + 1]
+                onClick={() =>
                   void act(
                     () => api(`/api/notes/${noteId}/kicked/${k.id}`, { method: 'DELETE' }),
                     `${k.nickname}님을 다시 허용했어요`,
-                    next ? `allow:${next.id}` : 'title',
+                    'kicked-title',
                   )
-                }}
+                }
               >
                 다시 허용
               </button>
