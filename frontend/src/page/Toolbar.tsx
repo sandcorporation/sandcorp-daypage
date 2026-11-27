@@ -384,6 +384,7 @@ export function Toolbar(props: Props) {
           <div key={t.kind} className="tool-anchor">
             <button
               ref={shapeRef}
+              data-shape-tool
               type="button"
               className="tool-btn"
               aria-label={`도형 (${shapeInfo.name})`}

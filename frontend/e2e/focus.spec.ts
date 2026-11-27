@@ -101,3 +101,39 @@ test('#183 도구 창에서 고르거나 내용이 바뀌어도, 한계에 닿�
   await expect(zoomOut).toHaveAttribute('aria-disabled', 'true')
   await expect(zoomOut).toBeFocused()
 })
+
+test('#189 곡선 중 취소·완료에 Enter를 누르면 그 단추의 일을 하고, 지면에 찍은 뒤의 Enter는 곡선을 끝낸다', async ({ page }) => {
+  const saved = await openNote(page)
+  const box = (await page.locator('.page-frame').boundingBox())!
+  const hands = await Hands.on(page)
+  const tool = page.getByRole('button', { name: /^도형/ })
+  await tool.click()
+  await tool.click()
+  await page.getByRole('button', { name: /^곡선:/ }).click()
+  await page.keyboard.press('Escape')
+  await expect(tool).toBeFocused()
+  const bar = page.getByRole('toolbar', { name: '곡선' })
+  let row = 0
+  const twoPoints = async () => {
+    const y = box.y + 150 + 60 * row++
+    for (const x of [box.x + 100, box.x + 220]) await hands.mouseStroke([{ x, y }])
+    await expect(bar).toBeVisible()
+  }
+
+  await twoPoints()
+  await expect(tool).not.toBeFocused()
+  await bar.getByRole('button', { name: '취소' }).press('Enter')
+  await expect(bar).toBeHidden()
+  await expect(tool).toBeFocused()
+
+  await twoPoints()
+  await bar.getByRole('button', { name: '완료' }).press('Enter')
+  await expect(tool).toBeFocused()
+  await savedStrokes(page, saved, 1)
+
+  // 도구 단추에 있던 초점이 지면으로 가므로 Enter는 곡선을 끝낸다. 취소한 곡선은 저장되지 않아 모두 두 획이다
+  await twoPoints()
+  await page.keyboard.press('Enter')
+  await expect(bar).toBeHidden()
+  await savedStrokes(page, saved, 2)
+})
