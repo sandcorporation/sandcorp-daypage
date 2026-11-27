@@ -57,7 +57,12 @@
 .note-title {
   min-width: 0;
 }
+.note-heading {
+  margin: 0;
+  font: inherit;
+}
 .note-name {
+  display: block;
   margin: 0;
   font-size: 17px;
   font-weight: 800;

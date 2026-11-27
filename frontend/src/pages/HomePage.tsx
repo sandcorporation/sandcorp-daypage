@@ -1,11 +1,12 @@
 import { PRIVACY_LABEL, PRIVACY_URL } from '../privacyLink'
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, ApiError } from '../api/client'
 import { logout, useMe, type MyNote, type Suspension } from '../auth/me'
 import { Brand, KakaoIcon, kakaoLoginHref } from '../components/Brand'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { MemberLimitPicker } from '../components/MemberLimitPicker'
+import { ARRIVE_AT_TITLE, useFocusOnArrival } from '../components/useFocusOnArrival'
 import { ErrorScreen, LoadingScreen } from './ErrorScreen'
 import './home.css'
 
@@ -126,12 +127,16 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<MyNote | null>(null)
   const [busy, setBusy] = useState(false)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useFocusOnArrival(titleRef)
 
   async function confirmDelete() {
     if (!deleting) return
     setBusy(true)
     try {
       await api<void>(`/api/notes/${deleting.id}`, { method: 'DELETE' })
+      // 지운 노트의 단추는 곧 사라지므로 제목으로 옮긴다
+      titleRef.current?.focus()
       setDeleting(null)
       onChanged()
     } catch (err) {
@@ -153,7 +158,7 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
         method: 'POST',
         body: JSON.stringify({ name, memberLimit }),
       })
-      navigate(`/note/${note.id}`)
+      navigate(`/note/${note.id}`, ARRIVE_AT_TITLE)
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === 'suspended' ? err.message : '노트를 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
@@ -189,7 +194,9 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
         )}
         <form className="card new-note" onSubmit={create}>
           <p className="hand new-note-kicker">새 페이지를 펼쳐요</p>
-          <h1>새 노트 만들기</h1>
+          <h1 ref={titleRef} tabIndex={-1}>
+            새 노트 만들기
+          </h1>
           <label className="field">
             <span>노트 이름</span>
             <input

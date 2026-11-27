@@ -269,6 +269,7 @@ export function SealedPageView({
   }, [doc, noteId, pageKey, src])
 
   async function save() {
+    if (saving) return
     setSaving(true)
     try {
       downloadBlob(await renderPagePng(doc, 1, paper, photoSrc), exportFileName(noteName, pageKey))
@@ -291,7 +292,8 @@ export function SealedPageView({
             </svg>
             읽기 전용
           </span>
-          <button type="button" className="btn" onClick={save} disabled={loaded !== 'ok' || saving}>
+          {/* 저장하는 동안 disabled를 쓰면 초점이 body로 빠진다 */}
+          <button type="button" className="btn" onClick={save} disabled={loaded !== 'ok'} aria-disabled={saving || undefined}>
             {saving ? '저장하는 중…' : '이미지로 저장'}
           </button>
         </div>

@@ -11,10 +11,11 @@ vi.mock('../page/exportPdf', async (importOriginal) => ({
 vi.mock('../page/exportPng', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../page/exportPng')>()),
   downloadBlob: vi.fn(),
+  renderPagePng: vi.fn(async () => new Blob(['png'], { type: 'image/png' })),
 }))
 
 import { renderNoteBook } from '../page/exportPdf'
-import { downloadBlob } from '../page/exportPng'
+import { downloadBlob, renderPagePng } from '../page/exportPng'
 
 const note = {
   id: 'n1',
@@ -83,6 +84,22 @@ function open() {
     </MemoryRouter>,
   )
 }
+
+test('‘이미지로 저장’ 뒤에도 초점이 그 단추에 남는다', async () => {
+  open()
+  const button = await screen.findByRole('button', { name: '이미지로 저장' })
+  await waitFor(() => expect(button).toBeEnabled())
+  let finish = (_: Blob) => {}
+  vi.mocked(renderPagePng).mockReturnValueOnce(new Promise<Blob>((resolve) => (finish = resolve)))
+  await userEvent.click(button)
+  // 브라우저는 disabled가 된 버튼의 초점을 body로 보낸다(jsdom은 그러지 않아 속성으로 본다)
+  expect(button).toHaveTextContent('저장하는 중')
+  expect(button).not.toBeDisabled()
+  expect(button).toHaveAttribute('aria-disabled', 'true')
+  finish(new Blob(['png'], { type: 'image/png' }))
+  await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))
+  expect(button).toHaveFocus()
+})
 
 test('‘책으로 저장’은 지난 페이지를 모두 날짜순으로 엮은 PDF를 노트 이름·기간 파일 이름으로 내려받는다', async () => {
   open()

@@ -19,6 +19,14 @@ test('만든 사람은 정원을 바꿀 수 있고, 지금 인원보다 작은 �
   expect(onChange).toHaveBeenCalledWith(5)
 })
 
+test('「이 노트 삭제」를 누르면 확인 창이 돌려줄 자리(정원 단추)에 초점을 둔다', async () => {
+  const onDelete = vi.fn()
+  render(<MemberLimitControl memberCount={1} memberLimit={null} editable onChange={vi.fn()} onDelete={onDelete} />)
+  await userEvent.click(screen.getByRole('button', { name: '참여 1명' }))
+  await userEvent.click(screen.getByRole('button', { name: '이 노트 삭제' }))
+  expect(screen.getByRole('button', { name: '참여 1명' })).toHaveFocus()
+})
+
 test('참여자에게는 정원이 글자로만 보인다', () => {
   render(<MemberLimitControl memberCount={2} memberLimit={4} editable={false} onChange={vi.fn()} />)
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
