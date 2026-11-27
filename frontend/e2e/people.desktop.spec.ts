@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
+import * as decoding from 'lib0/decoding'
+import * as encoding from 'lib0/encoding'
 import { fakePeers, nextFrames, openNote } from './helpers'
 
 // #220 「+N」 뒤에 가린 사람까지, 함께 있는 사람 전부의 닉네임을 모든 폭에서 볼 수 있다
@@ -68,11 +70,29 @@ test('#220 768 폭: 키보드로 열고 Esc로 닫으면 단추로 돌아오고,
   await expect(button).toBeFocused()
 })
 
+const MESSAGE_NOTE_INFO = 105 // src/note/useRealtime.ts
+
+/** 서버가 보낸 note_info의 참여 수·정원을 바꾼다. 다른 메시지는 그대로 둔다. */
+function withMemberCount(message: Buffer, memberCount: number): Buffer {
+  const decoder = decoding.createDecoder(new Uint8Array(message))
+  if (decoding.readVarUint(decoder) !== MESSAGE_NOTE_INFO) return message
+  const info = JSON.parse(decoding.readVarString(decoder)) as object
+  const encoder = encoding.createEncoder()
+  encoding.writeVarUint(encoder, MESSAGE_NOTE_INFO)
+  encoding.writeVarString(encoder, JSON.stringify({ ...info, memberCount, memberLimit: null }))
+  return Buffer.from(encoding.toUint8Array(encoder))
+}
+
 // #220 「참여 N명」 배지의 자릿수가 바뀌어도 머리글 줄은 그대로다
 for (const width of [390, 768, 1024, 1280]) {
   test(`#220 ${width} 폭: 참여 인원이 9명이든 10명이든 배지 폭과 머리글 높이가 같다`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
     let memberCount = 9
+    // 머리말은 REST로 한 번, 웹소켓에 연결하면 note_info로 한 번 더 온다(#222). 둘 다 같은 수로 바꾼다.
+    await page.routeWebSocket(/\/ws\/notes\//, (ws) => {
+      const server = ws.connectToServer()
+      server.onMessage((message) => ws.send(typeof message === 'string' ? message : withMemberCount(message, memberCount)))
+    })
     await page.route(/\/api\/notes\/[^/]+$/, async (route) => {
       const res = await route.fetch()
       await route.fulfill({ response: res, json: { ...((await res.json()) as object), memberCount, memberLimit: null } })
