@@ -183,6 +183,16 @@ test('내보내지거나 정지되면 다시 붙지 않고 그 안내를 보인�
   expect(screen.getByRole('heading', { name: '이 노트에 들어갈 수 없어요' })).toBeInTheDocument()
 })
 
+test('끊긴 까닭을 물었는데 이유 없는 403이면 화면의 설명을 그대로 둔다', async () => {
+  const request = vi.fn(async () => new Response('<h1>Forbidden</h1>', { status: 403 }))
+  vi.stubGlobal('fetch', request)
+  renderNote()
+  await act(async () => latest().emit('connection-close', [{ code: 4411 }]))
+  expect(request).toHaveBeenCalled()
+  expect(screen.getByText('노트를 만든 사람이 이 노트에서 내보냈어요.')).toBeInTheDocument()
+  expect(screen.queryByText('요청을 처리하지 못했어요.')).not.toBeInTheDocument()
+})
+
 test('집중 모드를 켜면 머리글·아래 칩이 숨고 전체 화면을 시도하며, Esc로 나온다', async () => {
   const request = vi.fn(async () => {})
   Object.defineProperty(document.documentElement, 'requestFullscreen', { value: request, configurable: true })
@@ -535,7 +545,7 @@ describe('성공한 쓰기 알림', () => {
 
   test.each([
     ['성공', 200, '노트 이름을 바꿨어요: 새 이름'],
-    ['실패', 500, '이름을 바꾸지 못했어요'],
+    ['실패', 500, '서버에 문제가 생겨 하지 못했어요. 잠시 뒤 다시 해 주세요.'],
   ])('이름 바꾸기 %s를 알린다', async (_, status, text) => {
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit = {}) =>
       init.method === 'PATCH' ? respond({ name: '새 이름' }, status) : respond({}),

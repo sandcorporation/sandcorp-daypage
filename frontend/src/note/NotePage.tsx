@@ -98,7 +98,8 @@ export function NotePage({ initial }: Props) {
     if (fatal !== "closed" && fatal !== "suspended" && fatal !== "kicked")
       return;
     api(`/api/notes/${note.id}`).catch((e) => {
-      if (e instanceof ApiError && e.status === 403)
+      // code가 없는 403은 서버가 까닭을 주지 않은 것이라 화면의 설명을 그대로 둔다
+      if (e instanceof ApiError && e.status === 403 && e.code)
         setBlockedDetail(e.message);
     });
   }, [fatal, note.id]);
@@ -736,7 +737,7 @@ export function NotePage({ initial }: Props) {
         setNote((n) => ({ ...n, name: res.name }));
         show(`노트 이름을 바꿨어요: ${res.name}`);
       } catch (e) {
-        show((e instanceof ApiError && e.message) || "이름을 바꾸지 못했어요");
+        show(e instanceof ApiError ? e.message : "이름을 바꾸지 못했어요");
       }
     },
     [note.id, show],
