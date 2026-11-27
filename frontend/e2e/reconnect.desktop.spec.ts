@@ -35,7 +35,7 @@ async function withDroppable(page: Page, browser: Browser, baseURL: string | und
   const cut = async () => {
     await context.setOffline(true)
     offline = true
-    await expect(other.getByText('오프라인 · 다시 연결되면 맞춰져요')).toBeVisible()
+    await expect(other.getByText('오프라인 · 이 탭에서 다시 연결되면 맞춰져요')).toBeVisible()
     await page.clock.runFor(33_000)
     await expect(people(1)).toBeVisible()
   }
@@ -83,10 +83,10 @@ test('#242 빈 글 상자를 만든 채 끊겼다 이어져도 상자가 남고,
   await expect(box).toBeFocused()
 
   await context.setOffline(true)
-  await expect(other.getByText('오프라인 · 다시 연결되면 맞춰져요')).toBeVisible()
+  await expect(other.getByText('오프라인 · 이 탭에서 다시 연결되면 맞춰져요')).toBeVisible()
   await other.clock.runFor(5_000)
   await restore()
-  await expect(other.getByText('오프라인 · 다시 연결되면 맞춰져요')).toBeHidden()
+  await expect(other.getByText('오프라인 · 이 탭에서 다시 연결되면 맞춰져요')).toBeHidden()
   await other.clock.runFor(3_000)
 
   await expect(box).toBeFocused()

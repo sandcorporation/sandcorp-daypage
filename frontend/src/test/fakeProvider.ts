@@ -13,8 +13,10 @@ export class FakeProvider extends ObservableV2<Record<string, (...args: any[]) =
   messageHandlers: Record<number, Handler> = {}
   shouldConnect = true
   awareness: Awareness
+  doc: Y.Doc
   constructor(_url: string, _room: string, doc: Y.Doc) {
     super()
+    this.doc = doc
     this.awareness = new Awareness(doc)
     FakeProvider.instances.push(this)
   }

@@ -4,7 +4,7 @@ const LABEL: Record<ConnectionStatus, string> = {
   connecting: '연결하는 중…',
   connected: '실시간 연결됨 · 자동 저장',
   reconnecting: '연결이 끊겼어요 · 다시 연결하는 중…',
-  offline: '오프라인 · 다시 연결되면 맞춰져요',
+  offline: '오프라인 · 이 탭에서 다시 연결되면 맞춰져요',
 }
 
 /** 휴대폰에서 보이는 짧은 말(아래쪽에 새 소식·건의·배율이 함께 들어가도록) */
@@ -12,7 +12,7 @@ const SHORT: Record<ConnectionStatus, string> = {
   connecting: '연결 중…',
   connected: '연결됨',
   reconnecting: '다시 연결 중…',
-  offline: '오프라인',
+  offline: '오프라인 · 탭 닫지 마세요',
 }
 
 type Props = {
@@ -48,7 +48,12 @@ export function ConnectionPill({ status, synced, newVersion = false }: Props) {
   const syncing = status === 'connected' && !synced
   const tone = ready ? '' : status === 'offline' ? ' offline' : ' connecting'
   return (
-    <div className="connection-pill" role="status" aria-live="polite">
+    <div
+      className="connection-pill"
+      role="status"
+      aria-live="polite"
+      title={status === 'offline' ? '이 탭을 닫거나 새로고침하지 않으면 다시 연결될 때 맞춰져요' : undefined}
+    >
       <span className={`status-dot${tone}`} aria-hidden="true" />
       <Label long={syncing ? '맞추는 중…' : LABEL[status]} short={syncing ? '맞추는 중…' : SHORT[status]} />
     </div>
