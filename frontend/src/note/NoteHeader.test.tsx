@@ -65,3 +65,20 @@ test.each([
   if (more) expect(within(group).getByText(more)).toHaveClass('avatar-more')
   else expect(group.querySelector('.avatar-more')).toBeNull()
 })
+
+test('아바타의 접근 이름은 닉네임(자기는 「(나)」)이고, 「+N」은 「그 밖에 N명」이다', () => {
+  const group = setup(3, true)
+  expect(within(group).getAllByRole('img').map((el) => el.getAttribute('aria-label'))).toEqual([
+    '말랑한 고양이(나)',
+    '졸린 수달0',
+    '그 밖에 2명',
+  ])
+})
+
+test.each([{ phone: true }, { phone: false }])('자기 닉네임은 글자로 한 번 보인다: 폰=$phone', ({ phone }) => {
+  setup(1, phone)
+  const mine = screen.getByText('말랑한 고양이', { selector: 'b' })
+  expect(mine.parentElement).toHaveTextContent('나: 말랑한 고양이')
+  // 폰에서는 좁은 오른쪽 단추 줄이 아니라 남은 시간 줄에 둔다
+  expect(mine.closest('.note-sub') !== null).toBe(phone)
+})
