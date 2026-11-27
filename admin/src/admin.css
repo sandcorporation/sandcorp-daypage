@@ -56,6 +56,24 @@ body {
   color: var(--white);
 }
 
+.btn-small {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+}
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.list-title {
+  margin: 0;
+  font-size: 15px;
+}
+/* 라이브 영역은 비어 있어도 DOM에 남아야 하므로 display:none 대신 여백만 없앤다 */
+.action-result:empty {
+  margin: 0;
+}
+
 /* 로그인·권한 안내 */
 .gate {
   max-width: 420px;
@@ -314,6 +332,8 @@ body {
   color: var(--muted);
 }
 .status-select {
+  display: flex;
+  gap: 6px;
   margin-left: auto;
 }
 .status-select select {

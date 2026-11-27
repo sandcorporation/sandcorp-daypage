@@ -96,6 +96,7 @@ test('건의함에서 상태를 바꾸면 저장하고, 거르는 상태에서 �
   expect(await screen.findByText('지우개 크기')).toBeInTheDocument()
   expect(screen.getByText('노트 ‘우리집’')).toBeInTheDocument()
   await userEvent.selectOptions(screen.getByRole('combobox', { name: '상태' }), 'done')
+  await userEvent.click(screen.getByRole('button', { name: '바꾸기' }))
   await waitFor(() => expect(screen.queryByText('지우개 크기')).not.toBeInTheDocument())
   const patch = calls.find((c) => c.url === '/api/admin/suggestions/7')!
   expect(patch.init?.method).toBe('PATCH')
