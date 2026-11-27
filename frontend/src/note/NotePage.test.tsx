@@ -4,6 +4,8 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { FakeProvider } from '../test/fakeProvider'
 import { ARRIVE_AT_TITLE, type ArrivalState } from '../components/useFocusOnArrival'
 import { NotePage } from './NotePage'
+import type * as Y from 'yjs'
+import { addStroke, addTextBox } from '../page/doc'
 import type { NoteDetail } from './types'
 import { DEFAULT_KEYMAP, resetKeymapStore, setKeymap } from '../page/shortcuts'
 
@@ -284,10 +286,16 @@ test('만든 사람에게만 새 페이지 시각 버튼이 보이고, 봉인 �
   expect(screen.getByRole('button', { name: '새 페이지 18:00' })).toBeInTheDocument()
 })
 
+const stroke = (doc: Y.Doc) =>
+  addStroke(doc, { id: 's1', tool: 'pen', color: '#000000', width: 2, points: [0, 0, 0.5, 10, 10, 0.5], author: '말랑한 고양이', createdAt: 0 })
+/** 만들고 아무것도 쓰지 않은 글 상자. 서버는 보관할 때 지운다 */
+const blankBox = (doc: Y.Doc) => addTextBox(doc, { id: 't1', x: 0, y: 0, width: 200, color: '#000000', fontSize: 20, author: '말랑한 고양이' })
+
 test.each([
-  { moved: true, message: '새 페이지가 열리는 시각을 12:00로 바꿨어요. 지금 페이지를 기록으로 옮겼어요' },
-  { moved: false, message: '새 페이지가 열리는 시각을 12:00로 바꿨어요' },
-])('새 페이지 시각을 저장한 알림은 지금 장이 보관됐는지($moved) 함께 말한다', async ({ moved, message }) => {
+  { name: '그린 장 보관', moved: true, draw: stroke, message: '새 페이지가 열리는 시각을 12:00로 바꿨어요. 지금 페이지를 기록으로 옮겼어요' },
+  { name: '빈 장 보관', moved: true, draw: blankBox, message: '새 페이지가 열리는 시각을 12:00로 바꿨어요. 빈 페이지라 기록에는 남지 않아요' },
+  { name: '보관 없음', moved: false, draw: stroke, message: '새 페이지가 열리는 시각을 12:00로 바꿨어요' },
+])('새 페이지 시각을 저장한 알림은 지금 장의 보관 결과를 함께 말한다: $name', async ({ moved, draw, message }) => {
   const page = moved ? { ...NOTE.page, key: '2026-10-15-2', seq: 2 } : NOTE.page
   const patch = vi.fn()
   vi.stubGlobal(
@@ -304,6 +312,7 @@ test.each([
     </MemoryRouter>,
   )
   act(() => latest().emit('sync', [true]))
+  act(() => draw(latest().awareness.doc))
   await userEvent.click(screen.getByRole('button', { name: '새 페이지 00:00' }))
   await userEvent.selectOptions(screen.getByRole('combobox', { name: '새 페이지 시각' }), '12')
   expect(patch).not.toHaveBeenCalled()
@@ -467,8 +476,8 @@ describe('성공한 쓰기 알림', () => {
 
 // 새 장으로 바뀌면 빈 종이만 남지 않게 알린다(#208)
 describe('새 페이지 알림', () => {
-  const NOTICE = '새 페이지가 열렸어요. 지난 페이지는 기록에 있어요'
-  const SAVED = '새 페이지가 열리는 시각을 02:00로 바꿨어요. 지금 페이지를 기록으로 옮겼어요'
+  const NOTICE = '새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요'
+  const SAVED = '새 페이지가 열리는 시각을 02:00로 바꿨어요. 빈 페이지라 기록에는 남지 않아요'
   const NEXT: NoteDetail = {
     ...NOTE,
     page: { key: '2026-10-15-2', date: '2026-10-15', seq: 2, openedAt: '2026-10-15T15:00:00+09:00', dueAt: '2026-10-16T02:00:00+09:00' },
@@ -480,20 +489,107 @@ describe('새 페이지 알림', () => {
 
   beforeEach(() => sessionStorage.clear())
 
-  test('page_rolled로 장이 바뀌면 한 번 알리고, 기록으로 갈 수 있다', async () => {
+  const connect = () =>
+    act(() => {
+      latest().emit('status', [{ status: 'connected' }])
+      latest().emit('sync', [true])
+    })
+  const pill = () => document.querySelector('.connection-pill .pill-long')?.textContent
+  const LIVE = '실시간 연결됨 · 자동 저장'
+  const DOWN = '연결이 끊겼어요 · 다시 연결하는 중…'
+  /** y-websocket이 닫을 때의 순서 */
+  const drop = (code: number, p = latest()) =>
+    act(() => {
+      p.emit('connection-close', [{ code }])
+      p.emit('sync', [false])
+      p.emit('status', [{ status: 'disconnected' }])
+    })
+
+  test('page_rolled로 장이 바뀌면 live 영역에는 새 페이지 알림 하나만 나간다(#212)', async () => {
     vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? { ...NEXT, sealHour: 2 } : {}))
-    render(
-      <MemoryRouter initialEntries={['/note/n1']}>
-        <Routes>
-          <Route path="/note/n1" element={<NotePage initial={NOTE} />} />
-          <Route path="/note/n1/history" element={<p>기록 화면</p>} />
-        </Routes>
-      </MemoryRouter>,
-    )
+    renderNote()
+    connect()
+    const said: string[] = []
+    const last = new Map<Element, string>()
+    const regions = () => document.querySelectorAll('[role="status"], [aria-live]')
+    regions().forEach((el) => last.set(el, el.textContent ?? ''))
+    const watcher = new MutationObserver(() => {
+      for (const el of regions()) {
+        const text = el.textContent ?? ''
+        if (text !== (last.get(el) ?? '') && text) said.push(text)
+        last.set(el, text)
+      }
+    })
+    watcher.observe(document.body, { subtree: true, childList: true, characterData: true })
+    const before = latest()
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    drop(4409, before)
+    await waitFor(() => expect(latest()).not.toBe(before))
+    await act(async () => latest().emit('status', [{ status: 'connecting' }]))
+    await act(async () => latest().emit('status', [{ status: 'connected' }]))
+    await act(async () => latest().emit('sync', [true]))
+    await waitFor(() => expect(said).toEqual([NOTICE]))
+    expect(pill()).toBe(LIVE)
+    expect(screen.queryByRole('button', { name: '기록 보기' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '기록' })).toHaveAttribute('href', '/note/n1/history')
+    watcher.disconnect()
+    // 새 장에서 진짜로 끊기면 지금처럼 알린다
+    drop(1006)
+    expect(pill()).toBe(DOWN)
+  })
+
+  test.each([
+    ['새 장에 붙다가 끊김', () => drop(1006), DOWN],
+    ['네트워크 끊김', () => act(() => void window.dispatchEvent(new Event('offline'))), '오프라인 · 다시 연결되면 맞춰져요'],
+  ])('교체 중의 진짜 실패는 숨기지 않는다: %s', async (_, fail, text) => {
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+    renderNote()
+    connect()
+    const before = latest()
     roll()
-    await waitFor(() => expect(heard(NOTICE)).toHaveLength(1))
-    await userEvent.click(screen.getByRole('button', { name: '기록 보기' }))
-    expect(screen.getByText('기록 화면')).toBeInTheDocument()
+    drop(4409, before)
+    expect(pill()).toBe(LIVE)
+    await waitFor(() => expect(latest()).not.toBe(before))
+    fail()
+    expect(pill()).toBe(text)
+  })
+
+  test.each([
+    ['서버의 장이 그대로', async () => json(NOTE)],
+    ['새 장을 읽지 못함', async () => Promise.reject(new TypeError('offline'))],
+  ])('닫힌 뒤 새 장을 얻지 못하면 끊김을 보인다: %s', async (_, read) => {
+    vi.stubGlobal('fetch', (url: string) => (url === '/api/notes/n1' ? read() : Promise.resolve(json({}))))
+    renderNote()
+    connect()
+    drop(4409)
+    await waitFor(() => expect(pill()).toBe(DOWN))
+  })
+
+  test('교체가 오래 걸리면 지금 연결 상태를 보인다', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+      renderNote()
+      connect()
+      await act(async () => latest().receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+      expect(pill()).toBe(LIVE)
+      await act(() => vi.advanceTimersByTimeAsync(10_000))
+      expect(pill()).toBe('연결하는 중…')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('저장소를 막은 브라우저에서도 노트가 열린다', () => {
+    const blocked = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError')
+    })
+    try {
+      renderNote()
+      expect(screen.getByRole('heading', { level: 1, name: NOTE.name })).toBeInTheDocument()
+    } finally {
+      blocked.mockRestore()
+    }
   })
 
   test('제 시각이 되면 서버 알림이 없어도 알린다', async () => {
@@ -533,6 +629,7 @@ describe('새 페이지 알림', () => {
     const everHeard: string[] = []
     const watcher = new MutationObserver(() => everHeard.push(...heard(NOTICE)))
     watcher.observe(document.body, { subtree: true, childList: true, characterData: true })
+    connect()
     await userEvent.click(screen.getByRole('button', { name: /^새 페이지 \d/ }))
     await userEvent.selectOptions(screen.getByRole('combobox', { name: '새 페이지 시각' }), '2')
     await userEvent.click(screen.getByRole('button', { name: '저장' }))

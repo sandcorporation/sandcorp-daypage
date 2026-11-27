@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { nextFrames, openNote } from './helpers'
 
 // #170 새 페이지 시각: 키보드로 고르는 동안은 저장하지 않고, Enter로만 바꾼다
@@ -33,7 +33,33 @@ test('#170 화살표로 옮기는 동안 PATCH가 없고, Enter로 저장하면 
   expect(await saved.json()).toMatchObject({ sealHour: 2 })
 })
 
+/** 지금부터 live 영역에 새로 나가는 글을 차례대로 모은다(낭독기가 듣는 순서) */
+function listen(page: Page) {
+  return page.evaluate(() => {
+    const said: string[] = []
+    Object.assign(window, { said })
+    const regions = () => document.querySelectorAll('[role="status"], [aria-live]')
+    const last = new Map<Element, string>()
+    regions().forEach((el) => last.set(el, el.textContent ?? ''))
+    new MutationObserver(() => {
+      for (const el of regions()) {
+        const text = el.textContent ?? ''
+        if (text && text !== last.get(el)) said.push(text)
+        last.set(el, text)
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true })
+  })
+}
+const said = (page: Page) => page.evaluate(() => (window as unknown as { said: string[] }).said)
+
+/** 다음에 여는 웹소켓이 서버의 문서(sync step 2)를 받을 때까지 */
+async function nextSync(page: Page) {
+  const ws = await page.waitForEvent('websocket', (w) => w.url().includes('/ws/notes/'))
+  await ws.waitForEvent('framereceived', ({ payload }) => typeof payload !== 'string' && payload[0] === 0 && payload[1] === 1)
+}
+
 // #208 바로 보관하면 함께 있던 사람에게 새 장이 열렸다고 알리고, 바꾼 주인은 저장 결과만 듣는다
+// #212 장이 바뀌는 동안 연결 알약은 그대로라, 낭독기에 나가는 글은 그것 하나다. 빈 장은 기록에 남지 않는다고 말한다
 test('#208 바로 보관: 함께 있던 사람은 새 페이지 알림을, 주인은 저장 결과만 받는다', async ({ page, browser, baseURL }) => {
   const hour = (new Date().getUTCHours() + 9) % 24
   test.skip(hour === 0, 'KST 0시대에는 지난 봉인 시각을 고를 수 없다')
@@ -45,25 +71,22 @@ test('#208 바로 보관: 함께 있던 사람은 새 페이지 알림을, 주�
   await expect(guest.getByText(/^참여 2 /)).toBeVisible()
   await expect(guest.getByText('실시간 연결됨 · 자동 저장')).toBeAttached()
 
-  // 주인 화면의 알림 영역에 한 번이라도 뜬 글을 모은다
-  await page.evaluate(() => {
-    const heard: string[] = []
-    Object.assign(window, { heard })
-    new MutationObserver(() => {
-      for (const el of document.querySelectorAll('[role="status"]')) heard.push(el.textContent ?? '')
-    }).observe(document.body, { subtree: true, childList: true, characterData: true })
-  })
+  await expect(page.getByText('실시간 연결됨 · 자동 저장')).toBeAttached()
+
   await page.getByRole('button', { name: /^새 페이지 \d/ }).press('Enter')
   const select = page.getByRole('combobox', { name: '새 페이지 시각' })
   await select.selectOption(String(hour))
-  const reread = page.waitForResponse((r) => r.request().method() === 'GET' && /\/api\/notes\/[^/]+$/.test(r.url()))
+  await listen(page)
+  await listen(guest)
+  const synced = Promise.all([nextSync(page), nextSync(guest)])
   await select.press('Enter')
-
-  await expect(guest.getByRole('status').filter({ hasText: '새 페이지가 열렸어요' })).toHaveCount(1)
-  await expect(guest.getByRole('button', { name: '기록 보기' })).toBeVisible()
-  await expect(page.getByRole('status').filter({ hasText: '지금 페이지를 기록으로 옮겼어요' })).toBeVisible()
-  await reread
+  await synced
   await nextFrames(page)
-  expect(await page.evaluate(() => (window as unknown as { heard: string[] }).heard.filter((t) => t.includes('새 페이지가 열렸어요')))).toEqual([])
+  await nextFrames(guest)
+
+  await expect.poll(() => said(guest)).toEqual(['새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요'])
+  expect(await said(page)).toEqual([expect.stringMatching(/바꿨어요\. 빈 페이지라 기록에는 남지 않아요$/)])
+  for (const screen of [page, guest]) await expect(screen.getByText('실시간 연결됨 · 자동 저장')).toBeAttached()
+  await expect(guest.getByRole('link', { name: '기록', exact: true })).toBeVisible()
   await guestContext.close()
 })
