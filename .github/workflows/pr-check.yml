@@ -7,6 +7,8 @@ name: pr-check
 
 on:
   pull_request:
+    # staging으로 가는 PR(개선 작업을 모으는 중간 PR)은 검사하지 않는다(#162). main으로 가는 PR과 workflow_call은 그대로다.
+    branches-ignore: [staging]
   workflow_call:
 
 permissions:
