@@ -234,17 +234,21 @@ export function Toolbar(props: Props) {
   const keymap = useKeymap()
   const { node: announced, announce } = useAnnouncer()
   const navRef = useRef<HTMLElement>(null)
-  // 막대 높이를 --note-toolbar-h로 알린다. 아래에 붙인 막대 위에 뜨는 것(곡선 막대)이 줄 수에 맞춰 비켜선다.
+  // 막대 크기를 --note-toolbar-w·h로 알린다. 막대 위에 뜨는 것(곡선 막대)과 막대에 덮이는 지면의 여백이 줄 수에 맞춰 비켜선다.
   useLayoutEffect(() => {
     const el = navRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
     const root = document.documentElement
-    const update = () => root.style.setProperty('--note-toolbar-h', `${el.offsetHeight}px`)
+    const update = () => {
+      root.style.setProperty('--note-toolbar-w', `${el.offsetWidth}px`)
+      root.style.setProperty('--note-toolbar-h', `${el.offsetHeight}px`)
+    }
     update()
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => {
       observer.disconnect()
+      root.style.removeProperty('--note-toolbar-w')
       root.style.removeProperty('--note-toolbar-h')
     }
   }, [])

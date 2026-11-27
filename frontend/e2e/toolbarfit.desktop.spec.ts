@@ -1,5 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
-import { openNote } from './helpers'
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test'
+import * as encoding from 'lib0/encoding'
+import { nextFrames, openNote, zoomIn } from './helpers'
 
 // #207 흔한 노트북 창에서 세로 도구 막대가 화면을 넘거나 아래 칩(연결·배율)에 깔리지 않는다
 
@@ -195,3 +196,119 @@ test.describe('#216', () => {
     }
   }
 })
+
+/**
+ * 접속자(presence)를 서버 없이 더하고 뺀다. 웹소켓을 그대로 서버에 잇고, 화면 쪽으로 awareness 메시지를 끼워 넣는다.
+ * openNote보다 먼저 부른다.
+ */
+async function fakePeers(page: Page) {
+  let socket: WebSocketRoute | undefined
+  await page.routeWebSocket(/\/ws\/notes\//, (ws) => {
+    ws.connectToServer()
+    socket = ws
+  })
+  let clock = 0
+  let shown = 0
+  return async (others: number) => {
+    const update = encoding.createEncoder()
+    const count = Math.max(others, shown)
+    clock++
+    encoding.writeVarUint(update, count)
+    for (let i = 0; i < count; i++) {
+      encoding.writeVarUint(update, 1000 + i)
+      encoding.writeVarUint(update, clock)
+      encoding.writeVarString(update, JSON.stringify(i < others ? { nickname: `푸른 펭귄${i}`, color: '#5E6270' } : null))
+    }
+    shown = others
+    const message = encoding.createEncoder()
+    encoding.writeVarUint(message, 1) // MESSAGE_AWARENESS
+    encoding.writeVarUint8Array(message, encoding.toUint8Array(update))
+    socket!.send(Buffer.from(encoding.toUint8Array(message)))
+    await expect(page.getByRole('group', { name: `함께 있는 사람 ${others + 1}명` })).toBeVisible()
+  }
+}
+
+// #218 그리는 중에 사람이 들고 나도 지면은 움직이지 않는다
+for (const size of [
+  { width: 390, height: 844 },
+  { width: 768, height: 1024 },
+  { width: 1024, height: 768 },
+  { width: 1280, height: 800 },
+]) {
+  test(`#218 ${size.width}×${size.height} 접속자가 1→3→5→9→1로 바뀌어도 지면은 그대로다`, async ({ page }) => {
+    await page.setViewportSize(size)
+    const setPeers = await fakePeers(page)
+    await openNote(page)
+    await expect(page.getByRole('button', { name: /^참여 / })).toBeVisible()
+    const where = () =>
+      page.evaluate(() => {
+        const r = document.querySelector('.page-frame')!.getBoundingClientRect()
+        return { x: r.x, y: r.y, header: document.querySelector<HTMLElement>('.note-header')!.offsetHeight }
+      })
+    await nextFrames(page)
+    const before = await where()
+    for (const total of [3, 5, 9, 1]) {
+      await setPeers(total - 1)
+      await nextFrames(page)
+      expect({ total, ...(await where()) }).toEqual({ total, ...before })
+      if (process.env.E2E_SHOT_DIR && total <= 5) await page.screenshot({ path: `${process.env.E2E_SHOT_DIR}/218-peers${total}-${size.width}x${size.height}.png` })
+    }
+  })
+}
+
+/** 지면을 네 방향 끝까지 스크롤해 가며, 모서리 안쪽과 가장자리 가운데를 짚었을 때 지면이 아닌 것이 잡히는 곳 */
+const hiddenSpots = (page: Page) =>
+  page.evaluate(() => {
+    const vp = document.querySelector<HTMLElement>('.page-viewport')!
+    const frame = document.querySelector<HTMLElement>('.page-frame')!
+    const inset = 8
+    const out: string[] = []
+    for (const [v, top] of [['위', 0], ['아래', 1e6]] as const) {
+      for (const [h, left] of [['왼쪽', 0], ['오른쪽', 1e6]] as const) {
+        vp.scrollTo(left, top)
+        const r = frame.getBoundingClientRect()
+        const box = vp.getBoundingClientRect()
+        // 지면이 화면보다 크면 가장자리 가운데는 보이는 부분의 가운데다
+        const midX = (Math.max(r.left, box.left) + Math.min(r.right, box.right)) / 2
+        const midY = (Math.max(r.top, box.top) + Math.min(r.bottom, box.bottom)) / 2
+        const x = left ? r.right - inset : r.left + inset
+        const y = top ? r.bottom - inset : r.top + inset
+        for (const [name, px, py] of [[`${v} ${h} 모서리`, x, y], [`${v} 가장자리`, midX, y], [`${h} 가장자리`, x, midY]] as const) {
+          const hit = document.elementFromPoint(px, py)
+          if (!hit || !frame.contains(hit)) out.push(`${name}: ${hit?.closest('[aria-label]')?.getAttribute('aria-label') ?? hit?.className ?? '화면 밖'}`)
+        }
+      }
+    }
+    return [...new Set(out)]
+  })
+
+// #218 떠 있는 것 밑의 지면은 스크롤해서 꺼내 그릴 수 있다. 집중 모드에서는 네 자리의 막대가 모두 지면 위에 뜬다
+for (const mode of ['보통', '집중']) {
+  for (const [dock, dockName] of [['left', '왼쪽'], ['bottom', '아래'], ...(mode === '집중' ? [['right', '오른쪽'], ['top', '위']] : [])]) {
+    for (const size of [
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
+      { width: 1280, height: 800 },
+    ]) {
+      test(`#218 ${mode} 모드 ${dockName} 막대 ${size.width}×${size.height}: 지면 끝까지 스크롤하면 모서리·가장자리가 가리지 않는다`, async ({ page }) => {
+        await page.setViewportSize(size)
+        await page.addInitScript((d) => localStorage.setItem('daypage:toolbar-dock', d), dock)
+        await openNote(page)
+        if (mode === '집중') await page.getByRole('button', { name: '집중 모드' }).click()
+        const name = `${mode === '집중' ? 'focus' : 'normal'}-${dock}-${size.width}x${size.height}`
+        // 「화면에 맞추기」에서는 옆으로 넘치지 않는다
+        await expect.poll(() => page.locator('.page-viewport').evaluate((el) => el.scrollWidth - el.clientWidth), { timeout: 1_000 }).toBe(0)
+        await expect.poll(() => hiddenSpots(page), { timeout: 1_000 }).toEqual([])
+        if (process.env.E2E_SHOT_DIR) await page.screenshot({ path: `${process.env.E2E_SHOT_DIR}/218-end-${name}.png` })
+        await page.locator('.page-viewport').evaluate((el) => el.scrollTo(0, 0))
+        await startCurve(page)
+        await expect.poll(() => hiddenSpots(page), { timeout: 1_000 }).toEqual([])
+        if (process.env.E2E_SHOT_DIR) await page.screenshot({ path: `${process.env.E2E_SHOT_DIR}/218-end-curve-${name}.png` })
+        // 지면이 화면보다 클 때도 같다
+        await zoomIn(page, 3)
+        await expect.poll(() => hiddenSpots(page), { timeout: 1_000 }).toEqual([])
+      })
+    }
+  }
+}
