@@ -237,7 +237,6 @@ def note_detail(request, note_id: str):
     note = get_object_or_404(Note, pk=note_id)
     moderation.log(request.auth, "view_note", note=note)
     members = NoteMember.objects.filter(note=note).order_by("joined_at", "id")
-    sealed = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date", "-seq")
     return {
         "id": note.id,
         "name": note.name,
@@ -265,13 +264,13 @@ def note_detail(request, note_id: str):
                 "key": pages.page_key(p.date, p.seq),
                 "date": p.date.isoformat(),
                 "seq": p.seq,
-                "openedAt": p.opened_at.astimezone(clock.KST).isoformat(),
-                "closedAt": p.due_at.astimezone(clock.KST).isoformat(),
+                "openedAt": opened.astimezone(clock.KST).isoformat(),
+                "closedAt": closed.astimezone(clock.KST).isoformat(),
                 "participantCount": p.participant_count,
                 "strokeCount": p.stroke_count,
                 "paper": p.paper,
             }
-            for p in sealed
+            for p, opened, closed in pages.recorded_pages(note)
         ],
     }
 

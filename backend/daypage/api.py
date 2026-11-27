@@ -410,21 +410,20 @@ def announce_note_event(note_id: str, event: dict) -> None:
 @api.get("/notes/{note_id}/pages")
 def sealed_pages(request, note_id: str):
     note = member_note(request, note_id)
-    sealed = Page.objects.filter(note=note, sealed_at__isnull=False, is_empty=False).order_by("-date", "-seq")
     return [
         {
             "key": pages.page_key(p.date, p.seq),
             "date": p.date.isoformat(),
             "seq": p.seq,
-            "openedAt": p.opened_at.astimezone(clock.KST).isoformat(),
-            # 봉인된 순간이 아니라 기간이 끝난 순간(봉인 작업이 늦어도 같다)
-            "closedAt": p.due_at.astimezone(clock.KST).isoformat(),
+            # 실제로 열려 있던 때(바로 봉인한 장과 그 다음 장은 opened_at·due_at과 다르다)
+            "openedAt": opened.astimezone(clock.KST).isoformat(),
+            "closedAt": closed.astimezone(clock.KST).isoformat(),
             "participantCount": p.participant_count,
             "strokeCount": p.stroke_count,
             # 그날 쓰던 종이(종이 설정 전에 봉인한 장은 기본 줄 노트)
             "paper": paper.normalize(p.paper),
         }
-        for p in sealed
+        for p, opened, closed in pages.recorded_pages(note)
     ]
 
 
