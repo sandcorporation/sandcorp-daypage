@@ -22,6 +22,8 @@ test('#170 화살표로 옮기는 동안 PATCH가 없고, Enter로 저장하면 
   await page.keyboard.press('Enter')
   await expect(trigger).toHaveText('새 페이지 02:00')
   await expect(trigger).toBeFocused()
+  // #203 저장은 live 영역(Toast) 하나만 알린다. 새 장의 openedAt은 오늘 00:00이라 시각에 따라 보관 문구가 붙는다
+  await expect(page.getByRole('status').filter({ hasText: '바꿨어요' })).toHaveText([/^새 페이지가 열리는 시각을 02:00로 바꿨어요/])
   await expect(page.getByRole('dialog', { name: '새 페이지 시각' })).toBeHidden()
   expect(patches).toEqual(['{"sealHour":2}'])
 

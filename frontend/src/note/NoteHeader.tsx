@@ -20,7 +20,14 @@ type Props = {
 
 export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, settings, titleRef }: Props) {
   const shown = [{ nickname: note.me.nickname, color: note.me.color, isMe: true }, ...peers]
-  const faces = useIsPhone() ? 2 : 6
+  const isPhone = useIsPhone()
+  const faces = isPhone ? 2 : 6
+  const more = shown.length - faces
+  const me = (
+    <span className="me-label">
+      나: <b>{note.me.nickname}</b>
+    </span>
+  )
   const ref = useRef<HTMLElement>(null)
   // 머리글 높이를 --note-header-h로 알린다. 툴바가 이 아래에 붙는다(휴대폰에서는 머리글이 두 줄로 높아진다).
   useLayoutEffect(() => {
@@ -52,27 +59,36 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
               {seqSuffix(page.seq)} 페이지 ·{' '}
             </span>
             <Countdown until={page.dueAt} clockOffset={clockOffset} />
+            {isPhone && me}
           </p>
         </div>
       </div>
 
       <div className="note-header-right">
         <div className="avatars" role="group" aria-label={`함께 있는 사람 ${shown.length}명`}>
-          {shown.slice(0, faces).map((p, i) => (
-            <span
-              key={`${p.nickname}-${i}`}
-              className="avatar"
-              title={p.isMe ? `${p.nickname} (나)` : p.nickname}
-              style={{ background: p.color }}
-            >
-              {initial(p.nickname)}
+          {shown.slice(0, faces).map((p, i) => {
+            // 얼굴의 머리글자만으로는 누구인지 알 수 없어, 읽는 이름과 툴팁은 닉네임이다
+            const name = p.isMe ? `${p.nickname}(나)` : p.nickname
+            return (
+              <span
+                key={`${p.nickname}-${i}`}
+                className="avatar"
+                role="img"
+                aria-label={name}
+                title={name}
+                style={{ background: p.color }}
+              >
+                {initial(p.nickname)}
+              </span>
+            )
+          })}
+          {more > 0 && (
+            <span className="avatar avatar-more" role="img" aria-label={`그 밖에 ${more}명`}>
+              +{more}
             </span>
-          ))}
-          {shown.length > faces && <span className="avatar avatar-more">+{shown.length - faces}</span>}
+          )}
         </div>
-        <span className="me-label">
-          나: <b>{note.me.nickname}</b>
-        </span>
+        {!isPhone && me}
         {settings}
         <Link to={`/note/${note.id}/history`} className="btn" aria-label="기록">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">

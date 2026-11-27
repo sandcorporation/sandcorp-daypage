@@ -313,9 +313,6 @@
   .note-header {
     padding: 8px 12px;
   }
-  .me-label {
-    display: none;
-  }
   .note-body {
     flex-direction: column;
     padding: 12px 12px 0;
@@ -1597,12 +1594,18 @@
   .note-name {
     font-size: 15px;
   }
+  /* 남은 시간 옆에 자기 닉네임을 둔다. 자리가 모자라면 말줄임 대신 닉네임이 다음 줄로 간다 */
   .note-sub {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 8px;
     margin: 0;
     font-size: 11px;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  }
+  .note-sub .me-label {
+    padding: 0;
+    font-size: inherit;
   }
   .note-sub-date {
     display: none;

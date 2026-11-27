@@ -308,7 +308,9 @@ test.each([
   await userEvent.selectOptions(screen.getByRole('combobox', { name: '새 페이지 시각' }), '12')
   expect(patch).not.toHaveBeenCalled()
   await userEvent.click(screen.getByRole('button', { name: '저장' }))
-  expect(await screen.findByText(message)).toBeInTheDocument()
+  expect(await screen.findByText(message)).toHaveAttribute('role', 'status')
+  // 낭독기가 두 번 읽지 않게, 이 저장을 말하는 live 영역은 하나다
+  expect(screen.getAllByRole('status').filter((el) => el.textContent?.includes('바꿨어요'))).toHaveLength(1)
   expect(screen.getByRole('button', { name: '새 페이지 12:00' })).toHaveFocus()
   expect(patch).toHaveBeenCalledExactlyOnceWith('{"sealHour":12}')
 })
