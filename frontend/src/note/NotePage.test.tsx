@@ -5,7 +5,7 @@ import { FakeProvider } from '../test/fakeProvider'
 import { ARRIVE_AT_TITLE, type ArrivalState } from '../components/useFocusOnArrival'
 import { NotePage } from './NotePage'
 import type * as Y from 'yjs'
-import { addStroke, addTextBox } from '../page/doc'
+import { addStroke, addTextBox, readTextBoxes } from '../page/doc'
 import type { NoteDetail } from './types'
 import { DEFAULT_KEYMAP, resetKeymapStore, setKeymap } from '../page/shortcuts'
 
@@ -196,6 +196,75 @@ test('집중 모드를 켜면 머리글·아래 칩이 숨고 전체 화면을 �
   expect(screen.getByRole('button', { name: '확대' })).toBeInTheDocument()
   await userEvent.keyboard('{Escape}')
   expect(screen.getByRole('button', { name: '링크 공유' })).toBeInTheDocument()
+})
+
+describe('남은 빈 글 상자 정리', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    vi.useFakeTimers()
+  })
+  afterEach(() => void vi.useRealTimers())
+
+  const sync = (synced: boolean) => act(() => latest().emit('sync', [synced]))
+  const wait = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+  const boxIds = () => readTextBoxes(latest().awareness.doc as Y.Doc).map((b) => b.id)
+  const leftover = (id: string) =>
+    act(() => addTextBox(latest().awareness.doc as Y.Doc, { id, x: 0, y: 320, width: 200, color: '#000', font: 'gothic', fontSize: 18, author: NOTE.me.nickname }))
+
+  /** 글씨 도구로 지면을 눌러 빈 상자를 만들고 초점을 둔다. 새 상자의 id를 돌려준다. */
+  async function writeEmptyBox() {
+    const before = boxIds()
+    fireEvent.click(screen.getByRole('button', { name: '글씨' }))
+    const frame = document.querySelector('.page-frame') as HTMLElement
+    const at = { pointerId: 1, pointerType: 'mouse', clientX: 120, clientY: 100, button: 0 }
+    fireEvent.pointerDown(frame, { ...at, buttons: 1 })
+    fireEvent.pointerUp(frame, at)
+    await wait(100)
+    expect(document.activeElement).toHaveAttribute('aria-label', '글 상자')
+    return boxIds().filter((id) => !before.includes(id))[0]
+  }
+
+  test('들어와 동기화가 끝나면 지난번에 비워 둔 내 빈 상자를 지운다', async () => {
+    renderNote()
+    leftover('old')
+    sync(true)
+    await wait(1_600)
+    expect(boxIds()).toEqual([])
+  })
+
+  test('들어와 정리하기 전에 만들어 고치고 있는 빈 상자는 남긴다', async () => {
+    renderNote()
+    leftover('old')
+    sync(true)
+    const mine = await writeEmptyBox()
+    await wait(1_600)
+    expect(boxIds()).toEqual([mine])
+  })
+
+  test('빈 상자를 고치는 중에 끊겼다 이어져도 상자가 남는다', async () => {
+    renderNote()
+    sync(true)
+    await wait(1_600)
+    const mine = await writeEmptyBox()
+    sync(false)
+    sync(true)
+    await wait(1_600)
+    expect(boxIds()).toEqual([mine])
+    expect(document.activeElement).toHaveAttribute('aria-label', '글 상자')
+  })
+
+  test('들어와 정리하기 전에 끊기면 다시 이어졌을 때 정리한다', async () => {
+    renderNote()
+    leftover('old')
+    sync(true)
+    await wait(500)
+    sync(false)
+    sync(true)
+    await wait(1_600)
+    expect(boxIds()).toEqual([])
+  })
 })
 
 describe('손가락·화면 고정', () => {
