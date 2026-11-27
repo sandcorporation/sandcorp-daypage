@@ -1,24 +1,50 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
 
 type Member = { id: number; nickname: string; color: string; isOwner: boolean; lastVisitedAt: string }
 type Kicked = { id: number; nickname: string; at: string }
+type Members = { members: Member[]; kicked: Kicked[] }
+
+const LOAD_FAILED = '참여자를 불러오지 못했어요'
 
 /** 화면이 바뀐 뒤 초점을 둘 자리(data-focus-key). 없으면 목록 제목에 둔다. */
 type FocusKey = 'title' | 'confirm' | `kick:${number}` | `allow:${number}`
+
+type Props = {
+  noteId: string
+  /** 실시간 참여 수. 바뀌면 목록을 다시 읽는다 */
+  memberCount: number
+  /** 성공한 일을 알린다. 목록을 닫아도 읽히게 부르는 쪽의 알림 자리를 쓴다 */
+  onNotice: (text: string) => void
+}
 
 /**
  * 만든 사람이 보는 참여자 목록. 참여자를 내보내면 접속해 있어도 바로 나가고, 다시 허용할 때까지 들어오지 못한다.
  * 내보내기는 한 번 더 확인한다.
  */
-export function MemberList({ noteId }: { noteId: string }) {
-  const [data, setData] = useState<{ members: Member[]; kicked: Kicked[] } | null>(null)
+export function MemberList({ noteId, memberCount, onNotice }: Props) {
+  const [data, setData] = useState<Members | null>(null)
   const [confirming, setConfirming] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   // from이 있으면(요청 뒤) 초점이 아직 그 단추나 body에 있을 때만 옮긴다
   const pendingFocus = useRef<{ key: FocusKey; from?: Element | null } | null>(null)
+  const helpId = useId()
+  // 다시 읽기가 겹치면 늦게 온 옛 응답을 버린다
+  const asked = useRef(0)
+  const applied = useRef(0)
+  // 다시 읽기 직전에 목록 안에서 초점을 쥐고 있던 것. 그 줄이 사라지면 제목으로 옮긴다.
+  const held = useRef<Element | null>(null)
+  // 내보내기·다시 허용 중의 초점은 act가 정한다
+  const acting = useRef(false)
+
+  useEffect(() => {
+    const el = held.current
+    held.current = null
+    if (el && !el.isConnected && document.activeElement === document.body)
+      listRef.current?.querySelector<HTMLElement>('[data-focus-key="title"]')?.focus()
+  }, [data, confirming])
 
   useEffect(() => {
     const pending = pendingFocus.current
@@ -58,25 +84,36 @@ export function MemberList({ noteId }: { noteId: string }) {
   }, [confirming, busy, cancelConfirm])
 
   const load = useCallback(async () => {
+    const turn = ++asked.current
     try {
-      setData(await api(`/api/notes/${noteId}/members`))
+      const next = await api<Members>(`/api/notes/${noteId}/members`)
+      if (turn < applied.current) return
+      applied.current = turn
+      const active = document.activeElement
+      held.current = !acting.current && listRef.current?.contains(active) ? active : null
+      setData(next)
+      // 확인하던 사람이 그사이 나갔으면 확인 단계를 거둔다
+      setConfirming((id) => (next.members.some((m) => m.id === id) ? id : null))
+      setError((e) => (e === LOAD_FAILED ? null : e))
     } catch {
-      setError('참여자를 불러오지 못했어요')
+      if (turn >= applied.current) setError(LOAD_FAILED)
     }
   }, [noteId])
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, memberCount])
 
-  /** next는 성공한 뒤 초점을 둘 자리. 실패하면 누른 단추에 남긴다. */
-  async function act(run: () => Promise<unknown>, next: FocusKey) {
+  /** done은 성공했다고 알릴 글, next는 성공한 뒤 초점을 둘 자리. 실패하면 누른 단추에 남긴다. */
+  async function act(run: () => Promise<unknown>, done: string, next: FocusKey) {
     const from = document.activeElement
     const own = from?.getAttribute('data-focus-key') as FocusKey | null | undefined
+    acting.current = true
     setBusy(true)
     setError(null)
     try {
       await run()
+      onNotice(done)
       await load()
       setConfirming(null)
       pendingFocus.current = { key: next, from }
@@ -84,6 +121,7 @@ export function MemberList({ noteId }: { noteId: string }) {
       setError(e instanceof ApiError ? e.message : '바꾸지 못했어요')
       if (own) pendingFocus.current = { key: own, from }
     } finally {
+      acting.current = false
       setBusy(false)
     }
   }
@@ -114,12 +152,14 @@ export function MemberList({ noteId }: { noteId: string }) {
                   <button
                     type="button"
                     className="member-kick danger"
-                    aria-label="내보내기 확인"
+                    aria-label={`${m.nickname} 내보내기 확인`}
+                    aria-describedby={helpId}
                     data-focus-key="confirm"
                     disabled={busy}
                     onClick={() =>
                       void act(
                         () => api(`/api/notes/${noteId}/members/${m.id}/kick`, { method: 'POST' }),
+                        `${m.nickname}님을 내보냈어요`,
                         nextKick(data.members, index),
                       )
                     }
@@ -145,7 +185,9 @@ export function MemberList({ noteId }: { noteId: string }) {
         ))}
       </ul>
       {confirming !== null && (
-        <p className="member-help">내보내면 바로 나가고, 다시 허용할 때까지 이 노트에 들어오지 못해요.</p>
+        <p id={helpId} className="member-help">
+          내보내면 바로 나가고, 다시 허용할 때까지 이 노트에 들어오지 못해요.
+        </p>
       )}
       <p className="member-list-title">내보낸 사람</p>
       {data.kicked.length === 0 ? (
@@ -165,6 +207,7 @@ export function MemberList({ noteId }: { noteId: string }) {
                   const next = data.kicked[index + 1]
                   void act(
                     () => api(`/api/notes/${noteId}/kicked/${k.id}`, { method: 'DELETE' }),
+                    `${k.nickname}님을 다시 허용했어요`,
                     next ? `allow:${next.id}` : 'title',
                   )
                 }}

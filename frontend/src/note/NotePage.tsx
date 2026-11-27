@@ -34,6 +34,7 @@ import { useNavigate } from "react-router";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import {
   ARRIVE_AT_TITLE,
+  noteDeletedNotice,
   useFocusOnArrival,
 } from "../components/useFocusOnArrival";
 import { eulReul } from "../josa";
@@ -41,7 +42,11 @@ import { ErrorScreen, MessageCard } from "../pages/ErrorScreen";
 import { ConnectionPill } from "./ConnectionPill";
 import { NewsButton } from "../news/NewsButton";
 import { PaperButton } from "./PaperButton";
-import { normalizePaper, type Paper } from "../page/paper";
+import {
+  isCustomPaperColor,
+  normalizePaper,
+  type Paper,
+} from "../page/paper";
 import { fingerScrollsOnly, type PenOnlyMode } from "../page/penOnly";
 import { SuggestButton, type SuggestionContext } from "../suggest/SuggestButton";
 import { NoteHeader } from "./NoteHeader";
@@ -403,7 +408,12 @@ export function NotePage({ initial }: Props) {
     eraserR,
     selectMine ? note.me.nickname : null,
     selectLasso,
-    { additive: selectAdd, eraserMode, eraseFilter },
+    {
+      additive: selectAdd,
+      eraserMode,
+      eraseFilter,
+      onSelectionDeleted: () => show("고른 것을 지웠어요."),
+    },
   );
   const askClear = useCallback(() => {
     const n = edit.clearTargets().length;
@@ -473,6 +483,9 @@ export function NotePage({ initial }: Props) {
           body: JSON.stringify(change),
         });
         setNotePaper(saved);
+        // 모양·여백·기본 색은 고른 칸의 선택 상태가 읽힌다. 직접 만든 색은 만들기 화면이 닫혀 알릴 자리가 없다.
+        if (change.color && isCustomPaperColor(change.color))
+          show("종이 색을 바꿨어요");
       } catch {
         setNote((n) => ({ ...n, paper: before }));
         show("종이를 바꾸지 못했어요. 잠시 뒤 다시 해 주세요.");
@@ -679,13 +692,18 @@ export function NotePage({ initial }: Props) {
 
   const rename = useCallback(
     async (name: string) => {
-      const res = await api<{ name: string }>(`/api/notes/${note.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name }),
-      });
-      setNote((n) => ({ ...n, name: res.name }));
+      try {
+        const res = await api<{ name: string }>(`/api/notes/${note.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name }),
+        });
+        setNote((n) => ({ ...n, name: res.name }));
+        show(`노트 이름을 바꿨어요: ${res.name}`);
+      } catch (e) {
+        show((e instanceof ApiError && e.message) || "이름을 바꾸지 못했어요");
+      }
     },
-    [note.id],
+    [note.id, show],
   );
 
   const changeSealHour = useCallback(
@@ -742,6 +760,7 @@ export function NotePage({ initial }: Props) {
           },
         );
         setNote((n) => ({ ...n, colors: res.colors }));
+        show(`노트 색을 더했어요 ${color}`);
       } catch (e) {
         show(e instanceof ApiError ? e.message : "색을 더하지 못했어요");
         throw e;
@@ -771,6 +790,7 @@ export function NotePage({ initial }: Props) {
           { method: "DELETE" },
         );
         setNote((n) => ({ ...n, colors: res.colors }));
+        show(`노트 색을 뺐어요 ${color}`);
       } catch (e) {
         show(e instanceof ApiError ? e.message : "색을 빼지 못했어요");
       }
@@ -782,13 +802,15 @@ export function NotePage({ initial }: Props) {
     setDeleting(true);
     try {
       await api<void>(`/api/notes/${note.id}`, { method: "DELETE" });
-      navigate("/", ARRIVE_AT_TITLE);
+      navigate("/", {
+        state: { ...ARRIVE_AT_TITLE.state, notice: noteDeletedNotice(note.name) },
+      });
     } catch {
       setDeleting(false);
       setConfirmDelete(false);
       show("노트를 지우지 못했어요");
     }
-  }, [note.id, navigate, show]);
+  }, [note.id, note.name, navigate, show]);
 
   const share = useCallback(async () => {
     try {
@@ -841,7 +863,7 @@ export function NotePage({ initial }: Props) {
                 onChange={(c) => void changePaper(c)}
               />
               <MemberLimitControl
-                noteId={note.id}
+                members={{ noteId: note.id, onNotice: show }}
                 memberCount={note.memberCount}
                 memberLimit={note.memberLimit}
                 editable={note.isOwner}
@@ -1022,6 +1044,7 @@ export function NotePage({ initial }: Props) {
               origin={origin}
               onPreview={setPhotoDrag}
               hidden={hiddenPhotos}
+              onRemoved={() => show("사진을 뺐어요")}
             />
           )}
           <Cursors peers={presence.peers} scale={scale} />

@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { FakeProvider } from '../test/fakeProvider'
-import { ARRIVE_AT_TITLE } from '../components/useFocusOnArrival'
+import { ARRIVE_AT_TITLE, type ArrivalState } from '../components/useFocusOnArrival'
 import { NotePage } from './NotePage'
 import type { NoteDetail } from './types'
 import { DEFAULT_KEYMAP, resetKeymapStore, setKeymap } from '../page/shortcuts'
@@ -392,5 +392,52 @@ describe('단축키', () => {
     await userEvent.click(screen.getByRole('button', { name: '집중 모드 기본값으로' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('계정에 저장하지 못했어요')
     expect(puts).toEqual([{ focus: ['G'] }, {}])
+  })
+})
+
+describe('성공한 쓰기 알림', () => {
+  function respond(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  test('참여자 창에서 노트를 지우면 홈에 지운 노트 이름을 넘긴다', async () => {
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+      if (init.method === 'DELETE') return new Response(null, { status: 204 })
+      return respond(url.endsWith('/members') ? { members: [], kicked: [] } : {})
+    })
+    function Home() {
+      return <p>{(useLocation().state as ArrivalState)?.notice}</p>
+    }
+    render(
+      <MemoryRouter initialEntries={['/note/n1']}>
+        <Routes>
+          <Route path="/note/n1" element={<NotePage initial={{ ...NOTE, isOwner: true }} />} />
+          <Route path="/" element={<Home />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /^참여 / }))
+    await userEvent.click(screen.getByRole('button', { name: '이 노트 삭제' }))
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }))
+    expect(await screen.findByText('‘우리 노트’ 노트를 지웠어요')).toBeInTheDocument()
+  })
+
+  test.each([
+    ['성공', 200, '노트 이름을 바꿨어요: 새 이름'],
+    ['실패', 500, '이름을 바꾸지 못했어요'],
+  ])('이름 바꾸기 %s를 알린다', async (_, status, text) => {
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit = {}) =>
+      init.method === 'PATCH' ? respond({ name: '새 이름' }, status) : respond({}),
+    )
+    render(
+      <MemoryRouter>
+        <NotePage initial={{ ...NOTE, isOwner: true }} />
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: '노트 이름 바꾸기: 우리 노트' }))
+    const input = screen.getByRole('textbox', { name: '노트 이름' })
+    await userEvent.clear(input)
+    await userEvent.type(input, '새 이름{Enter}')
+    expect(await screen.findByText(text)).toHaveAttribute('role', 'status')
   })
 })

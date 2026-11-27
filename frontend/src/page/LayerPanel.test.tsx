@@ -273,3 +273,16 @@ describe('화면에 표시', () => {
     expect(onHighlight).toHaveBeenLastCalledWith(null)
   })
 })
+
+test('새 레이어·순서 바꾸기·지우기는 한 일을 알린다', async () => {
+  setup(createPageDoc('2026-10-16'))
+  const said = screen.getByRole('status')
+  await userEvent.click(screen.getByRole('button', { name: '+ 새 레이어' }))
+  expect(said).toHaveTextContent('새 레이어를 만들었어요')
+  screen.getByRole('button', { name: '레이어 2 순서 바꾸기' }).focus()
+  await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}')
+  expect(said).toHaveTextContent('레이어 2 순서를 바꿨어요')
+  await userEvent.click(screen.getByRole('button', { name: '레이어 2 지우기' }))
+  await userEvent.click(screen.getByRole('button', { name: '지우기' }))
+  expect(said).toHaveTextContent('‘레이어 2’ 레이어를 지웠어요')
+})

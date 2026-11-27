@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { useReorder } from './useReorder'
 import * as Y from 'yjs'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useAnnouncer } from '../components/useAnnouncer'
 import { eulReul } from '../josa'
 import { readStrokes } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
@@ -93,14 +94,21 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
   const doomedStats = doomed ? (stats.get(doomed.id) ?? { count: 0, authors: [] }) : null
 
   const indexOf = (id: string) => layers.findIndex((l) => l.id === id)
+  const { node: announced, announce } = useAnnouncer()
+  function move(id: string, to: number) {
+    const from = indexOf(id)
+    if (to < 0 || to >= layers.length || to === from) return
+    moveLayer(doc, id, to, origin)
+    announce(`${layers[from].name} 순서를 바꿨어요`)
+  }
   // 끌어서 순서 바꾸기(손가락은 손잡이로). 놓은 자리의 순서로 옮긴다.
-  const reorder = useReorder((from, to) => moveLayer(doc, from, indexOf(to), origin))
+  const reorder = useReorder((from, to) => move(from, indexOf(to)))
 
   function onPickKey(e: KeyboardEvent, layer: Layer) {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
     e.preventDefault()
     // 목록은 위가 앞(높은 순서)이다
-    moveLayer(doc, layer.id, indexOf(layer.id) + (e.key === 'ArrowUp' ? 1 : -1), origin)
+    move(layer.id, indexOf(layer.id) + (e.key === 'ArrowUp' ? 1 : -1))
   }
 
   return (
@@ -247,6 +255,7 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
           <span aria-hidden="true">{Math.round(active.opacity * 100)}%</span>
         </label>
       )}
+      {announced}
       <div className="layer-foot">
         <button
           ref={addRef}
@@ -256,7 +265,9 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
           onClick={() => {
             if (full) return
             const id = addLayer(doc, origin)
-            if (id) onCurrent(id)
+            if (!id) return
+            onCurrent(id)
+            announce('새 레이어를 만들었어요')
           }}
         >
           + 새 레이어
@@ -272,6 +283,7 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
             onCancel={() => setDeleting(null)}
             onConfirm={() => {
               deleteLayer(doc, doomed.id, origin)
+              announce(`‘${doomed.name}’ 레이어를 지웠어요`)
               setDeleting(null)
             }}
           >

@@ -25,9 +25,10 @@ export function useToast(duration = 2200) {
   // 실행 단추는 알림과 함께 사라진다. 단추로 오기 전에 있던 자리로 초점을 돌려준다.
   const cameFrom = useRef<Element | null>(null)
   const action = message?.action
-  const toast = message ? (
-    <div className={action ? 'toast toast-action' : 'toast'} role="status" aria-live="polite">
-      {message.text}
+  // live 영역은 늘 둔다. 글과 함께 새로 생긴 영역은 화면 낭독기가 읽지 않을 수 있다.
+  const toast = (
+    <div className={!message ? 'visually-hidden' : action ? 'toast toast-action' : 'toast'} role="status" aria-live="polite">
+      {message?.text}
       {action && (
         <button
           type="button"
@@ -48,7 +49,7 @@ export function useToast(duration = 2200) {
         </button>
       )}
     </div>
-  ) : null
+  )
 
   return { toast, show }
 }

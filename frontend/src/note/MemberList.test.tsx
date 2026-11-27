@@ -33,21 +33,25 @@ function mockServer({ others = [] as string[], failKick = false } = {}) {
     kicked = []
     return new Response(null, { status: 204 })
   })
-  return calls
+  /** 다른 사람이 들어오거나 나간 것처럼 서버의 목록만 바꾼다 */
+  const change = (next: (now: typeof members) => typeof members) => {
+    members = next(members)
+  }
+  return Object.assign(calls, { change })
 }
 
 afterEach(() => vi.unstubAllGlobals())
 
 test('참여자를 내보내기 전에 한 번 더 묻고, 내보낸 사람은 아래 목록에서 다시 허용한다', async () => {
   const calls = mockServer()
-  render(<MemberList noteId="n1" />)
+  render(<MemberList noteId="n1" memberCount={2} onNotice={() => {}} />)
   expect(await screen.findByText('푸른 고래')).toBeInTheDocument()
   // 만든 사람은 내보낼 수 없다
   expect(screen.getAllByRole('button', { name: /내보내기/ })).toHaveLength(1)
 
   await userEvent.click(screen.getByRole('button', { name: '푸른 고래 내보내기' }))
   expect(calls.some((c) => c.method === 'POST')).toBe(false)
-  await userEvent.click(screen.getByRole('button', { name: '내보내기 확인' }))
+  await userEvent.click(screen.getByRole('button', { name: '푸른 고래 내보내기 확인' }))
   expect(calls.at(-2)).toEqual({ url: '/api/notes/n1/members/2/kick', method: 'POST' })
 
   const allow = await screen.findByRole('button', { name: '푸른 고래 다시 허용' })
@@ -58,7 +62,7 @@ test('참여자를 내보내기 전에 한 번 더 묻고, 내보낸 사람은 �
 
 test('내보내기를 취소하면 아무것도 보내지 않는다', async () => {
   const calls = mockServer()
-  render(<MemberList noteId="n1" />)
+  render(<MemberList noteId="n1" memberCount={2} onNotice={() => {}} />)
   await userEvent.click(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
   await userEvent.click(screen.getByRole('button', { name: '취소' }))
   expect(calls.every((c) => c.method === 'GET')).toBe(true)
@@ -75,9 +79,9 @@ async function press(el: HTMLElement) {
 
 test('확인 단계로 가면 초점이 「내보내기 확인」으로 가고, 취소하면 「○○ 내보내기」로 돌아온다', async () => {
   mockServer()
-  render(<MemberList noteId="n1" />)
+  render(<MemberList noteId="n1" memberCount={2} onNotice={() => {}} />)
   await press(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
-  expect(button('내보내기 확인')).toHaveFocus()
+  expect(button('푸른 고래 내보내기 확인')).toHaveFocus()
   await press(button('취소'))
   expect(button('푸른 고래 내보내기')).toHaveFocus()
 })
@@ -86,13 +90,13 @@ test.each(['확인 단추', 'body'])('초점이 %s에 있을 때 Esc는 확인 �
   const calls = mockServer()
   const onWindowKey = vi.fn()
   window.addEventListener('keydown', onWindowKey)
-  render(<MemberList noteId="n1" />)
+  render(<MemberList noteId="n1" memberCount={2} onNotice={() => {}} />)
   await press(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
-  if (where === 'body') button('내보내기 확인').blur()
+  if (where === 'body') button('푸른 고래 내보내기 확인').blur()
   onWindowKey.mockClear()
 
   await userEvent.keyboard('{Escape}')
-  expect(screen.queryByRole('button', { name: '내보내기 확인' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '푸른 고래 내보내기 확인' })).not.toBeInTheDocument()
   expect(button('푸른 고래 내보내기')).toHaveFocus()
   // 팝오버를 닫는 window 듣개까지 가지 않는다
   expect(onWindowKey).not.toHaveBeenCalled()
@@ -105,18 +109,18 @@ test.each(['확인 단추', 'body'])('초점이 %s에 있을 때 Esc는 확인 �
 
 test('내보낸 뒤 초점은 목록의 다음 사람으로 간다', async () => {
   mockServer({ others: ['초록 여우'] })
-  render(<MemberList noteId="n1" />)
+  render(<MemberList noteId="n1" memberCount={2} onNotice={() => {}} />)
   await press(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
-  await press(button('내보내기 확인'))
+  await press(button('푸른 고래 내보내기 확인'))
   await screen.findByRole('button', { name: '푸른 고래 다시 허용' })
   expect(button('초록 여우 내보내기')).toHaveFocus()
 })
 
 test('다음 사람이 없으면 목록 제목으로, 다시 허용한 뒤에도 목록 제목으로 간다', async () => {
   mockServer()
-  render(<MemberList noteId="n1" />)
+  render(<MemberList noteId="n1" memberCount={2} onNotice={() => {}} />)
   await press(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
-  await press(button('내보내기 확인'))
+  await press(button('푸른 고래 내보내기 확인'))
   const allow = await screen.findByRole('button', { name: '푸른 고래 다시 허용' })
   expect(screen.getByText('참여자 1명')).toHaveFocus()
 
@@ -127,9 +131,63 @@ test('다음 사람이 없으면 목록 제목으로, 다시 허용한 뒤에도
 
 test('내보내기가 실패하면 초점은 「내보내기 확인」에 남는다', async () => {
   mockServer({ failKick: true })
-  render(<MemberList noteId="n1" />)
+  render(<MemberList noteId="n1" memberCount={2} onNotice={() => {}} />)
   await press(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
-  await press(button('내보내기 확인'))
+  await press(button('푸른 고래 내보내기 확인'))
   await screen.findByRole('alert')
-  expect(button('내보내기 확인')).toHaveFocus()
+  expect(button('푸른 고래 내보내기 확인')).toHaveFocus()
+})
+
+const list = (memberCount: number, onNotice: (text: string) => void = () => {}) => (
+  <MemberList noteId="n1" memberCount={memberCount} onNotice={onNotice} />
+)
+
+test('참여 수가 바뀌면 목록을 다시 읽는다', async () => {
+  const server = mockServer()
+  const view = render(list(2))
+  await screen.findByText('참여자 2명')
+  server.change((now) => [...now, member(3, '초록 여우')])
+  view.rerender(list(3))
+  expect(await screen.findByText('참여자 3명')).toBeInTheDocument()
+  expect(screen.getByText('초록 여우')).toBeInTheDocument()
+})
+
+test.each(['내보내기', '확인'])('「%s」 단추에 초점을 둔 사이 그 사람이 나가면 초점은 목록 제목으로 간다', async (step) => {
+  const server = mockServer()
+  const view = render(list(2))
+  const kick = await screen.findByRole('button', { name: '푸른 고래 내보내기' })
+  if (step === '확인') await press(kick)
+  else kick.focus()
+  server.change((now) => now.filter((m) => m.id !== 2))
+  view.rerender(list(1))
+  expect(await screen.findByText('참여자 1명')).toHaveFocus()
+  expect(screen.queryByText(/내보내면 바로 나가고/)).not.toBeInTheDocument()
+})
+
+test('내보내기·다시 허용에 성공하면 누구에게 한 일인지 알린다', async () => {
+  mockServer()
+  const onNotice = vi.fn()
+  render(list(2, onNotice))
+  await userEvent.click(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
+  await userEvent.click(button('푸른 고래 내보내기 확인'))
+  await userEvent.click(await screen.findByRole('button', { name: '푸른 고래 다시 허용' }))
+  await screen.findByText('내보낸 사람이 없어요.')
+  expect(onNotice.mock.calls).toEqual([['푸른 고래님을 내보냈어요'], ['푸른 고래님을 다시 허용했어요']])
+})
+
+test('내보내기에 실패하면 성공 알림이 없다', async () => {
+  mockServer({ failKick: true })
+  const onNotice = vi.fn()
+  render(list(2, onNotice))
+  await userEvent.click(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
+  await userEvent.click(button('푸른 고래 내보내기 확인'))
+  await screen.findByRole('alert')
+  expect(onNotice).not.toHaveBeenCalled()
+})
+
+test('확인 단추는 대상을 이름에 담고 설명 문단과 이어진다', async () => {
+  mockServer()
+  render(list(2))
+  await userEvent.click(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
+  expect(button('푸른 고래 내보내기 확인')).toHaveAccessibleDescription(/다시 허용할 때까지/)
 })

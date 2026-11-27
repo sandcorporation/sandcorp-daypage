@@ -1,12 +1,13 @@
 import { PRIVACY_LABEL, PRIVACY_URL } from '../privacyLink'
-import { useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { api, ApiError } from '../api/client'
 import { logout, useMe, type MyNote, type Suspension } from '../auth/me'
 import { Brand, KakaoIcon, kakaoLoginHref } from '../components/Brand'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { MemberLimitPicker } from '../components/MemberLimitPicker'
-import { ARRIVE_AT_TITLE, useFocusOnArrival } from '../components/useFocusOnArrival'
+import { useToast } from '../components/Toast'
+import { ARRIVE_AT_TITLE, noteDeletedNotice, useFocusOnArrival, type ArrivalState } from '../components/useFocusOnArrival'
 import { eulReul } from '../josa'
 import { ErrorScreen, LoadingScreen } from './ErrorScreen'
 import './home.css'
@@ -133,6 +134,15 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
   const [busy, setBusy] = useState(false)
   const titleRef = useRef<HTMLHeadingElement>(null)
   useFocusOnArrival(titleRef)
+  const { toast, show } = useToast()
+  // 노트 화면에서 지우고 온 알림. 한 번 읽으면 방문 기록에서 지워 새로고침에 되풀이하지 않는다.
+  const arrival = useLocation().state as ArrivalState
+  const notice = arrival?.notice
+  useEffect(() => {
+    if (!notice) return
+    show(notice)
+    navigate('.', { ...ARRIVE_AT_TITLE, replace: true })
+  }, [notice, show, navigate])
 
   function closeDelete() {
     // 응답을 기다리는 동안 Escape·바깥 누르기로 닫으면 실패 글이 보일 곳이 없다.
@@ -150,6 +160,7 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
       // 지운 노트의 단추는 곧 사라지므로 제목으로 옮긴다
       titleRef.current?.focus()
       setDeleting(null)
+      show(noteDeletedNotice(deleting.name))
       onChanged()
     } catch (err) {
       setDeleteError(
@@ -285,6 +296,7 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
           )}
         </ConfirmDialog>
       )}
+      {toast}
     </div>
   )
 }

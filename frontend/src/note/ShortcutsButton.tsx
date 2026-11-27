@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { isPressable } from '../components/pressable'
 import { ToolPopover } from '../components/ToolPopover'
+import { useAnnouncer } from '../components/useAnnouncer'
 import {
   assign,
   comboLabel,
@@ -46,8 +47,11 @@ export function ShortcutsButton({ open, onOpen }: Props) {
   const [saveFailed, setSaveFailed] = useState(false)
   const [notice, setNotice] = useState<{ at: ShortcutAction; text: string } | null>(null)
 
-  // 계정에 저장한다. 실패해도 이 브라우저에는 남으니 알리기만 한다.
-  function setKeymap(next: Keymap) {
+  const { node: announced, announce } = useAnnouncer()
+
+  // 계정에 저장한다. 실패해도 이 브라우저에는 남으니 알리기만 한다. done은 바뀐 것을 알리는 글(다른 알림이 있으면 빈 글).
+  function setKeymap(next: Keymap, done: string) {
+    announce(done)
     void saveKeymapToAccount(next).then((ok) => setSaveFailed(!ok))
   }
 
@@ -76,7 +80,8 @@ export function ShortcutsButton({ open, onOpen }: Props) {
         return
       }
       const { keymap: next, taken } = assign(keymap, recording, combo)
-      setKeymap(next)
+      // 다른 동작에서 옮겨 왔으면 줄 밑 알림이 말한다
+      setKeymap(next, taken ? '' : `‘${LABELS[recording]}’ 단축키를 바꿨어요: ${comboLabel(combo)}`)
       setNotice(
         taken ? { at: recording, text: `${comboLabel(combo)}를 ‘${LABELS[taken]}’에서 빼서 ‘${LABELS[recording]}’에 붙였어요.` } : null,
       )
@@ -111,6 +116,7 @@ export function ShortcutsButton({ open, onOpen }: Props) {
           <p className="tool-pop-caption">
             바꿀 단축키를 누른 뒤 새 키를 누르세요. 바꾼 키는 내 계정에 저장돼 다른 기기에서도 같아요. 글 상자에 쓰는 동안에는 단축키가 쉬어요.
           </p>
+          {announced}
           {saveFailed && (
             <p className="keys-error" role="alert">
               계정에 저장하지 못했어요. 이 브라우저에는 기억해 두고, 다음에 바꿀 때 다시 저장할게요.
@@ -130,7 +136,7 @@ export function ShortcutsButton({ open, onOpen }: Props) {
                           type="button"
                           className="keys-small"
                           onClick={() => {
-                            setKeymap(assign(keymap, a.id, null).keymap)
+                            setKeymap(assign(keymap, a.id, null).keymap, `‘${a.label}’ 단축키를 껐어요`)
                             setRecording(null)
                           }}
                         >
@@ -160,7 +166,7 @@ export function ShortcutsButton({ open, onOpen }: Props) {
                         className="keys-small"
                         aria-label={`${a.label} 기본값으로`}
                         title={`기본값: ${DEFAULT_KEYMAP[a.id].map((c) => comboLabel(c)).join(', ')}`}
-                        onClick={() => setKeymap(resetAction(keymap, a.id))}
+                        onClick={() => setKeymap(resetAction(keymap, a.id), `‘${a.label}’ 단축키를 기본값으로 돌렸어요`)}
                       >
                         기본값
                       </button>
@@ -193,7 +199,7 @@ export function ShortcutsButton({ open, onOpen }: Props) {
               type="button"
               className="btn"
               onClick={() => {
-                setKeymap(DEFAULT_KEYMAP)
+                setKeymap(DEFAULT_KEYMAP, '단축키를 모두 기본값으로 돌렸어요')
                 setNotice(null)
                 setRecording(null)
               }}

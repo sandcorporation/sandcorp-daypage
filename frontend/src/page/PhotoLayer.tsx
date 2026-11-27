@@ -64,6 +64,8 @@ type ControlsProps = {
   onPreview: (drag: PhotoDrag | null) => void
   /** 내 화면에서만 숨긴 사진(손잡이도 숨긴다) */
   hidden?: ReadonlySet<string>
+  /** 지면에서 사진을 뺀 뒤(알림 자리) */
+  onRemoved?: () => void
 }
 
 /** 끄는 결과: 옮기면 장 안에, 키우면 가로세로 비율을 지키며 장 안에 */
@@ -90,18 +92,18 @@ export function dragResult(kind: 'move' | 'resize', p: Photo, dx: number, dy: nu
  * 선택·이동 도구일 때 사진마다 옮기기 손잡이·크기 손잡이·빼기 단추를 보인다(장 맨 위 레이어).
  * 사진 몸통은 누르지 않아 사진 위에 쓴 획을 그대로 고를 수 있다.
  */
-export function PhotoControls({ doc, scale, origin, onPreview, hidden }: ControlsProps) {
+export function PhotoControls({ doc, scale, origin, onPreview, hidden, onRemoved }: ControlsProps) {
   const photos = usePhotos(doc)
   return (
     <>
       {photos.filter((p) => !hidden?.has(p.id)).map((p) => (
-        <PhotoControl key={p.id} photo={p} doc={doc} scale={scale} origin={origin} onPreview={onPreview} />
+        <PhotoControl key={p.id} photo={p} doc={doc} scale={scale} origin={origin} onPreview={onPreview} onRemoved={onRemoved} />
       ))}
     </>
   )
 }
 
-function PhotoControl({ photo, doc, scale, origin, onPreview }: ControlsProps & { photo: Photo }) {
+function PhotoControl({ photo, doc, scale, origin, onPreview, onRemoved }: ControlsProps & { photo: Photo }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<PhotoDrag | null>(null)
   const start = useRef<{
@@ -221,6 +223,7 @@ function PhotoControl({ photo, doc, scale, origin, onPreview }: ControlsProps & 
           // 단추는 사진과 함께 사라진다
           focusSpot(e.currentTarget.closest<HTMLElement>('.page-viewport'))
           deletePhoto(doc, photo.id, origin)
+          onRemoved?.()
         }}
       >
         ×

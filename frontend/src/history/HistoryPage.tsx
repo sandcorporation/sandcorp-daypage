@@ -288,6 +288,7 @@ export function SealedPageView({
     setSaving(true)
     try {
       downloadBlob(await renderPagePng(doc, 1, paper, photoSrc), exportFileName(noteName, pageKey))
+      show('이미지를 내려받았어요')
     } catch {
       show('이미지를 만들지 못했어요')
     } finally {
