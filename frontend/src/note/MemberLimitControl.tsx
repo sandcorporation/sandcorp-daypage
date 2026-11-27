@@ -11,7 +11,7 @@ type Props = {
   /** 만든 사람이 노트를 지우려 할 때(확인 창은 부르는 쪽에서) */
   onDelete?: () => void
   /** 있으면 만든 사람에게 참여자 목록(내보내기·다시 허용)을 보인다. onNotice는 그 결과를 알리는 자리 */
-  members?: { noteId: string; onNotice: (text: string) => void }
+  members?: { noteId: string; infoSeq?: number; onNotice: (text: string) => void }
 }
 
 export function memberLabel(count: number, limit: number | null): string {

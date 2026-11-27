@@ -464,10 +464,12 @@ export function NotePage({ initial }: Props) {
     (raw: unknown) => setNote((n) => ({ ...n, paper: normalizePaper(raw) })),
     [],
   );
-  const setNoteInfo = useCallback(
-    (info: NoteInfo) => setNote((n) => ({ ...n, ...info })),
-    [],
-  );
+  // 알림을 받은 횟수. 값이 그대로인 알림(다시 허용)에도 열어 둔 참여자 목록을 다시 읽게 한다
+  const [infoSeq, setInfoSeq] = useState(0);
+  const setNoteInfo = useCallback((info: NoteInfo) => {
+    setNote((n) => ({ ...n, ...info }));
+    setInfoSeq((seq) => seq + 1);
+  }, []);
   const paper = normalizePaper(note.paper);
   // 종이 바꾸기: 화면은 바로 바꾸고 저장한다(실패하면 되돌린다). 다른 사람에게는 서버가 알린다.
   const changePaper = useCallback(
@@ -863,7 +865,7 @@ export function NotePage({ initial }: Props) {
                 onChange={(c) => void changePaper(c)}
               />
               <MemberLimitControl
-                members={{ noteId: note.id, onNotice: show }}
+                members={{ noteId: note.id, infoSeq, onNotice: show }}
                 memberCount={note.memberCount}
                 memberLimit={note.memberLimit}
                 editable={note.isOwner}

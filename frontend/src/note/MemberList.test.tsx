@@ -27,10 +27,11 @@ function mockServer({ others = [] as string[], failKick = false } = {}) {
       const id = Number(url.split('/').at(-2))
       const m = members.find((x) => x.id === id)!
       members = members.filter((x) => x.id !== id)
-      kicked = [{ id: 9, nickname: m.nickname, at: '2026-10-20T03:00:00Z' }]
+      // 첫 번째로 내보낸 사람의 번호는 9
+      kicked = [...kicked, { id: 9 + kicked.length, nickname: m.nickname, at: '2026-10-20T03:00:00Z' }]
       return json({ ok: true })
     }
-    kicked = []
+    kicked = kicked.filter((k) => k.id !== Number(url.split('/').at(-1)))
     return new Response(null, { status: 204 })
   })
   /** 다른 사람이 들어오거나 나간 것처럼 서버의 목록만 바꾼다 */
@@ -116,7 +117,7 @@ test('내보낸 뒤 초점은 목록의 다음 사람으로 간다', async () =>
   expect(button('초록 여우 내보내기')).toHaveFocus()
 })
 
-test('다음 사람이 없으면 목록 제목으로, 다시 허용한 뒤에도 목록 제목으로 간다', async () => {
+test('다음 사람이 없으면 목록 제목으로, 다시 허용한 뒤에는 「내보낸 사람」 제목으로 간다', async () => {
   mockServer()
   render(<MemberList noteId="n1" memberCount={2} onNotice={() => {}} />)
   await press(await screen.findByRole('button', { name: '푸른 고래 내보내기' }))
@@ -126,7 +127,25 @@ test('다음 사람이 없으면 목록 제목으로, 다시 허용한 뒤에도
 
   await press(allow)
   await screen.findByText('내보낸 사람이 없어요.')
-  expect(screen.getByText('참여자 1명')).toHaveFocus()
+  expect(screen.getByText('내보낸 사람')).toHaveFocus()
+})
+
+// 다시 허용은 확인 단계가 없어, 초점이 다음 「다시 허용」으로 가면 Enter 두 번에 두 사람을 허용한다(#197)
+test('다시 허용한 뒤 초점은 다른 「다시 허용」 단추에 가지 않아, Enter를 또 눌러도 한 사람만 허용한다', async () => {
+  const calls = mockServer({ others: ['초록 여우'] })
+  render(<MemberList noteId="n1" memberCount={3} onNotice={() => {}} />)
+  for (const name of ['푸른 고래', '초록 여우']) {
+    await press(await screen.findByRole('button', { name: `${name} 내보내기` }))
+    await press(button(`${name} 내보내기 확인`))
+    await screen.findByRole('button', { name: `${name} 다시 허용` })
+  }
+
+  await press(button('푸른 고래 다시 허용'))
+  await vi.waitFor(() => expect(screen.queryByRole('button', { name: '푸른 고래 다시 허용' })).not.toBeInTheDocument())
+  expect(screen.getByText('내보낸 사람')).toHaveFocus()
+  await userEvent.keyboard('{Enter}')
+  expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(1)
+  expect(button('초록 여우 다시 허용')).toBeInTheDocument()
 })
 
 test('내보내기가 실패하면 초점은 「내보내기 확인」에 남는다', async () => {
