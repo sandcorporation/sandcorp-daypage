@@ -74,11 +74,23 @@ export function ErrorScreen({ kind, onAction, detail }: Props) {
           {copy.action}
         </button>
       ) : (
-        <Link to="/" className="btn btn-primary btn-lg invite-cta">
+        // server는 홈에서도 뜬다. 같은 주소로 가는 라우터 이동은 다시 불러오지 않으니 문서를 새로 연다
+        <Link to="/" reloadDocument={kind === 'server'} className="btn btn-primary btn-lg invite-cta">
           첫 화면으로
         </Link>
       )}
     </MessageCard>
+  )
+}
+
+/** 첫 응답을 기다리는 빈 배경. 화면 낭독기에만 알린다 */
+export function LoadingScreen() {
+  return (
+    <div className="grid-bg">
+      <p role="status" className="visually-hidden">
+        불러오는 중
+      </p>
+    </div>
   )
 }
 

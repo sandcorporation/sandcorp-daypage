@@ -6,11 +6,13 @@ import { logout, useMe, type MyNote, type Suspension } from '../auth/me'
 import { Brand, KakaoIcon, kakaoLoginHref } from '../components/Brand'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { MemberLimitPicker } from '../components/MemberLimitPicker'
+import { ErrorScreen, LoadingScreen } from './ErrorScreen'
 import './home.css'
 
 export function HomePage() {
-  const { me, reload } = useMe()
-  if (!me) return <div className="grid-bg" />
+  const { me, error, reload } = useMe()
+  if (error instanceof ApiError && error.status === 401) return <Landing />
+  if (!me) return error ? <ErrorScreen kind="server" /> : <LoadingScreen />
   return me.authenticated ? (
     <MyNotes notes={me.notes} onChanged={reload} suspension={me.suspension ?? null} />
   ) : (
