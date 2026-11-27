@@ -34,8 +34,16 @@ export const MESSAGE_NOTE_PAPER = 103
 /** 장의 봉인 예정이 바뀜(주인이 봉인 시각을 바꿈): {type: 'note_page', key, dueAt, sealHour} (MESSAGE_NOTE_PAGE) */
 export const MESSAGE_NOTE_PAGE = 104
 
-/** 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·다시 허용·정원 변경): {type: 'note_info', name, memberCount, memberLimit} (MESSAGE_NOTE_INFO) */
+/**
+ * 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·다시 허용·정원 변경): {type: 'note_info', name, memberCount, memberLimit, seq}
+ * (MESSAGE_NOTE_INFO). 접속해 노트 그룹에 들 때도 한 번 온다. seq는 서버가 읽은 순서대로 커지는 판이다.
+ */
 export const MESSAGE_NOTE_INFO = 105
+
+/** 받아 쓴 판보다 작거나 같은 머리말 알림은 늦게 도착한 낡은 값이다(#222). 판이 없으면(옛 서버) 받는다. */
+export function isNewerInfo(lastSeq: number, seq: number | undefined): boolean {
+  return seq === undefined || seq > lastSeq
+}
 
 export type NoteInfo = { name: string; memberCount: number; memberLimit: number | null }
 
@@ -97,6 +105,8 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
   /** 맞춰진 연결이 있었고 그 뒤로 진짜 끊김이 없었다. 이럴 때만 교체를 조용히 넘긴다. */
   const healthy = useRef(false)
   const connectedKey = useRef(pageKey)
+  /** 마지막으로 받아 쓴 머리말의 판. 판은 서버 전체에서 커지므로 다시 연결해도 이어 쓴다. */
+  const infoSeq = useRef(0)
 
   const startSwitch = useCallback(() => {
     if (!healthy.current) return
@@ -163,8 +173,10 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
       if (msg.type === 'note_page') onNotePage?.({ key: msg.key, dueAt: msg.dueAt, sealHour: msg.sealHour })
     }
     p.messageHandlers[MESSAGE_NOTE_INFO] = (_encoder, decoder) => {
-      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string } & NoteInfo
-      if (msg.type === 'note_info') onNoteInfo?.({ name: msg.name, memberCount: msg.memberCount, memberLimit: msg.memberLimit })
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; seq?: number } & NoteInfo
+      if (msg.type !== 'note_info' || !isNewerInfo(infoSeq.current, msg.seq)) return
+      if (msg.seq !== undefined) infoSeq.current = msg.seq
+      onNoteInfo?.({ name: msg.name, memberCount: msg.memberCount, memberLimit: msg.memberLimit })
     }
     setProvider(p)
     setSynced(false)

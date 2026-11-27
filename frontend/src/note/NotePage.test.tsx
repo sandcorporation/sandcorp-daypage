@@ -117,6 +117,16 @@ test('노트 머리말 알림(105)을 받으면 이름과 참여 수가 바로 �
   expect(screen.getByText('참여 3 / 4명')).toBeInTheDocument()
 })
 
+// 동시에 들어오면 먼저 읽은 수가 늦게 도착할 수 있다. 판이 더 작은 알림은 버린다(#222).
+test('머리말 알림(105)이 거꾸로 와도 판이 큰 값이 남는다', () => {
+  renderNote()
+  act(() => latest().receive(105, { type: 'note_info', name: NOTE.name, memberCount: 4, memberLimit: 8, seq: 12 }))
+  act(() => latest().receive(105, { type: 'note_info', name: NOTE.name, memberCount: 3, memberLimit: 8, seq: 11 }))
+  expect(screen.getByText('참여 4 / 8명')).toBeInTheDocument()
+  act(() => latest().receive(105, { type: 'note_info', name: NOTE.name, memberCount: 5, memberLimit: 8, seq: 13 }))
+  expect(screen.getByText('참여 5 / 8명')).toBeInTheDocument()
+})
+
 // 다시 허용은 참여 수가 그대로라, 알림이 온 것만으로 다시 읽어야 한다(#197)
 test('참여자 창을 열어 둔 사이 알림(105)이 오면 참여 수가 같아도 목록을 다시 읽는다', async () => {
   let kicked = [{ id: 9, nickname: '푸른 고래', at: '2026-10-20T03:00:00Z' }]

@@ -38,7 +38,7 @@ from pycrdt import (
     write_message,
 )
 
-from . import admission, awareness, clock, hub, moderation, pages, rooms
+from . import admission, awareness, clock, hub, membership, moderation, pages, rooms
 from .hub import EMPTY_UPDATE, db, page_group  # noqa: F401  page_group은 다른 모듈이 여기서 가져간다
 from .models import Note, NoteMember
 
@@ -65,7 +65,9 @@ MESSAGE_NOTE_COLORS = 102
 MESSAGE_NOTE_PAPER = 103
 # 장의 봉인 예정 시각이 바뀜(주인이 봉인 시각을 바꿈): {"type":"note_page","key","dueAt","sealHour"}
 MESSAGE_NOTE_PAGE = 104
-# 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·다시 허용·정원 변경): {"type":"note_info","name","memberCount","memberLimit"}
+# 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·다시 허용·정원 변경): {"type":"note_info","name","memberCount","memberLimit","seq"}
+# 노트 그룹에 든 뒤에도 그때의 머리말을 한 번 보낸다(그룹에 들기 전에 나간 알림을 놓치지 않게, #222).
+# seq는 읽은 순서대로 커지는 판이다. 화면은 받은 것보다 작은 판을 버린다(membership.current_info).
 MESSAGE_NOTE_INFO = 105
 
 # 대기 중에 받아 두었다가 입장하면 다시 처리할 메시지 수(클라이언트가 연결하자마자 보내는 sync step1·커서)
@@ -83,6 +85,11 @@ OUTBOX_LIMIT = 512
 KEEPALIVE_EVERY = 10
 # 빈 awareness: 아무의 커서도 바꾸지 않는다.
 KEEPALIVE = awareness.encode_message([])
+
+
+def note_info_message(info: dict) -> bytes:
+    payload = {k: info[k] for k in ("name", "memberCount", "memberLimit", "seq")}
+    return daypage_message(MESSAGE_NOTE_INFO, {"type": "note_info", **payload})
 
 
 def note_group(note_id: str) -> str:
@@ -233,6 +240,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(note_group(self.note_id), self.channel_name)
         # 정지·내보내기는 사용자에게 알린다(그 사람의 모든 연결을 끊는다)
         await self.channel_layer.group_add(moderation.user_group(self.member.user_id), self.channel_name)
+        # 그룹에 든 뒤 지금 머리말을 보낸다. 페이지를 읽은 뒤 그룹에 들기 전에 바뀐 것도 여기서 따라잡는다.
+        if (info := await database_sync_to_async(membership.current_info)(self.note_id)) is not None:
+            await self.send(bytes_data=note_info_message(info))
         self.sender = asyncio.create_task(self._send_loop())
         self.room = await hub.hub().join(page.id, self, lambda: db(pages.load_updates)(page.id))
         # 들어오는 사이 클라이언트가 떠났어도 send는 조용히 끝난다. 방에서 나가는 건 disconnect가 한다.
@@ -513,8 +523,7 @@ class PageConsumer(AsyncWebsocketConsumer):
 
     async def note_info(self, event) -> None:
         """노트 이름·참여 수·정원이 바뀌었다. 모두의 머리말을 바로 바꾸도록 전한다."""
-        payload = {k: event[k] for k in ("name", "memberCount", "memberLimit")}
-        self.push(daypage_message(MESSAGE_NOTE_INFO, {"type": "note_info", **payload}))
+        self.push(note_info_message(event))
 
     async def note_deleted(self, event) -> None:
         """만든 사람이 노트를 지웠다. 장도 함께 사라졌으니 저장·합치기를 하지 않고 닫는다."""
