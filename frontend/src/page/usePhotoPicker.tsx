@@ -72,9 +72,13 @@ export function usePhotoPicker({ doc, noteId, author, origin, scale, view = VIEW
   async function onFile(file: File) {
     if (count >= PHOTO_LIMIT) return
     setBusy(true)
+    // 줄이기 실패는 파일 문제, 올리기에서 난 서버 응답 아닌 오류는 망 문제다
+    let uploading = false
     try {
       const shrunk = await shrinkPhoto(file)
+      uploading = true
       const src = await uploadPhoto(noteId, shrunk.data, shrunk.mime)
+      uploading = false
       // 이미 붙은 사진과 꼭 겹치지 않게 장 수만큼 조금씩 비켜 붙인다
       const c = visibleCenter(scale, view)
       const shift = PHOTO_CASCADE * count
@@ -90,6 +94,7 @@ export function usePhotoPicker({ doc, noteId, author, origin, scale, view = VIEW
     } catch (e) {
       if (e instanceof PhotoTooBig) show('사진을 충분히 줄이지 못했어요. 다른 사진으로 해 주세요.')
       else if (e instanceof ApiError) show(e.message)
+      else if (uploading) show('연결이 끊겨 사진을 올리지 못했어요. 다시 연결되면 한 번 더 해 주세요.')
       else show('사진을 열지 못했어요. JPEG·PNG·WebP 사진으로 해 주세요.')
     } finally {
       setBusy(false)
