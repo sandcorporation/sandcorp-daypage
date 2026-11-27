@@ -92,6 +92,7 @@
   border-radius: 6px;
   font-family: inherit;
   width: min(320px, 60vw);
+  max-width: calc(100% + 6px);
 }
 .note-sub {
   margin: 2px 0 0;
@@ -104,6 +105,8 @@
   font-variant-numeric: tabular-nums;
 }
 .note-header-right {
+  /* 둘째 줄로 내려가도 오른쪽에 붙인다(머리말 팝오버는 버튼의 오른쪽 끝에서 왼쪽으로 열린다) */
+  margin-left: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -798,6 +801,36 @@
     right: 12px;
     bottom: 12px;
     gap: 6px;
+  }
+}
+
+/* 좁은 화면: 아래 왼쪽 칩과 오른쪽 도구 묶음이 한 줄에 들어가지 않아 도구 묶음을 칩 위에 둔다.
+   몰입 모드에는 칩이 없어 아래에 그대로 둔다. */
+@media (max-width: 1023px) {
+  .status-corner ~ .view-dock {
+    left: 12px;
+    bottom: 64px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+  .status-corner ~ .view-dock > * {
+    pointer-events: auto;
+  }
+  .page-viewport {
+    padding-bottom: 128px;
+  }
+  .note-screen:not([data-focus]) .curve-bar {
+    bottom: 128px;
+  }
+}
+/* 터치 휴대폰: 도구 묶음이 두 줄이 된다 */
+@media (max-width: 500px) and (any-pointer: coarse) {
+  .page-viewport {
+    padding-bottom: 184px;
+  }
+  .note-screen:not([data-focus]) .curve-bar {
+    bottom: 184px;
   }
 }
 
@@ -1531,17 +1564,16 @@
 
 @media (max-width: 720px) {
 
-  /* 머리글을 한 줄로: 로고와 날짜를 빼고(늘 오늘이다) 이름·남은 시간·버튼만 작게 */
+  /* 머리글을 작게: 로고와 날짜를 빼고(늘 오늘이다) 이름·남은 시간·버튼만. 이름 자리가 모자라면 버튼 묶음이 둘째 줄로 간다 */
   .note-header {
-    flex-wrap: nowrap;
-    gap: 8px;
+    gap: 4px 8px;
     padding: 6px 10px;
   }
   .note-header .icon-link {
     display: none;
   }
   .note-header-left {
-    flex: 1 1 auto;
+    flex: 1 1 200px;
     min-width: 0;
   }
   .note-title {
@@ -1584,6 +1616,20 @@
     min-height: 30px;
     padding: 0 8px;
     white-space: nowrap;
+  }
+  /* 머리말 팝오버는 버튼이 아니라 머리말을 기준으로 연다(버튼 기준이면 화면 왼쪽 밖으로 나간다) */
+  .note-header .member-control {
+    position: static;
+  }
+  .note-header .member-popover {
+    right: 10px;
+    top: calc(100% + 4px);
+    max-height: calc(100dvh - var(--note-header-h, 96px) - 12px);
+    overflow-y: auto;
+  }
+  /* 열린 팝오버가 아래 칩·도구 묶음(z 30)에 덮이지 않게 */
+  .note-header:has(.member-popover) {
+    z-index: 35;
   }
 }
 
@@ -1985,6 +2031,11 @@
   /* 아래 툴바는 아래 칩(연결·새 소식·건의·배율) 위에 둔다 */
   .note-body[data-dock='bottom'] {
     padding-bottom: 72px;
+  }
+  @media (max-width: 1023px) {
+    .note-screen:not([data-focus]) .note-body[data-dock='bottom'] {
+      padding-bottom: 128px;
+    }
   }
   .toolbar[data-dock='top'] .tool-sep,
   .toolbar[data-dock='bottom'] .tool-sep {
