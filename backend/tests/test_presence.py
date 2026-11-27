@@ -166,3 +166,61 @@ async def test_connection_cannot_change_or_clear_another_clients_presence():
     assert got[-1][2]["nickname"] == names[1]["nickname"]
     for y in (a, b, c):
         await y.close()
+
+
+async def test_reconnect_of_same_person_takes_over_client_id_from_half_open_connection():
+    """#230 옛 연결이 반쯤 열린 채 남아도 같은 사람의 새 연결이 같은 clientID를 넘겨받아 바로 다시 보인다.
+    새 연결의 clock이 처음부터 시작해도 남의 화면이 버리지 않게 옛 clock보다 크게 보낸다.
+    옛 연결이 뒤늦게 끊겨도 지우지 않고, 다른 사람은 여전히 그 clientID를 쓸 수 없다."""
+    note_id, owner, (g1, g2), names = await setup_note(2, 3)
+    a = await join(owner, note_id, "2026-10-15")
+    b = await join(g1, note_id, "2026-10-15")
+    await a.ws.send_to(bytes_data=awareness_message(111, 50, {"cursor": {"x": 1, "y": 1}}))
+    assert [(cid, clk) for cid, clk, _ in await next_awareness(b)] == [(111, 50)]
+    # A는 끊긴 줄 모른 채 남아 있고, 같은 사람이 새 연결로 같은 clientID를 다시 보낸다
+    a2 = await join(owner, note_id, "2026-10-15")
+    await next_awareness(a2)  # 들어올 때 받는 지금 커서
+    await a2.ws.send_to(bytes_data=awareness_message(111, 1, {"cursor": {"x": 2, "y": 2}}))
+    [(client_id, clock_value, state)] = await next_awareness(b)
+    assert client_id == 111
+    assert clock_value > 50
+    assert state["cursor"] == {"x": 2, "y": 2}
+    assert state["nickname"] == names[1]["nickname"]
+    # 넘겨준 옛 연결이 뒤늦게 보내거나 끊겨도, 다른 사람이 같은 clientID로 보내도 퍼지지 않는다
+    await a.ws.send_to(bytes_data=awareness_message(111, 51, {"cursor": {"x": 7, "y": 7}}))
+    await a.close()
+    c = await join(g2, note_id, "2026-10-15")
+    [(client_id, _, state)] = await next_awareness(c)
+    assert (client_id, state["cursor"]) == (111, {"x": 2, "y": 2})
+    await c.ws.send_to(bytes_data=awareness_message(111, 99, None))
+    await c.ws.send_to(bytes_data=awareness_message(111, 100, {"cursor": {"x": 9, "y": 9}}))
+    await c.ws.send_to(bytes_data=awareness_message(333, 1, {"cursor": None}))
+    got = await next_awareness(b)
+    while 333 not in {cid for cid, _, _ in got}:
+        got += await next_awareness(b)
+    assert {cid for cid, _, _ in got} == {333}
+    for y in (a2, b, c):
+        await y.close()
+
+
+async def test_reconnect_after_leaving_continues_the_clock_others_have_seen():
+    """#230 새로 만든 provider는 clock을 처음부터 센다. 방은 남이 본 마지막 clock보다 크게 이어 보낸다."""
+    note_id, owner, (guest,), _ = await setup_note(2)
+    a = await join(owner, note_id, "2026-10-15")
+    b = await join(guest, note_id, "2026-10-15")
+    await a.ws.send_to(bytes_data=awareness_message(111, 50, {"cursor": None}))
+    await next_awareness(b)
+    await a.close()
+    [(_, removed_at, state)] = await next_awareness(b)
+    assert state is None
+    a2 = await join(owner, note_id, "2026-10-15")
+    await a2.ws.send_to(bytes_data=awareness_message(111, 1, {"cursor": None}))
+    await a2.ws.send_to(bytes_data=awareness_message(111, 2, {"cursor": {"x": 3, "y": 3}}))
+    got = await next_awareness(b)
+    while got[-1][2]["cursor"] is None:
+        got += await next_awareness(b)
+    clocks = [clk for _, clk, _ in got]
+    assert clocks[0] > removed_at
+    assert clocks == sorted(set(clocks))
+    await a2.close()
+    await b.close()
