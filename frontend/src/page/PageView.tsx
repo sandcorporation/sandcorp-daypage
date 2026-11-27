@@ -13,6 +13,7 @@ import type { EditPreview } from './useEditTools'
 import { transformPoints, type Matrix } from './transform'
 import { getKeymap, matches } from './shortcuts'
 import { DEFAULT_PAINT_OPACITY, fountainPressure, strokeWidth, type Brush, type ToolKind, type WidthLevel } from './tools'
+import { closesPopover } from '../components/outsidePress'
 import { PAN_START_EVENT, TouchPan, scrollNearest } from './touchPan'
 import { straightPoints } from './straight'
 import { smoothPoints, smoothTailFrom } from './inkSmooth'
@@ -1080,6 +1081,7 @@ export function PageView({
   gestureActions.current = { cancelGesture }
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
+    closingPen.current = false
     if (e.pointerType === 'mouse' && isPanButton(e.button, spaceHeld)) {
       e.preventDefault()
       e.currentTarget.setPointerCapture(e.pointerId)
@@ -1126,6 +1128,12 @@ export function PageView({
     if (activePointer.current !== null) return
     // 지면을 누르면 초점도 지면으로: 아래에서 pointerdown을 막으면 초점이 도구 단추에 남아 Enter·Space가 그 단추를 누른다
     if (isPressable(document.activeElement)) focusSpot(viewportRef.current)
+    // 열린 팝오버를 닫는 누르기는 닫기만 한다(#206). 손가락 이동·확대와 화면 끌기는 위에서 이미 처리했다.
+    if (closesPopover(e.nativeEvent)) {
+      e.preventDefault()
+      closingPen.current = e.pointerType === 'pen'
+      return
+    }
     lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
     if (picking) {
@@ -1303,6 +1311,8 @@ export function PageView({
   // 포인터 이벤트가 그 획을 아직 받지 않았을 때만 터치 이벤트로 긋는다. 터치가 먼저 잡으면 그 획의 포인터 이벤트는
   // activePointer가 달라 쉰다(어느 쪽이 먼저 와도 한 획은 한 길로만 그어진다).
   const stylusTouch = useRef<number | null>(null)
+  // 팝오버를 닫는 데 쓴 펜 누르기: 같은 접촉의 touchstart로도 긋지 않는다
+  const closingPen = useRef(false)
   function stylusPoint(t: Touch): Point {
     return clampToPage(clientToPage(view, t.clientX, t.clientY, frameRef.current!.getBoundingClientRect(), scale))
   }
@@ -1312,6 +1322,10 @@ export function PageView({
   function onStylusStart(e: TouchEvent) {
     if (readOnly || picking || !inkTool(tool) || activePointer.current !== null) return
     const t = Array.from(e.changedTouches ?? []).find((t) => (t as Touch & { touchType?: string }).touchType === 'stylus')
+    if (closingPen.current) {
+      closingPen.current = false
+      return
+    }
     // 글 상자 같은 DOM 위에서 누른 건 그 요소가 처리한다
     if (!t || (e.target instanceof Element && e.target.closest('[data-page-ui]'))) return
     if (!canDrawHere()) return
@@ -1362,6 +1376,8 @@ export function PageView({
   }
 
   function onUp(e: PointerEvent<HTMLDivElement>) {
+    // touchstart는 pointerup보다 먼저 온다. 터치를 보내지 않는 브라우저에서는 표시를 여기서 거둔다.
+    if (e.pointerType === 'pen') closingPen.current = false
     if (e.pointerType !== 'mouse') touchGrab.current = false
     if (pan.current?.id === e.pointerId) {
       pan.current = null

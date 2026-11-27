@@ -88,3 +88,31 @@ test('#67 정수 픽셀로 잘린 펜 좌표의 계단을 편다(저장된 점�
   expect(before).toBeGreaterThan(0.2 / scale)
   expect(after).toBeLessThan(before / 2)
 })
+
+test('#206 도구 창을 종이를 눌러 닫는 손가락·펜 누르기는 획과 되돌리기 기록을 남기지 않고, 다음 누르기는 그린다', async ({ page }) => {
+  const saved = await openNote(page)
+  const hands = await Hands.on(page)
+  const vp = (await page.locator('.page-viewport').boundingBox())!
+  const line = (y: number) => [0, 1, 2, 3, 4].map((i) => ({ x: vp.x + 150 + i * 14, y: vp.y + y }))
+  const opener = page.locator('button[aria-haspopup="dialog"]').filter({ has: page.locator('.width-name') })
+  const undo = page.getByRole('button', { name: /^되돌리기/ })
+
+  // 손가락(펜을 보기 전이라 손가락도 그리는 상태)
+  await opener.click()
+  await hands.fingerDrag(line(300)[0], line(300)[4], 4)
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await nextFrames(page)
+  await expect(undo).toBeDisabled()
+  expect(saved.strokes()).toHaveLength(0)
+
+  await opener.click()
+  await hands.penStroke(line(400))
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await nextFrames(page)
+  await expect(undo).toBeDisabled()
+  expect(saved.strokes()).toHaveLength(0)
+
+  await hands.penStroke(line(500))
+  await savedStrokes(page, saved, 1)
+  await expect(undo).toBeEnabled()
+})
