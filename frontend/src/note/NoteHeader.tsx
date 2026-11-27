@@ -4,8 +4,7 @@ import { Logo } from '../components/Brand'
 import { useIsPhone, useMediaQuery } from '../components/useIsPhone'
 import { Countdown } from './Countdown'
 import { NoteName } from './NoteName'
-import { PeopleMore } from './PeopleMore'
-import { displayName, initial } from './people'
+import { PeopleButton } from './PeopleButton'
 import { formatPageDate, seqSuffix } from './time'
 import type { NoteDetail, OpenPage, Peer } from './types'
 
@@ -27,14 +26,12 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
   const isNarrow = useMediaQuery('(max-width: 1023px)') || isPhone
   const isMedium = useMediaQuery('(max-width: 1279px)')
   const faces = isNarrow ? 2 : isMedium ? 3 : 6
-  const more = shown.length - faces
   const me = (
     <span className="me-label">
       나: <b>{note.me.nickname}</b>
     </span>
   )
   const ref = useRef<HTMLElement>(null)
-  const avatarsRef = useRef<HTMLDivElement>(null)
   // 머리글 높이를 --note-header-h로 알린다. 툴바가 이 아래에 붙는다(휴대폰에서는 머리글이 두 줄로 높아진다).
   useLayoutEffect(() => {
     const el = ref.current
@@ -73,30 +70,12 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
       <div className="note-header-right">
         {/* 아바타 자리는 가장 많이 보일 때(얼굴 + 「+n」)만큼 늘 잡아 둔다. 접속자 수로 머리글 줄이 바뀌면 그 아래 지면이 긋는 중에 밀린다 */}
         <div
-          ref={avatarsRef}
-          tabIndex={-1}
           className="avatars"
           role="group"
           aria-label={`함께 있는 사람 ${shown.length}명`}
           style={{ '--avatar-slots': faces + 1 } as CSSProperties}
         >
-          {shown.slice(0, faces).map((p, i) => {
-            // 얼굴의 머리글자만으로는 누구인지 알 수 없어, 읽는 이름과 툴팁은 닉네임이다
-            const name = displayName(p)
-            return (
-              <span
-                key={`${p.nickname}-${i}`}
-                className="avatar"
-                role="img"
-                aria-label={name}
-                title={name}
-                style={{ background: p.color }}
-              >
-                {initial(p.nickname)}
-              </span>
-            )
-          })}
-          {more > 0 && <PeopleMore people={shown} hidden={more} fallback={avatarsRef} />}
+          <PeopleButton people={shown} faces={faces} />
         </div>
         {!isNarrow && me}
         {settings}

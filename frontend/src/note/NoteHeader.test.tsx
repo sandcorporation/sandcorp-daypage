@@ -74,12 +74,21 @@ test.each([
   else expect(group.querySelector('.avatar-more')).toBeNull()
 })
 
-test('아바타의 접근 이름은 닉네임(자기는 「(나)」)이고, 「+N」은 모두 보기 단추다', () => {
+test('#246 얼굴 묶음은 +N 유무와 상관없이 목록 단추 하나이고, 얼굴의 툴팁은 닉네임(자기는 「(나)」)이다', () => {
   const group = setup(3, true)
-  expect(within(group).getAllByRole('img').map((el) => el.getAttribute('aria-label'))).toEqual(['말랑한 고양이(나)', '졸린 수달0'])
-  const more = within(group).getByRole('button', { name: '함께 있는 사람 4명 모두 보기' })
-  expect(more).toHaveTextContent('+2')
-  expect(more).toHaveAttribute('aria-expanded', 'false')
+  expect([...group.querySelectorAll('.avatar:not(.avatar-more)')].map((el) => el.getAttribute('title'))).toEqual(['말랑한 고양이(나)', '졸린 수달0'])
+  const button = within(group).getByRole('button', { name: '함께 있는 사람 4명 — 목록 보기' })
+  expect(within(group).getAllByRole('button')).toEqual([button])
+  expect(button).toHaveTextContent('+2')
+  expect(button).toHaveAttribute('aria-haspopup', 'dialog')
+  expect(button).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('#246 「+N」이 없는 2명에서도 눌러 두 사람 이름을 본다', async () => {
+  setup(1, true)
+  await userEvent.click(screen.getByRole('button', { name: '함께 있는 사람 2명 — 목록 보기' }))
+  expect(screen.getByRole('dialog', { name: '함께 있는 사람 2명' })).toBeInTheDocument()
+  expect(listed()).toEqual(everyone(1))
 })
 
 const everyone = (others: number) => ['말랑한 고양이(나)', ...Array.from({ length: others }, (_, i) => `졸린 수달${i}`)]
@@ -94,7 +103,7 @@ test.each([
   { width: 1280, more: '+2' },
 ])('#220 폭 $width: 「$more」를 누르면 함께 있는 사람 8명 전부가 목록에 나온다', async ({ width, more }) => {
   setup(7, width)
-  const button = screen.getByRole('button', { name: '함께 있는 사람 8명 모두 보기' })
+  const button = screen.getByRole('button', { name: '함께 있는 사람 8명 — 목록 보기' })
   expect(button).toHaveTextContent(more)
   await userEvent.click(button)
   expect(screen.getByRole('dialog', { name: '함께 있는 사람 8명' })).toBeInTheDocument()
@@ -102,34 +111,37 @@ test.each([
   expect(listed()).toEqual(everyone(7))
 })
 
-test('#220 열린 목록은 접속자를 따라 바뀌고, 「+N」이 없어지면 닫히며 초점은 얼굴 묶음에 간다', async () => {
+test('#220 열린 목록은 접속자를 따라 바뀌고, 「+N」이 없어져도 열려 있다', async () => {
   setup(4, 768)
-  await userEvent.click(screen.getByRole('button', { name: /모두 보기$/ }))
+  const button = screen.getByRole('button', { name: /목록 보기$/ })
+  await userEvent.click(button)
   act(() => setPeers(6))
   expect(screen.getByRole('dialog', { name: '함께 있는 사람 7명' })).toBeInTheDocument()
   expect(listed()).toEqual(everyone(6))
-  await act(async () => setPeers(1))
-  expect(screen.queryByRole('dialog')).toBeNull()
-  expect(screen.getByRole('group', { name: '함께 있는 사람 2명' })).toHaveFocus()
+  act(() => setPeers(1))
+  expect(screen.getByRole('dialog', { name: '함께 있는 사람 2명' })).toBeInTheDocument()
+  expect(listed()).toEqual(everyone(1))
+  await userEvent.keyboard('{Escape}')
+  expect(button).toHaveFocus()
 })
 
-test('#228 목록이 열린 채 한 사람이 나가도 「+N」이 남으면 목록은 열려 있고 초점도 그대로다', async () => {
+test('#228 목록이 열린 채 한 사람이 나가도 목록은 열려 있고 초점도 그대로다', async () => {
   setup(4, 768)
-  const button = screen.getByRole('button', { name: /모두 보기$/ })
+  const button = screen.getByRole('button', { name: /목록 보기$/ })
   await userEvent.click(button)
   const focused = document.activeElement
   expect(focused?.closest('.people-pop')).not.toBeNull()
   await act(async () => setPeers(3))
   expect(screen.getByRole('dialog', { name: '함께 있는 사람 4명' })).toBeInTheDocument()
   expect(listed()).toEqual(everyone(3))
-  expect(screen.getByRole('button', { name: '함께 있는 사람 4명 모두 보기' })).toBe(button)
+  expect(screen.getByRole('button', { name: '함께 있는 사람 4명 — 목록 보기' })).toBe(button)
   expect(button).toHaveTextContent('+2')
   expect(focused).toHaveFocus()
 })
 
 test.each(['{Enter}', ' '])('#220 키보드(%j)로 열고 Esc로 닫으면 초점이 단추로 돌아온다', async (key) => {
   setup(4, 768)
-  const button = screen.getByRole('button', { name: /모두 보기$/ })
+  const button = screen.getByRole('button', { name: /목록 보기$/ })
   button.focus()
   await userEvent.keyboard(key)
   expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -140,7 +152,7 @@ test.each(['{Enter}', ' '])('#220 키보드(%j)로 열고 Esc로 닫으면 초�
 
 test('#220 바깥을 누르면 닫히고 초점이 단추로 돌아온다. 다른 단추를 눌렀으면 초점을 뺏지 않는다', async () => {
   setup(4, 768)
-  const button = screen.getByRole('button', { name: /모두 보기$/ })
+  const button = screen.getByRole('button', { name: /목록 보기$/ })
   await userEvent.click(button)
   await userEvent.click(document.body)
   expect(screen.queryByRole('dialog')).toBeNull()

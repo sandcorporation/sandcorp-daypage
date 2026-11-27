@@ -1,19 +1,18 @@
-import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { PopoverSideContext, ToolPopover } from '../components/ToolPopover'
 import { displayName, initial, type Person } from './people'
 
 type Props = {
   people: Person[]
-  /** 얼굴로 보이지 못한 사람 수 */
-  hidden: number
-  /** 목록이 열린 채 숨은 사람이 없어져 이 단추가 사라질 때 초점을 받을 자리 */
-  fallback: RefObject<HTMLElement | null>
+  /** 얼굴로 보이는 사람 수. 나머지는 「+N」으로 묶는다 */
+  faces: number
 }
 
-/** 「+N」 단추. 누르면 함께 있는 사람 전부의 닉네임 목록이 열린다. 창은 body에 떠서 머리글 높이를 바꾸지 않는다. */
-export function PeopleMore({ people, hidden, fallback }: Props) {
+/** 함께 있는 사람 얼굴 묶음. 누르면 모두의 닉네임 목록이 열린다. 창은 body에 떠서 머리글 높이를 바꾸지 않는다. */
+export function PeopleButton({ people, faces }: Props) {
   const [open, setOpen] = useState(false)
   const button = useRef<HTMLButtonElement>(null)
+  const hidden = people.length - faces
 
   const close = useCallback(() => {
     setOpen(false)
@@ -31,30 +30,24 @@ export function PeopleMore({ people, hidden, fallback }: Props) {
     window.addEventListener('pointerdown', off)
   }, [])
 
-  useLayoutEffect(() => {
-    const el = button.current
-    const target = fallback
-    return () => {
-      const active = document.activeElement
-      if (active !== el && !active?.closest('.people-pop')) return
-      queueMicrotask(() => {
-        if (document.activeElement === document.body) target.current?.focus()
-      })
-    }
-  }, [fallback])
-
   return (
     <>
       <button
         ref={button}
         type="button"
-        className="avatar avatar-more"
-        aria-label={`함께 있는 사람 ${people.length}명 모두 보기`}
+        className="avatars-button"
+        aria-label={`함께 있는 사람 ${people.length}명 — 목록 보기`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        +{hidden}
+        {people.slice(0, faces).map((p, i) => (
+          // 얼굴의 머리글자만으로는 누구인지 알 수 없어, 마우스에는 툴팁으로 닉네임을 보인다
+          <span key={`${p.nickname}-${i}`} className="avatar" title={displayName(p)} style={{ background: p.color }}>
+            {initial(p.nickname)}
+          </span>
+        ))}
+        {hidden > 0 && <span className="avatar avatar-more">+{hidden}</span>}
       </button>
       {open && (
         <PopoverSideContext.Provider value="below">

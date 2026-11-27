@@ -144,7 +144,7 @@ test('#236 800×340 「새 페이지 시각」 창과 「+N」 목록도 화면 
     expect(box.y + box.height).toBeLessThanOrEqual(size.height)
   }
 
-  await page.getByRole('button', { name: /모두 보기$/ }).click()
+  await page.getByRole('button', { name: /목록 보기$/ }).click()
   await inside(/^함께 있는 사람/)
   const last = page.getByRole('dialog').getByRole('listitem').last()
   await last.scrollIntoViewIfNeeded()
