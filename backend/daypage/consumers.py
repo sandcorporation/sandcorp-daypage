@@ -70,6 +70,10 @@ MESSAGE_NOTE_PAGE = 104
 # seq는 읽은 순서대로 커지는 판이다. 화면은 받은 것보다 작은 판을 버린다(membership.current_info).
 MESSAGE_NOTE_INFO = 105
 
+# 열린 연결의 권한(내보냄·정지·노트 닫힘)을 이만큼 지나면 다시 본다. 끊는 것은 보통 알림이 하지만 알림이 실패하면
+# (broadcast.py, 다시 보내지 않음) 끊을 길이 없다(#256). 메시지마다 DB를 치지 않고 시계만 비교한다.
+RECHECK_AFTER = dt.timedelta(seconds=15)
+
 # 대기 중에 받아 두었다가 입장하면 다시 처리할 메시지 수(클라이언트가 연결하자마자 보내는 sync step1·커서)
 HELD_LIMIT = 16
 
@@ -167,6 +171,10 @@ class PageConsumer(AsyncWebsocketConsumer):
         self.cursor_state: tuple | None = None
         # 닫기 시작했거나 보내다 끊긴 걸 안 연결. 더 보내지 않고 다시 닫지 않는다.
         self.closing = False
+        # 마지막으로 권한을 본 시각(clock.now), 다시 보다 막혀 닫은 코드, 같은 때 두 번 묻지 않게 하는 자물쇠(#256)
+        self.checked_at: dt.datetime | None = None
+        self.revoked: int | None = None
+        self.recheck_lock = asyncio.Lock()
         # 닫는 코드를 전하려면 먼저 수락해야 한다.
         await self.accept()
 
@@ -270,6 +278,7 @@ class PageConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_discard(moderation.user_group(self.member.user_id), self.channel_name)
             self.entering = False
             return await self.close(code=code)
+        self.checked_at = clock.now()
         self.page_id = page.id
         self.due_at = page.due_at
         self.member = member  # 기다리는 사이 바뀐 닉네임·색을 따른다
@@ -329,6 +338,8 @@ class PageConsumer(AsyncWebsocketConsumer):
                 await asyncio.sleep(rooms.HEARTBEAT_EVERY)
                 if self.conn:
                     await rooms.registry().touch(self.note_id, self.conn)
+                if self.room is not None:
+                    await self._still_allowed()  # 아무것도 보내지 않는(읽기만 하는) 연결도 끊기게
                 if self.online:
                     store = admission.store()
                     await store.online_add(self.conn)
@@ -337,6 +348,28 @@ class PageConsumer(AsyncWebsocketConsumer):
                         await store.report_input(self.channel_name, self.last_input)
         except asyncio.CancelledError:
             pass
+
+    async def _still_allowed(self) -> bool:
+        """들어온 뒤에도 쓸 수 있는지. 마지막 확인 뒤 RECHECK_AFTER가 지났으면 입장 때와 같은 판정(_recheck)을
+        다시 하고, 막혔으면 입장 때와 같은 닫는 코드로 닫는다. 그 사이에는 시계만 비교한다."""
+        async with self.recheck_lock:
+            if self.revoked is not None:
+                return False
+            elapsed = clock.now() - self.checked_at
+            if dt.timedelta(0) <= elapsed < RECHECK_AFTER:
+                return True
+            try:
+                code, _ = await _recheck(self.note_id, self.member.user_id)
+            except Exception:
+                # DB가 잠깐 안 되면 연결을 죽이지 않는다(입장 때 이미 봤다). 다음 주기에 다시 본다.
+                logger.warning("열린 연결 권한 재확인 실패", exc_info=True)
+                code = None
+            self.checked_at = clock.now()
+            if code is None:
+                return True
+            self.revoked = code
+        await self.close(code=code)
+        return False
 
     async def _note_input(self) -> None:
         """편집·커서 변경을 받았다. 자리 비움 판정에 쓰도록 가끔 저장소에 올린다."""
@@ -471,6 +504,8 @@ class PageConsumer(AsyncWebsocketConsumer):
             if (self.waiter or self.entering) and held and len(self.held) < HELD_LIMIT:
                 self.held.append(bytes_data)
             return
+        if not await self._still_allowed():
+            return  # 내보냄·정지·닫힘: 이 메시지는 저장하지도 퍼뜨리지도 않는다
         if kind == YMessageType.SYNC:
             await self._receive_sync(bytes_data)
         elif kind == YMessageType.AWARENESS:
