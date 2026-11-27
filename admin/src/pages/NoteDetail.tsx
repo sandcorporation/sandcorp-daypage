@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type NoteDetail as Note } from '../api'
 import { dayLabel, shortTime } from '../format'
+import { useModeration } from '../useModeration'
 
 /**
  * 노트 하나: 참여자와 페이지 목록, 읽기 전용 보기 링크(Daypage의 운영자 보기 화면), 닫기·다시 열기.
@@ -8,30 +9,18 @@ import { dayLabel, shortTime } from '../format'
  */
 export function NoteDetail({ id }: { id: string }) {
   const [note, setNote] = useState<Note | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [reason, setReason] = useState('')
-  const [busy, setBusy] = useState(false)
 
-  const load = useCallback(() => {
-    api<Note>(`/api/admin/notes/${id}`)
-      .then(setNote)
-      .catch((e) => setError(String(e.message ?? e)))
+  const load = useCallback(async () => {
+    setNote(await api<Note>(`/api/admin/notes/${id}`))
   }, [id])
-  useEffect(load, [load])
-
-  async function act(path: string, body?: unknown) {
-    setBusy(true)
-    setError(null)
-    try {
-      await api(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) })
-      setReason('')
-      load()
-    } catch (e) {
-      setError(String((e as Error).message ?? e))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const { act, busy, error, setError, notice, panelRef, headingRef, reverseRef } = useModeration(async () => {
+    await load()
+    setReason('')
+  })
+  useEffect(() => {
+    load().catch((e) => setError(String(e.message ?? e)))
+  }, [load, setError])
 
   if (!note) return error ? <p role="alert">불러오지 못했어요: {error}</p> : <p className="muted">불러오는 중…</p>
   return (
@@ -95,15 +84,24 @@ export function NoteDetail({ id }: { id: string }) {
         </div>
       </section>
 
-      <section className="panel danger-zone" aria-labelledby="note-close">
-        <h3 id="note-close">노트 닫기</h3>
+      <section ref={panelRef} className="panel danger-zone" aria-labelledby="note-close">
+        <h3 id="note-close" ref={headingRef} tabIndex={-1}>
+          노트 닫기
+        </h3>
         {note.closed ? (
           <>
             <p className="alert">
               닫힌 노트예요 · {shortTime(note.closed.at)} · 사유: {note.closed.reason}
             </p>
             <p className="muted small">참여자는 들어올 수 없고 '운영 정책에 따라 닫힌 노트'라는 안내와 사유를 봐요.</p>
-            <button type="button" className="btn" disabled={busy} onClick={() => void act(`/api/admin/notes/${id}/reopen`)}>
+            <button
+              key="reopen"
+              ref={reverseRef}
+              type="button"
+              className="btn"
+              aria-disabled={busy}
+              onClick={() => void act(`/api/admin/notes/${id}/reopen`, { message: '노트를 다시 열었어요', focus: 'heading' })}
+            >
               다시 열기
             </button>
           </>
@@ -117,15 +115,22 @@ export function NoteDetail({ id }: { id: string }) {
               <textarea value={reason} maxLength={200} rows={2} onChange={(e) => setReason(e.target.value)} />
             </label>
             <button
+              key="close"
               type="button"
               className="btn btn-danger"
-              disabled={busy || !reason.trim()}
-              onClick={() => void act(`/api/admin/notes/${id}/close`, { reason: reason.trim() })}
+              disabled={!reason.trim()}
+              aria-disabled={busy}
+              onClick={() =>
+                void act(`/api/admin/notes/${id}/close`, { message: '노트를 닫았어요', focus: 'reverse' }, { reason: reason.trim() })
+              }
             >
               노트 닫기
             </button>
           </>
         )}
+        <p role="status" className="action-result">
+          {notice}
+        </p>
         {error && <p role="alert">{error}</p>}
       </section>
     </div>

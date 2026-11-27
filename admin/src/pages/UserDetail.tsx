@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type UserDetail as User } from '../api'
 import { shortTime } from '../format'
+import { useModeration } from '../useModeration'
 
 const PERIODS = [
   { days: 1, label: '1일' },
@@ -12,31 +13,19 @@ const PERIODS = [
 /** 사용자 하나: 참여한 노트, 정지·정지 풀기(기간과 사유). 운영자는 정지할 수 없다. */
 export function UserDetail({ id }: { id: string }) {
   const [user, setUser] = useState<User | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [days, setDays] = useState<1 | 7 | 30 | null>(7)
   const [reason, setReason] = useState('')
-  const [busy, setBusy] = useState(false)
 
-  const load = useCallback(() => {
-    api<User>(`/api/admin/users/${id}`)
-      .then(setUser)
-      .catch((e) => setError(String(e.message ?? e)))
+  const load = useCallback(async () => {
+    setUser(await api<User>(`/api/admin/users/${id}`))
   }, [id])
-  useEffect(load, [load])
-
-  async function act(path: string, body?: unknown) {
-    setBusy(true)
-    setError(null)
-    try {
-      await api(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) })
-      setReason('')
-      load()
-    } catch (e) {
-      setError(String((e as Error).message ?? e))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const { act, busy, error, setError, notice, panelRef, headingRef, reverseRef } = useModeration(async () => {
+    await load()
+    setReason('')
+  })
+  useEffect(() => {
+    load().catch((e) => setError(String(e.message ?? e)))
+  }, [load, setError])
 
   if (!user) return error ? <p role="alert">불러오지 못했어요: {error}</p> : <p className="muted">불러오는 중…</p>
   return (
@@ -68,14 +57,23 @@ export function UserDetail({ id }: { id: string }) {
       </section>
 
       {!user.isStaff && (
-        <section className="panel danger-zone" aria-labelledby="user-suspend">
-          <h3 id="user-suspend">이용 정지</h3>
+        <section ref={panelRef} className="panel danger-zone" aria-labelledby="user-suspend">
+          <h3 id="user-suspend" ref={headingRef} tabIndex={-1}>
+            이용 정지
+          </h3>
           {user.suspension ? (
             <>
               <p className="alert">
                 정지 중 · {user.suspension.until ? `${shortTime(user.suspension.until)}까지` : '영구'} · 사유: {user.suspension.reason}
               </p>
-              <button type="button" className="btn" disabled={busy} onClick={() => void act(`/api/admin/users/${id}/unsuspend`)}>
+              <button
+                key="unsuspend"
+                ref={reverseRef}
+                type="button"
+                className="btn"
+                aria-disabled={busy}
+                onClick={() => void act(`/api/admin/users/${id}/unsuspend`, { message: '정지를 풀었어요', focus: 'heading' })}
+              >
                 정지 풀기
               </button>
             </>
@@ -98,15 +96,26 @@ export function UserDetail({ id }: { id: string }) {
                 <textarea value={reason} maxLength={200} rows={2} onChange={(e) => setReason(e.target.value)} />
               </label>
               <button
+                key="suspend"
                 type="button"
                 className="btn btn-danger"
-                disabled={busy || !reason.trim()}
-                onClick={() => void act(`/api/admin/users/${id}/suspend`, { days, reason: reason.trim() })}
+                disabled={!reason.trim()}
+                aria-disabled={busy}
+                onClick={() =>
+                  void act(
+                    `/api/admin/users/${id}/suspend`,
+                    { message: '이용을 정지했어요', focus: 'reverse' },
+                    { days, reason: reason.trim() },
+                  )
+                }
               >
                 정지하기
               </button>
             </>
           )}
+          <p role="status" className="action-result">
+            {notice}
+          </p>
           {error && <p role="alert">{error}</p>}
         </section>
       )}

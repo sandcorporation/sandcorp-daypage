@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { isPressable } from '../components/pressable'
 import { ToolPopover } from '../components/ToolPopover'
 import { useAnnouncer } from '../components/useAnnouncer'
 import {
@@ -64,6 +65,8 @@ export function ShortcutsButton({ open, onOpen }: Props) {
   useEffect(() => {
     if (!recording) return
     const onKey = (e: KeyboardEvent) => {
+      // 정해 둔 키라 받을 수 없으니, 단추 위의 Enter·Space는 그 단추가 누르게 둔다
+      if ((e.key === 'Enter' || e.key === ' ') && isPressable(e.target)) return
       e.preventDefault()
       e.stopPropagation()
       if (e.key === 'Escape') {
