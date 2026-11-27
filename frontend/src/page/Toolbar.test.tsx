@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { type ComponentProps } from 'react'
 import { Toolbar } from './Toolbar'
@@ -448,4 +448,45 @@ describe('지우개 창: 방식·거르기·이 장 모두 지우기(#95)', () =
     await userEvent.click(screen.getByRole('button', { name: '지우개 크기: 보통' }))
     expect(screen.queryByRole('button', { name: /크게/ })).toBeNull()
   })
+})
+
+test.each(['되돌리기', '다시하기'])('할 것이 없어진 ‘%s’는 초점을 지키고 누름을 무시한다', async (name) => {
+  const props = setup()
+  const button = screen.getByRole('button', { name })
+  expect(button).not.toBeDisabled()
+  expect(button).toHaveAttribute('aria-disabled', 'true')
+  await userEvent.click(button)
+  expect(button).toHaveFocus()
+  expect(props.onUndo).not.toHaveBeenCalled()
+  expect(props.onRedo).not.toHaveBeenCalled()
+})
+
+test('노트 색을 더하는 동안 단추는 초점을 지키고, 더해져 창이 닫히면 잉크 버튼으로 돌아간다', async () => {
+  let finish = () => {}
+  const props = setup({ onAddColor: vi.fn(() => new Promise<void>((resolve) => (finish = resolve))) })
+  const ink = screen.getByRole('button', { name: /^잉크:/ })
+  await userEvent.click(ink)
+  await userEvent.click(screen.getByRole('button', { name: '+ 새 색 만들기' }))
+  const add = screen.getByRole('button', { name: '이 색 더하기' })
+  await userEvent.click(add)
+  expect(add).not.toBeDisabled()
+  expect(add).toHaveAttribute('aria-disabled', 'true')
+  expect(add).toHaveFocus()
+  await userEvent.click(add)
+  expect(props.onAddColor).toHaveBeenCalledTimes(1)
+  await act(async () => finish())
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(document.activeElement).not.toBe(document.body)
+  expect(ink).toHaveFocus()
+})
+
+test('키보드로 글꼴을 고르면 초점이 글꼴 단추로 돌아간다', async () => {
+  setup({ showFont: true })
+  const button = screen.getByRole('button', { name: /^글꼴:/ })
+  await userEvent.click(button)
+  screen.getAllByRole('option')[1].focus()
+  await userEvent.keyboard('{Enter}')
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  expect(document.activeElement).not.toBe(document.body)
+  expect(button).toHaveFocus()
 })

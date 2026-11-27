@@ -502,7 +502,15 @@ export function NotePage({ initial }: Props) {
     onNoteInfo: setNoteInfo,
   });
   reconnectRef.current = reconnect;
+  // ‘다시 연결’ 단추는 화면과 함께 사라지므로 노트로 돌아오면 제목에 초점을 둔다
+  const rejoined = useRef(false);
+  useEffect(() => {
+    if (fatal || !rejoined.current) return;
+    rejoined.current = false;
+    titleRef.current?.focus();
+  }, [fatal]);
   const rejoin = useCallback(() => {
+    rejoined.current = true;
     setFatal(null);
     reconnect();
   }, [reconnect]);

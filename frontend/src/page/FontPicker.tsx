@@ -9,6 +9,7 @@ const keepFocus = (e: PointerEvent) => e.preventDefault()
 export function FontPicker({ font, onFont }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const current = fontOf(font)
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export function FontPicker({ font, onFont }: Props) {
   return (
     <div className="font-picker" ref={ref}>
       <button
+        ref={buttonRef}
         type="button"
         className="tool-btn font-btn"
         aria-label={`글꼴: ${current.name}`}
@@ -46,6 +48,8 @@ export function FontPicker({ font, onFont }: Props) {
                 className="font-option"
                 onPointerDown={keepFocus}
                 onClick={() => {
+                  // 키보드로 고르면 초점이 있던 목록이 사라진다(마우스는 keepFocus로 편집기에 남는다)
+                  if (ref.current?.contains(document.activeElement)) buttonRef.current?.focus()
                   onFont(f.id)
                   setOpen(false)
                 }}

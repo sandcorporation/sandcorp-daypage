@@ -1,3 +1,4 @@
+import { focusSpot } from '../components/focusSpot'
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import * as Y from 'yjs'
 import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
@@ -216,7 +217,11 @@ function PhotoControl({ photo, doc, scale, origin, onPreview }: ControlsProps & 
         aria-label="사진 빼기"
         title="사진 빼기"
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => deletePhoto(doc, photo.id, origin)}
+        onClick={(e) => {
+          // 단추는 사진과 함께 사라진다
+          focusSpot(e.currentTarget.closest<HTMLElement>('.page-viewport'))
+          deletePhoto(doc, photo.id, origin)
+        }}
       >
         ×
       </button>

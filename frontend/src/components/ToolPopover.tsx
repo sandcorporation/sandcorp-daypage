@@ -30,6 +30,33 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
     closeRef.current = onClose
   })
 
+  // 바깥 누르기로 닫을 때는 누른 자리를 따른다
+  const outside = useRef(false)
+  // 창 안에서 초점이 있던 요소가 사라지거나 바뀌면 창에, 고른 뒤 창째 닫히면 연 버튼에 초점을 둔다.
+  // layout 효과의 정리는 창이 DOM에서 빠지기 전에 돌아 초점이 안에 있었는지 알 수 있다.
+  useLayoutEffect(() => {
+    const dialog = ref.current!
+    const anchorEl = anchor.current
+    let held: Node | null = null
+    const onFocusIn = (e: FocusEvent) => {
+      outside.current = false
+      held = e.target as Node
+    }
+    dialog.addEventListener('focusin', onFocusIn)
+    const observer = new MutationObserver(() => {
+      if (held && !held.isConnected && document.activeElement === document.body) dialog.focus()
+    })
+    observer.observe(dialog, { childList: true, subtree: true })
+    return () => {
+      observer.disconnect()
+      dialog.removeEventListener('focusin', onFocusIn)
+      if (outside.current || !dialog.contains(document.activeElement)) return
+      queueMicrotask(() => {
+        if (document.activeElement === document.body && anchorEl?.isConnected) anchorEl.focus()
+      })
+    }
+  }, [anchor])
+
   useEffect(() => {
     const anchorEl = anchor.current
     const close = () => {
@@ -45,6 +72,7 @@ export function ToolPopover({ title, anchor, onClose, children, align = 'top', c
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node
       if (ref.current?.contains(t) || anchorEl?.contains(t)) return
+      outside.current = true
       closeRef.current()
     }
     window.addEventListener('keydown', onKey)

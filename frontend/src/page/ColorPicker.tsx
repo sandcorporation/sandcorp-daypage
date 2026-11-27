@@ -86,7 +86,8 @@ export function ColorPicker({ noteColors, onAdd, onRemove }: Props) {
       <button
         type="button"
         className="btn btn-primary color-add"
-        disabled={!color || busy || (full && !exists)}
+        disabled={!color || (full && !exists)}
+        aria-disabled={busy || undefined}
         onClick={() => void add()}
       >
         이 색 더하기

@@ -23,6 +23,8 @@ export function HomePage() {
 }
 
 function Landing() {
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useFocusOnArrival(titleRef)
   return (
     <div className="grid-bg">
       <header className="home-header">
@@ -41,7 +43,7 @@ function Landing() {
       <main className="landing">
         <section className="landing-copy">
           <p className="hand landing-kicker">오늘도 한 페이지, 같이 채워요</p>
-          <h1>
+          <h1 ref={titleRef} tabIndex={-1}>
             링크 하나로 열리는
             <br />
             함께 쓰는 하루 노트
@@ -160,6 +162,7 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
 
   async function create(e: FormEvent) {
     e.preventDefault()
+    if (creating) return
     setCreating(true)
     setError(null)
     try {
@@ -178,6 +181,8 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
 
   async function doLogout() {
     await logout()
+    // 로그아웃 단추는 화면과 함께 사라진다
+    navigate('/', { ...ARRIVE_AT_TITLE, replace: true })
     onChanged()
   }
 
@@ -216,7 +221,7 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
             />
           </label>
           <MemberLimitPicker value={memberLimit} onChange={setMemberLimit} />
-          <button type="submit" className="btn btn-primary btn-lg" disabled={creating}>
+          <button type="submit" className="btn btn-primary btn-lg" aria-disabled={creating || undefined}>
             {creating ? '만드는 중…' : '노트 만들기'}
           </button>
           {error && (

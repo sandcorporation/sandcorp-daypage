@@ -136,6 +136,20 @@ test('엮는 동안 버튼은 진행 상황을 보이고 눌리지 않으며, �
   expect(screen.getByRole('button', { name: '책으로 저장 (PDF)' })).toBeEnabled()
 })
 
+test('책을 다 엮었을 때 초점이 ‘취소’에 있었으면 ‘책으로 저장’으로 돌아오고 끝을 알린다', async () => {
+  let finish = (_: Blob) => {}
+  vi.mocked(renderNoteBook).mockImplementationOnce(() => new Promise<Blob>((resolve) => (finish = resolve)))
+  open()
+  const button = await screen.findByRole('button', { name: '책으로 저장 (PDF)' })
+  await userEvent.click(button)
+  await waitFor(() => expect(renderNoteBook).toHaveBeenCalled())
+  screen.getByRole('button', { name: '취소' }).focus()
+  finish(new Blob(['%PDF']))
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('책을 내려받았어요'))
+  expect(document.activeElement).not.toBe(document.body)
+  expect(button).toHaveFocus()
+})
+
 test('오늘 장에 내용이 있으면 지금 종이로 맨 뒤에 넣고, 파일 이름 기간에 오늘이 들어간다', async () => {
   todayHasStroke = true
   open()
@@ -165,13 +179,24 @@ test('엮는 중 ‘취소’를 누르면 신호가 오고, 내려받지 않고
   )
   open()
   await userEvent.click(await screen.findByRole('button', { name: '책으로 저장 (PDF)' }))
-  expect(await screen.findByRole('button', { name: '엮는 중… 1/2' })).toBeDisabled()
+  const busy = await screen.findByRole('button', { name: '엮는 중… 1/2' })
+  // disabled면 브라우저가 초점을 body로 보낸다
+  expect(busy).not.toBeDisabled()
+  expect(busy).toHaveAttribute('aria-disabled', 'true')
+  expect(busy).toHaveFocus()
+  expect(screen.getByRole('status')).toHaveTextContent('책을 엮기 시작했어요')
+  // 누름은 무시한다
+  await userEvent.click(busy)
+  expect(renderNoteBook).toHaveBeenCalledTimes(1)
   await userEvent.click(screen.getByRole('button', { name: '취소' }))
 
   expect(await screen.findByRole('button', { name: '책으로 저장 (PDF)' })).toBeEnabled()
   expect(screen.queryByRole('button', { name: '취소' })).not.toBeInTheDocument()
   expect(screen.queryByText('책을 만들지 못했어요')).not.toBeInTheDocument()
   expect(downloadBlob).not.toHaveBeenCalled()
+  expect(document.activeElement).not.toBe(document.body)
+  expect(screen.getByRole('button', { name: '책으로 저장 (PDF)' })).toHaveFocus()
+  expect(screen.getByRole('status')).toHaveTextContent('책 엮기를 취소했어요')
 
   await userEvent.click(screen.getByRole('button', { name: '책으로 저장 (PDF)' }))
   await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))

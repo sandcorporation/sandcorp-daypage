@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type PointerEvent, type ReactNode } from 'react'
+import { focusSpot } from '../components/focusSpot'
 import * as Y from 'yjs'
 import { addStroke, newId, readStroke, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, type Point } from './geometry'
@@ -964,6 +965,12 @@ export function PageView({
     paintLive()
   }
 
+  /** 곡선 바의 단추는 바와 함께 사라지므로 초점을 지면에 두고 일을 한다 */
+  function leaveCurveBar(action: () => void) {
+    focusSpot(viewportRef.current)
+    action()
+  }
+
   function cancelCurve() {
     curve.current = null
     drawing.current = null
@@ -1529,15 +1536,15 @@ export function PageView({
             곡선 · 점 {curveCount}개
             <span className="curve-bar-hint"> · 두 번 누르면 끝 · 첫 점(고리)을 누르면 닫혀요 · Ctrl+Z로 점 지우기</span>
           </span>
-          <button type="button" className="curve-bar-btn" onClick={() => cancelCurve()}>
+          <button type="button" className="curve-bar-btn" onClick={() => leaveCurveBar(() => cancelCurve())}>
             취소
           </button>
           {curveCount >= 3 && (
-            <button type="button" className="curve-bar-btn" onClick={() => finishCurve(true)}>
+            <button type="button" className="curve-bar-btn" onClick={() => leaveCurveBar(() => finishCurve(true))}>
               닫기
             </button>
           )}
-          <button type="button" className="curve-bar-btn primary" disabled={curveCount < 2} onClick={() => finishCurve(false)}>
+          <button type="button" className="curve-bar-btn primary" disabled={curveCount < 2} onClick={() => leaveCurveBar(() => finishCurve(false))}>
             완료
           </button>
         </div>

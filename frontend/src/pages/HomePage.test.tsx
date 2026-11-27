@@ -213,3 +213,37 @@ test('삭제가 거절되면 글이 확인 창 안에만 뜨고, 창을 닫으�
   await userEvent.click(screen.getByRole('button', { name: '노트 삭제: 노트 0' }))
   expect(within(screen.getByRole('alertdialog')).queryByRole('alert')).not.toBeInTheDocument()
 })
+
+test('노트를 만드는 동안 단추는 초점을 지키고, 실패해도 초점이 남는다', async () => {
+  let fail = () => {}
+  const fetchMock = vi.fn((url: string) => {
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+    if (url === '/api/notes') return new Promise<Response>((resolve) => (fail = () => resolve(json({}, 500))))
+    return Promise.resolve(json({ authenticated: true, notes: [] }))
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  renderHome()
+  const button = await screen.findByRole('button', { name: '노트 만들기' })
+  await userEvent.click(button)
+  expect(button).not.toBeDisabled()
+  expect(button).toHaveAttribute('aria-disabled', 'true')
+  expect(button).toHaveFocus()
+  await userEvent.click(button)
+  expect(fetchMock.mock.calls.filter(([url]) => url === '/api/notes')).toHaveLength(1)
+  fail()
+  expect(await screen.findByRole('alert')).toHaveTextContent('노트를 만들지 못했어요')
+  expect(button).toHaveFocus()
+})
+
+test('로그아웃하면 첫 화면의 제목에 초점을 둔다', async () => {
+  let loggedIn = true
+  mockApi((url) => {
+    if (url === '/auth/logout') loggedIn = false
+    return { authenticated: loggedIn, notes: [] }
+  })
+  renderHome()
+  await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
+  expect(await screen.findByRole('link', { name: /카카오로 시작하기/ })).toBeInTheDocument()
+  expect(document.activeElement).not.toBe(document.body)
+  expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
+})

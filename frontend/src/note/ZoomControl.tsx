@@ -11,9 +11,12 @@ export function stepZoom(current: number, direction: 1 | -1): number {
 type Props = { scale: number; zoom: Zoom; onZoom: (zoom: Zoom) => void }
 
 export function ZoomControl({ scale, zoom, onZoom }: Props) {
+  const atMin = scale <= STEPS[0]
+  const atMax = scale >= STEPS[STEPS.length - 1]
   return (
     <div className="zoom-control" role="group" aria-label="확대·축소">
-      <button type="button" aria-label="축소" onClick={() => onZoom(stepZoom(scale, -1))} disabled={scale <= STEPS[0]}>
+      {/* 끝에 닿아도 disabled를 쓰지 않는다: 누르던 초점이 body로 빠진다 */}
+      <button type="button" aria-label="축소" onClick={() => atMin || onZoom(stepZoom(scale, -1))} aria-disabled={atMin || undefined}>
         −
       </button>
       <button type="button" aria-label="화면에 맞추기" aria-pressed={zoom === 'fit'} onClick={() => onZoom('fit')}>
@@ -22,8 +25,8 @@ export function ZoomControl({ scale, zoom, onZoom }: Props) {
       <button
         type="button"
         aria-label="확대"
-        onClick={() => onZoom(stepZoom(scale, 1))}
-        disabled={scale >= STEPS[STEPS.length - 1]}
+        onClick={() => atMax || onZoom(stepZoom(scale, 1))}
+        aria-disabled={atMax || undefined}
       >
         +
       </button>

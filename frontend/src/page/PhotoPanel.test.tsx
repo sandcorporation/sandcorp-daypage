@@ -81,7 +81,10 @@ test('Alt+↑로 앞으로 보낸다', async () => {
 test('한도가 차면 붙이기가 꺼진다', () => {
   const { rerender } = setup({ addBlocked: '사진은 한 페이지에 3장까지 붙일 수 있어요' })
   rerender()
-  expect(screen.getByRole('button', { name: '+ 사진 붙이기' })).toBeDisabled()
+  const add = screen.getByRole('button', { name: '+ 사진 붙이기' })
+  // disabled면 붙이던 초점이 body로 빠진다
+  expect(add).not.toBeDisabled()
+  expect(add).toHaveAttribute('aria-disabled', 'true')
 })
 
 test('아이패드: 손잡이를 손가락으로 끌어 맨 앞으로 놓는다', () => {
