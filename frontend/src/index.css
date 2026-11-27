@@ -160,7 +160,10 @@ button {
   align-items: center;
   gap: 14px;
   padding-right: 8px;
-  white-space: nowrap;
+  /* 긴 글은 좁은 화면에서 줄을 바꾼다. left 50%만으로는 폭이 화면 절반으로 줄어 max-content로 잡는다 */
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  word-break: keep-all;
 }
 .toast-btn {
   flex: none;

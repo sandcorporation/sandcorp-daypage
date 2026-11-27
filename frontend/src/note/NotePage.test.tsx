@@ -464,3 +464,103 @@ describe('성공한 쓰기 알림', () => {
     expect(await screen.findByText(text)).toHaveAttribute('role', 'status')
   })
 })
+
+// 새 장으로 바뀌면 빈 종이만 남지 않게 알린다(#208)
+describe('새 페이지 알림', () => {
+  const NOTICE = '새 페이지가 열렸어요. 지난 페이지는 기록에 있어요'
+  const SAVED = '새 페이지가 열리는 시각을 02:00로 바꿨어요. 지금 페이지를 기록으로 옮겼어요'
+  const NEXT: NoteDetail = {
+    ...NOTE,
+    page: { key: '2026-10-15-2', date: '2026-10-15', seq: 2, openedAt: '2026-10-15T15:00:00+09:00', dueAt: '2026-10-16T02:00:00+09:00' },
+  }
+  const roll = () => act(() => latest().receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  const statuses = () => screen.queryAllByRole('status').map((el) => el.textContent ?? '')
+  const heard = (text: string) => statuses().filter((t) => t.includes(text))
+
+  beforeEach(() => sessionStorage.clear())
+
+  test('page_rolled로 장이 바뀌면 한 번 알리고, 기록으로 갈 수 있다', async () => {
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? { ...NEXT, sealHour: 2 } : {}))
+    render(
+      <MemoryRouter initialEntries={['/note/n1']}>
+        <Routes>
+          <Route path="/note/n1" element={<NotePage initial={NOTE} />} />
+          <Route path="/note/n1/history" element={<p>기록 화면</p>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    roll()
+    await waitFor(() => expect(heard(NOTICE)).toHaveLength(1))
+    await userEvent.click(screen.getByRole('button', { name: '기록 보기' }))
+    expect(screen.getByText('기록 화면')).toBeInTheDocument()
+  })
+
+  test('제 시각이 되면 서버 알림이 없어도 알린다', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+      render(
+        <MemoryRouter>
+          <NotePage initial={{ ...NOTE, page: { ...NOTE.page, dueAt: new Date(Date.now() + 1000).toISOString() }, serverNow: new Date().toISOString() }} />
+        </MemoryRouter>,
+      )
+      expect(heard(NOTICE)).toHaveLength(0)
+      await act(() => vi.advanceTimersByTimeAsync(5000))
+      expect(heard(NOTICE)).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test.each([
+    ['새 장 읽기가 저장 응답보다 먼저', true],
+    ['저장 응답이 새 장 읽기보다 먼저', false],
+  ])('바로 보관한 주인은 저장 결과만 듣는다: %s', async (_, readFirst) => {
+    let answerPatch = () => {}
+    let answerRead = () => {}
+    vi.stubGlobal('fetch', (url: string, init: RequestInit = {}) => {
+      if (init.method === 'PATCH')
+        return new Promise<Response>((r) => (answerPatch = () => r(json({ sealHour: 2, page: NEXT.page }))))
+      if (url === '/api/notes/n1') return new Promise<Response>((r) => (answerRead = () => r(json({ ...NEXT, isOwner: true, sealHour: 2 }))))
+      return Promise.resolve(json({}))
+    })
+    render(
+      <MemoryRouter>
+        <NotePage initial={{ ...NOTE, isOwner: true }} />
+      </MemoryRouter>,
+    )
+    const everHeard: string[] = []
+    const watcher = new MutationObserver(() => everHeard.push(...heard(NOTICE)))
+    watcher.observe(document.body, { subtree: true, childList: true, characterData: true })
+    await userEvent.click(screen.getByRole('button', { name: /^새 페이지 \d/ }))
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: '새 페이지 시각' }), '2')
+    await userEvent.click(screen.getByRole('button', { name: '저장' }))
+    const before = latest()
+    roll() // 서버는 저장 요청을 처리하는 동안 보낸다
+    for (const answer of readFirst ? [() => answerRead(), () => answerPatch()] : [() => answerPatch(), () => answerRead()]) {
+      await act(async () => answer())
+    }
+    await waitFor(() => expect(latest()).not.toBe(before))
+    expect(heard(SAVED)).toHaveLength(1)
+    expect(everHeard).toEqual([])
+    watcher.disconnect()
+  })
+
+  test('새 버전 때문에 새로고침해도 다시 연 화면에서 알린다', async () => {
+    sessionStorage.setItem('daypage:rolledFrom:n1', NOTE.page.key)
+    render(
+      <MemoryRouter>
+        <NotePage initial={NEXT} />
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(heard(NOTICE)).toHaveLength(1))
+    expect(sessionStorage.getItem('daypage:rolledFrom:n1')).toBeNull()
+  })
+
+  test('같은 장으로 다시 열면 알리지 않는다', () => {
+    sessionStorage.setItem('daypage:rolledFrom:n1', NOTE.page.key)
+    renderNote()
+    expect(heard(NOTICE)).toHaveLength(0)
+  })
+})
