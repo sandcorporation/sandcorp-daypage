@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type PointerEvent, type ReactNode } from 'react'
 import { focusSpot } from '../components/focusSpot'
-import { isPressable } from '../components/pressable'
+import { isPressable, ownsSpace } from '../components/pressable'
 import * as Y from 'yjs'
 import { addStroke, newId, readStroke, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, type Point } from './geometry'
@@ -405,15 +405,24 @@ export function PageView({
     if (readOnly && !onZoom) return
     const typing = (t: EventTarget | null) =>
       t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
+    // 가져간 Space는 반복과 뗌까지 막는다. 하나라도 흘리면 마우스로 누른 단추에 남은 초점 때문에 뗄 때 그 단추가 눌린다
+    let taken = false
     const down = (e: KeyboardEvent) => {
-      if (e.key !== ' ' || e.repeat || typing(e.target) || isPressable(e.target)) return
+      if (e.key !== ' ' || typing(e.target) || ownsSpace(e.target)) return
       e.preventDefault()
+      taken = true
       setSpaceHeld(true)
     }
     const up = (e: KeyboardEvent) => {
-      if (e.key === ' ') setSpaceHeld(false)
+      if (e.key !== ' ') return
+      if (taken) e.preventDefault()
+      taken = false
+      setSpaceHeld(false)
     }
-    const blur = () => setSpaceHeld(false)
+    const blur = () => {
+      taken = false
+      setSpaceHeld(false)
+    }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
     window.addEventListener('blur', blur)
@@ -984,8 +993,8 @@ export function PageView({
     paintLive()
   }
   // 최신 함수를 효과·바깥(되돌리기 버튼)에서 부르기 위해 둔다
-  const curveActions = useRef({ finishCurve, cancelCurve, undoCurvePoint })
-  curveActions.current = { finishCurve, cancelCurve, undoCurvePoint }
+  const curveActions = useRef({ finishCurve, cancelCurve, undoCurvePoint, leaveCurveBar })
+  curveActions.current = { finishCurve, cancelCurve, undoCurvePoint, leaveCurveBar }
   useEffect(() => {
     if (!curveControl) return
     curveControl.current = { undoPoint: () => curveActions.current.undoCurvePoint() }
@@ -994,15 +1003,19 @@ export function PageView({
     }
   }, [curveControl])
 
-  // 곡선 중: Enter로 끝내고 Esc로 취소한다(글 상자에 쓰는 중이거나 초점이 누를 수 있는 요소에 있으면 그대로 둔다)
+  // 곡선 중: Enter로 끝내고 Esc로 취소한다. 글 상자에 쓰는 중이면 그대로 둔다. Enter는 누를 수 있는 요소 위에서는
+  // 그 요소의 것이고, Esc는 열린 창이 있으면 창의 것이다
   useEffect(() => {
     if (curveCount === 0) return
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
-      if (el?.closest('input, textarea, [contenteditable="true"]') || isPressable(el)) return
-      if (e.key === 'Enter') curveActions.current.finishCurve(false)
-      else if (e.key === 'Escape') curveActions.current.cancelCurve()
-      else return
+      if (el?.closest('input, textarea, [contenteditable="true"]')) return
+      if (e.key === 'Enter' && !isPressable(el)) curveActions.current.finishCurve(false)
+      else if (e.key === 'Escape' && !document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+        const { cancelCurve, leaveCurveBar } = curveActions.current
+        if (el?.closest('.curve-bar')) leaveCurveBar(cancelCurve)
+        else cancelCurve()
+      } else return
       e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
