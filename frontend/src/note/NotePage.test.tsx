@@ -89,6 +89,15 @@ test('노트 색이 바뀌었다는 알림(102)을 받으면 도구 막대가 �
   expect(screen.getByRole('button', { name: '노트 색 #16794f' })).toBeInTheDocument()
 })
 
+test('노트 머리말 알림(105)을 받으면 이름과 참여 수가 바로 바뀐다', async () => {
+  renderNote()
+  expect(screen.getByText('참여 2명')).toBeInTheDocument()
+  act(() => latest().receive(105, { type: 'note_info', name: '바뀐 이름', memberCount: 3, memberLimit: 4 }))
+  expect(screen.getByText('바뀐 이름')).toBeInTheDocument()
+  expect(screen.queryByText('우리 노트')).not.toBeInTheDocument()
+  expect(screen.getByText('참여 3 / 4명')).toBeInTheDocument()
+})
+
 test('고르고 있던 노트 색이 빠지면 기본 잉크로 돌아간다', async () => {
   renderNote()
   act(() => latest().receive(102, { type: 'note_colors', colors: ['#16794f'] }))

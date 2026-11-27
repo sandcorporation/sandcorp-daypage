@@ -311,6 +311,8 @@ def update_note(request, note_id: str, body: UpdateNoteIn):
             note.seal_hour = body.sealHour
             rescheduled = pages.reschedule_open_page(note)
         note.save()
+        if body.name is not None or "memberLimit" in body.model_fields_set:
+            membership.announce_info(note.id)
     if rescheduled is not None:
         now = clock.now()
         if rescheduled.due_at <= now:
@@ -555,6 +557,7 @@ def kick_member(request, note_id: str, member_id: int):
     if member.user_id == note.owner_id:
         raise ApiError(400, "kick_owner", "노트를 만든 사람은 내보낼 수 없어요.")
     moderation.kick(note, member)
+    membership.announce_info(note.id)
     return {"ok": True}
 
 
