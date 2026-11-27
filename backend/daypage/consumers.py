@@ -40,7 +40,7 @@ from pycrdt import (
 
 from . import admission, awareness, clock, hub, membership, moderation, pages, rooms
 from .hub import EMPTY_UPDATE, db, page_group  # noqa: F401  page_group은 다른 모듈이 여기서 가져간다
-from .models import Note, NoteMember
+from .models import Note, NoteMember, User
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +97,7 @@ def note_group(note_id: str) -> str:
     return f"note.{note_id}"
 
 
-@database_sync_to_async
-def _blocked_code(note: Note, user) -> int | None:
+def _block_code(note: Note, user) -> int | None:
     """운영 조치로 들어올 수 없으면 닫는 코드(moderation.py)."""
     try:
         moderation.check_note(note, user)
@@ -111,6 +110,9 @@ def _blocked_code(note: Note, user) -> int | None:
     return None
 
 
+_blocked_code = database_sync_to_async(_block_code)
+
+
 @database_sync_to_async
 def _lookup(note_id: str, user) -> tuple[Note | None, NoteMember | None]:
     note = Note.objects.filter(pk=note_id).first()
@@ -118,6 +120,22 @@ def _lookup(note_id: str, user) -> tuple[Note | None, NoteMember | None]:
         return None, None
     member = NoteMember.objects.filter(note=note, user=user).first() if user.is_authenticated else None
     return note, member
+
+
+@database_sync_to_async
+def _recheck(note_id: str, user_id: int) -> tuple[int | None, NoteMember | None]:
+    """들어가기 직전에 다시 본다: 들어갈 수 없으면 (닫는 코드, None), 들어가도 되면 (None, 지금 멤버십).
+    사용자도 DB에서 새로 읽는다(연결의 사용자 객체는 접속할 때의 정지 상태를 들고 있다)."""
+    note = Note.objects.filter(pk=note_id).first()
+    user = User.objects.filter(pk=user_id).first()
+    if note is None or user is None:
+        return CLOSE_NOT_FOUND, None
+    if (code := _block_code(note, user)) is not None:
+        return code, None
+    member = NoteMember.objects.filter(note=note, user=user).first()
+    if member is None:
+        return CLOSE_UNAUTHORIZED, None
+    return None, member
 
 
 class PageConsumer(AsyncWebsocketConsumer):
@@ -230,17 +248,26 @@ class PageConsumer(AsyncWebsocketConsumer):
         await store.report_input(self.channel_name, self.last_input)
         await store.wait_remove(self.waiter)
         self.waiter = None
-        page = await db(pages.open_page)(self.note)
-        if pages.page_key(page.date, page.seq) != self.key:  # 기다리는 사이 장이 바뀌었다
-            self.entering = False
-            return await self.close(code=CLOSE_NOT_TODAY)
-        self.page_id = page.id
-        self.due_at = page.due_at
-        # 노트 지움·자정 교체 알림은 노트 그룹으로 온다.
+        # 노트 지움·닫힘·자정 교체 알림은 노트 그룹으로 온다.
         await self.channel_layer.group_add(note_group(self.note_id), self.channel_name)
         # 정지·내보내기는 사용자에게 알린다(그 사람의 모든 연결을 끊는다)
         await self.channel_layer.group_add(moderation.user_group(self.member.user_id), self.channel_name)
-        # 그룹에 든 뒤 지금 머리말을 보낸다. 페이지를 읽은 뒤 그룹에 들기 전에 바뀐 것도 여기서 따라잡는다.
+        # 내보냄·정지·노트 닫힘·지움은 접속할 때 한 번 봤지만, 대기열에서 기다리는 동안은 그룹 밖이라 알림을 못 받는다.
+        # 그룹에 든 뒤 다시 읽어야 그 사이 조치가 이 재검사나 알림 둘 중 하나로 반드시 잡힌다(#224).
+        code, member = await _recheck(self.note_id, self.member.user_id)
+        if code is None:
+            page = await db(pages.open_page)(self.note)
+            if pages.page_key(page.date, page.seq) != self.key:  # 기다리는 사이 장이 바뀌었다
+                code = CLOSE_NOT_TODAY
+        if code is not None:
+            await self.channel_layer.group_discard(note_group(self.note_id), self.channel_name)
+            await self.channel_layer.group_discard(moderation.user_group(self.member.user_id), self.channel_name)
+            self.entering = False
+            return await self.close(code=code)
+        self.page_id = page.id
+        self.due_at = page.due_at
+        self.member = member  # 기다리는 사이 바뀐 닉네임·색을 따른다
+        # 그룹에 든 뒤 지금 머리말을 보낸다. 그룹에 들기 전에 바뀐 것도 여기서 따라잡는다.
         if (info := await database_sync_to_async(membership.current_info)(self.note_id)) is not None:
             await self.send(bytes_data=note_info_message(info))
         self.sender = asyncio.create_task(self._send_loop())

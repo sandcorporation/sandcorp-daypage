@@ -11,6 +11,7 @@ from django.test import Client
 from pycrdt import read_message
 
 from daypage import clock
+from daypage.models import User
 from tests.helpers import create_note, login_as
 from tests.ws import YClient, awareness_message, expect_close, join, open_ws
 
@@ -246,3 +247,57 @@ async def test_nobody_is_let_go_without_waiters(cpu, settings):
     await ya.drain(timeout=0.4)  # 자리 비움 한도(0.1초)의 몇 배 동안 아무 일도 없어야 한다(안 와야 할 닫기는 짧게 받아 본다)
     assert not hasattr(ya, "closed")
     await ya.close()
+
+
+async def closed_before_entering(ws) -> int:
+    """문서·커서를 하나도 받지 못하고 닫힌 코드."""
+    while True:
+        msg = await ws.receive_output(timeout=3)
+        if msg["type"] == "websocket.close":
+            return msg.get("code")
+        assert msg["bytes"][0] not in (0, 1), "장 방에 들어와 문서·커서를 받았다"
+
+
+def _kick_guest(owner, admin, note_id: str, user_id: int) -> None:
+    member = owner.get(f"/api/notes/{note_id}/members").json()["members"][-1]  # 마지막에 참여한 c
+    assert owner.post(f"/api/notes/{note_id}/members/{member['id']}/kick").status_code == 200
+
+
+def _suspend(owner, admin, note_id: str, user_id: int) -> None:
+    body = {"days": 1, "reason": "욕설"}
+    assert admin.post(f"/api/admin/users/{user_id}/suspend", body, content_type="application/json").status_code == 200
+
+
+def _close_note(owner, admin, note_id: str, user_id: int) -> None:
+    body = {"reason": "광고"}
+    assert admin.post(f"/api/admin/notes/{note_id}/close", body, content_type="application/json").status_code == 200
+
+
+def _delete_note(owner, admin, note_id: str, user_id: int) -> None:
+    assert owner.delete(f"/api/notes/{note_id}").status_code == 204
+
+
+@pytest.mark.parametrize(
+    ("act", "code"),
+    [(_kick_guest, 4411), (_suspend, 4403), (_close_note, 4410), (_delete_note, 4404)],
+    ids=["kicked", "suspended", "note_closed", "note_deleted"],
+)
+async def test_waiter_blocked_while_waiting_does_not_get_in(cpu, act, code):
+    """대기 중에는 노트·사용자 그룹 밖이라 내보냄·정지·닫힘·지움 알림을 받지 못한다.
+    차례가 와도 들어가지 못하고 그 닫기 코드로 끊긴다(#224)."""
+    cpu(0.2)
+    note_id, (a, b, c) = await setup_note(3)
+    ya = await join(a, note_id, DATE)
+    yb = await join(b, note_id, DATE)
+    yc = await queue(c, note_id)
+    assert await next_position(yc.ws) == 1
+
+    def act_on_c():
+        admin = login_as(900)
+        User.objects.filter(kakao_id=900).update(is_staff=True)
+        act(a, admin, note_id, User.objects.get(kakao_id=3).id)
+
+    await sync_to_async(act_on_c)()
+    await ya.close()  # 자리가 빈다
+    assert await closed_before_entering(yc.ws) == code
+    await yb.close()
