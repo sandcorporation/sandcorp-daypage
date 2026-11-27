@@ -18,11 +18,14 @@ export function usePresence(provider: WebsocketProvider | null, me: { nickname: 
   const [peers, setPeers] = useState<Peer[]>([])
   const lastSent = useRef(0)
   const pending = useRef<number | undefined>(undefined)
+  // 지금 커서·고치는 상자. 다시 연결하면 awareness가 새로 만들어지지만 초점은 상자에 그대로라 focus가 다시 오지 않으므로,
+  // provider가 없는 동안의 변화까지 여기 두었다가 새 상태에 담는다(#240).
+  const local = useRef<Required<Pick<State, 'cursor' | 'editingBoxId'>>>({ cursor: null, editingBoxId: null })
 
   useEffect(() => {
     if (!provider) return
     const awareness = provider.awareness
-    awareness.setLocalState({ nickname: me.nickname, color: me.color, cursor: null, editingBoxId: null })
+    awareness.setLocalState({ nickname: me.nickname, color: me.color, ...local.current })
     const read = () => {
       const list: Peer[] = []
       awareness.getStates().forEach((raw, clientId) => {
@@ -49,10 +52,12 @@ export function usePresence(provider: WebsocketProvider | null, me: { nickname: 
 
   const setCursor = useCallback(
     (p: Point | null) => {
+      const cursor = p ? { x: Math.round(p.x), y: Math.round(p.y) } : null
+      local.current.cursor = cursor
       if (!provider) return
       const send = () => {
         lastSent.current = Date.now()
-        provider.awareness.setLocalStateField('cursor', p ? { x: Math.round(p.x), y: Math.round(p.y) } : null)
+        provider.awareness.setLocalStateField('cursor', cursor)
       }
       window.clearTimeout(pending.current)
       const wait = CURSOR_INTERVAL - (Date.now() - lastSent.current)
@@ -63,7 +68,10 @@ export function usePresence(provider: WebsocketProvider | null, me: { nickname: 
   )
 
   const setEditing = useCallback(
-    (boxId: string | null) => provider?.awareness.setLocalStateField('editingBoxId', boxId),
+    (boxId: string | null) => {
+      local.current.editingBoxId = boxId
+      provider?.awareness.setLocalStateField('editingBoxId', boxId)
+    },
     [provider],
   )
 
