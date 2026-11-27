@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { PopoverSideContext, ToolPopover } from '../components/ToolPopover'
 import type { PopoverSide } from '../components/popoverPlacement'
@@ -233,9 +233,24 @@ export function Toolbar(props: Props) {
   const dock = props.dock ?? 'left'
   const keymap = useKeymap()
   const { node: announced, announce } = useAnnouncer()
+  const navRef = useRef<HTMLElement>(null)
+  // 막대 높이를 --note-toolbar-h로 알린다. 아래에 붙인 막대 위에 뜨는 것(곡선 막대)이 줄 수에 맞춰 비켜선다.
+  useLayoutEffect(() => {
+    const el = navRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const root = document.documentElement
+    const update = () => root.style.setProperty('--note-toolbar-h', `${el.offsetHeight}px`)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--note-toolbar-h')
+    }
+  }, [])
   return (
     <PopoverSideContext.Provider value={POPOVER_SIDE[dock]}>
-    <nav aria-label="도구" className="toolbar" data-dock={dock}>
+    <nav ref={navRef} aria-label="도구" className="toolbar" data-dock={dock}>
       {props.onDock && <DockGrip dock={dock} onDock={props.onDock} />}
       {TOOLS.map((t) =>
         t.kind === 'pen' ? (
