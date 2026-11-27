@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type PointerEvent, type ReactNode } from 'react'
 import { focusSpot } from '../components/focusSpot'
+import { isPressable } from '../components/pressable'
 import * as Y from 'yjs'
 import { addStroke, newId, readStroke, readStrokes, round, strokesMap, type Stroke } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH, clampToPage, fitScale, type Point } from './geometry'
@@ -405,7 +406,7 @@ export function PageView({
     const typing = (t: EventTarget | null) =>
       t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
     const down = (e: KeyboardEvent) => {
-      if (e.key !== ' ' || e.repeat || typing(e.target)) return
+      if (e.key !== ' ' || e.repeat || typing(e.target) || isPressable(e.target)) return
       e.preventDefault()
       setSpaceHeld(true)
     }
@@ -965,9 +966,11 @@ export function PageView({
     paintLive()
   }
 
-  /** 곡선 바의 단추는 바와 함께 사라지므로 초점을 지면에 두고 일을 한다 */
+  /** 곡선 바의 단추는 바와 함께 사라지므로 초점을 곡선 도구 단추(없으면 지면)에 두고 일을 한다 */
   function leaveCurveBar(action: () => void) {
-    focusSpot(viewportRef.current)
+    const toolButton = document.querySelector<HTMLElement>('[data-shape-tool]')
+    if (toolButton) toolButton.focus()
+    else focusSpot(viewportRef.current)
     action()
   }
 
@@ -991,12 +994,12 @@ export function PageView({
     }
   }, [curveControl])
 
-  // 곡선 중: Enter로 끝내고 Esc로 취소한다(글 상자 등에 쓰는 중이면 그대로 둔다)
+  // 곡선 중: Enter로 끝내고 Esc로 취소한다(글 상자에 쓰는 중이거나 초점이 누를 수 있는 요소에 있으면 그대로 둔다)
   useEffect(() => {
     if (curveCount === 0) return
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
-      if (el?.closest('input, textarea, [contenteditable="true"]')) return
+      if (el?.closest('input, textarea, [contenteditable="true"]') || isPressable(el)) return
       if (e.key === 'Enter') curveActions.current.finishCurve(false)
       else if (e.key === 'Escape') curveActions.current.cancelCurve()
       else return
@@ -1108,6 +1111,8 @@ export function PageView({
     // 글 상자 같은 DOM 위에서 누른 건 그 요소가 처리한다.
     if ((e.target as HTMLElement).closest('[data-page-ui]')) return
     if (activePointer.current !== null) return
+    // 지면을 누르면 초점도 지면으로: 아래에서 pointerdown을 막으면 초점이 도구 단추에 남아 Enter·Space가 그 단추를 누른다
+    if (isPressable(document.activeElement)) focusSpot(viewportRef.current)
     lastClient.current = { x: e.clientX, y: e.clientY }
     const p = pagePoint(e)
     if (picking) {

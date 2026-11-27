@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import * as Y from 'yjs'
 import { PageView } from './PageView'
 import { PAN_START_EVENT } from './touchPan'
@@ -464,5 +465,70 @@ describe('펜 지우개 버튼(#95)', () => {
     const { el, calls } = penFrame()
     fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100, button: 2, buttons: 2 })
     expect(calls).toEqual([])
+  })
+})
+
+describe('#189 곡선 중 누를 수 있는 요소의 Enter·Space·Escape는 그 요소의 것이다', () => {
+  beforeEach(() => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+  })
+
+  function curveFrame(points = 3) {
+    const doc = new Y.Doc()
+    const { container } = render(
+      <>
+        <button type="button" data-shape-tool>
+          도형
+        </button>
+        <PageView doc={doc} tool="shape" shape="curve" ink="#000" widthLevel={1} author="나" />
+      </>,
+    )
+    const el = container.querySelector('.page-frame') as HTMLElement
+    const tool = screen.getByRole('button', { name: '도형' })
+    // 도구를 고른 뒤 초점이 도구 단추에 남은 채로 지면에 점을 찍는다
+    tool.focus()
+    for (let i = 0; i < points; i++) {
+      const at = { pointerId: i + 1, pointerType: 'mouse', clientX: 100 + i * 80, clientY: 100 + i * 40, button: 0 }
+      fireEvent.pointerDown(el, { ...at, buttons: 1 })
+      fireEvent.pointerUp(el, at)
+    }
+    return { doc, tool, strokes: () => doc.getMap('strokes').size }
+  }
+
+  test.each([
+    ['취소', '{Enter}', 0],
+    ['취소', ' ', 0],
+    ['닫기', '{Enter}', 1],
+    ['완료', '{Enter}', 1],
+    ['완료', ' ', 1],
+  ])('「%s」에 %s → 획 %i개, 초점은 곡선 도구 단추로', async (name, key, saved) => {
+    const { tool, strokes } = curveFrame()
+    screen.getByRole('button', { name }).focus()
+    await userEvent.keyboard(key)
+    expect(strokes()).toBe(saved)
+    expect(screen.queryByRole('toolbar', { name: '곡선' })).toBeNull()
+    expect(tool).toHaveFocus()
+  })
+
+  test('다른 단추 위의 Enter·Escape는 곡선을 끝내거나 버리지 않는다', async () => {
+    const { tool, strokes } = curveFrame()
+    tool.focus()
+    await userEvent.keyboard('{Enter}{Escape}')
+    expect(strokes()).toBe(0)
+    expect(screen.getByRole('toolbar', { name: '곡선' })).toBeInTheDocument()
+  })
+
+  test('지면에 점을 찍으면 초점이 도구 단추를 떠나 Enter로 곡선을 끝낸다', async () => {
+    const { tool, strokes } = curveFrame()
+    expect(tool).not.toHaveFocus()
+    await userEvent.keyboard('{Enter}')
+    expect(strokes()).toBe(1)
+  })
+
+  test('단추 위의 Space는 화면 끌기가 가로채지 않는다', () => {
+    const { tool } = curveFrame(0)
+    expect(fireEvent.keyDown(tool, { key: ' ' })).toBe(true)
+    expect(fireEvent.keyDown(document.body, { key: ' ' })).toBe(false)
   })
 })
