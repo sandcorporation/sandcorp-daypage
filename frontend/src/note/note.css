@@ -841,14 +841,16 @@
   .note-screen:not([data-focus]) .curve-bar {
     bottom: 72px;
   }
+}
+/* 아래 막대의 높이는 줄 수에 따라 다르다(Toolbar가 --note-toolbar-h로 알린다). --note-dock-clear는 막대 아래에 비워 둔 칩 자리다. */
+@media (min-width: 721px) {
   .note-screen:not([data-focus]) .note-body[data-dock='bottom'] .curve-bar {
-    bottom: 146px;
+    bottom: calc(var(--note-dock-clear) + var(--note-toolbar-h, 67px) + 8px);
   }
 }
-@media (min-width: 721px) and (max-width: 1023px) {
-  .note-screen:not([data-focus]) .note-body[data-dock='bottom'] .curve-bar {
-    bottom: 202px;
-  }
+/* 집중 모드의 아래 막대는 휴대폰 폭에서도 아래에 뜬다 */
+.note-screen[data-focus] .note-body[data-dock='bottom'] .curve-bar {
+  bottom: calc(var(--note-dock-clear) + var(--note-toolbar-h, 67px) + 8px);
 }
 /* 터치 휴대폰: 도구 묶음이 두 줄이 된다 */
 @media (max-width: 500px) and (any-pointer: coarse) {
@@ -2064,11 +2066,12 @@
   }
   /* 아래 툴바는 아래 칩(연결·새 소식·건의·배율) 위에 둔다 */
   .note-body[data-dock='bottom'] {
-    padding-bottom: 72px;
+    --note-dock-clear: 72px;
+    padding-bottom: var(--note-dock-clear);
   }
   @media (max-width: 1023px) {
     .note-screen:not([data-focus]) .note-body[data-dock='bottom'] {
-      padding-bottom: 128px;
+      --note-dock-clear: 128px;
     }
   }
   .toolbar[data-dock='top'] .tool-sep,
@@ -2378,9 +2381,12 @@
   left: 50%;
   transform: translateX(-50%);
 }
+.note-screen[data-focus] .note-body[data-dock='bottom'] {
+  --note-dock-clear: 72px;
+}
 .note-screen[data-focus] .toolbar[data-dock='bottom'] {
   top: auto;
-  bottom: 72px;
+  bottom: var(--note-dock-clear);
   left: 50%;
   transform: translateX(-50%);
 }
