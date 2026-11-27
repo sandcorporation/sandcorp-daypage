@@ -115,6 +115,27 @@ test('노트 머리말 알림(105)을 받으면 이름과 참여 수가 바로 �
   expect(screen.getByText('참여 3 / 4명')).toBeInTheDocument()
 })
 
+// 다시 허용은 참여 수가 그대로라, 알림이 온 것만으로 다시 읽어야 한다(#197)
+test('참여자 창을 열어 둔 사이 알림(105)이 오면 참여 수가 같아도 목록을 다시 읽는다', async () => {
+  let kicked = [{ id: 9, nickname: '푸른 고래', at: '2026-10-20T03:00:00Z' }]
+  vi.stubGlobal('fetch', async (url: string) =>
+    new Response(JSON.stringify(url.endsWith('/members') ? { members: [], kicked } : {}), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  )
+  render(
+    <MemoryRouter>
+      <NotePage initial={{ ...NOTE, isOwner: true }} />
+    </MemoryRouter>,
+  )
+  await userEvent.click(screen.getByRole('button', { name: /^참여 / }))
+  expect(await screen.findByRole('button', { name: '푸른 고래 다시 허용' })).toBeInTheDocument()
+  kicked = []
+  act(() => latest().receive(105, { type: 'note_info', name: NOTE.name, memberCount: 2, memberLimit: null }))
+  expect(await screen.findByText('내보낸 사람이 없어요.')).toBeInTheDocument()
+})
+
 test('고르고 있던 노트 색이 빠지면 기본 잉크로 돌아간다', async () => {
   renderNote()
   act(() => latest().receive(102, { type: 'note_colors', colors: ['#16794f'] }))

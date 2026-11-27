@@ -8,7 +8,7 @@ from asgiref.sync import sync_to_async
 from pycrdt import read_message
 
 from daypage import clock
-from daypage.models import NoteMember
+from daypage.models import NoteBan, NoteMember
 from tests.helpers import create_note, login_as
 from tests.ws import join
 
@@ -68,6 +68,22 @@ async def test_kick_member_count_reaches_connected_people():
     member = await NoteMember.objects.aget(note_id=note_id, user__kakao_id=3)
     await sync_to_async(owner.post)(f"/api/notes/{note_id}/members/{member.pk}/kick")
     assert (await next_info(y.ws))["memberCount"] == 2
+    await y.close()
+
+
+async def test_allowing_again_reaches_connected_people():
+    # 참여 수는 그대로지만, 열어 둔 참여자 창이 「내보낸 사람」 목록을 다시 읽어야 한다(#197)
+    owner, note_id, y = await connected_note()
+    newcomer = await sync_to_async(login_as)(3)
+    await sync_to_async(newcomer.get)(f"/api/notes/{note_id}")
+    assert (await next_info(y.ws))["memberCount"] == 3
+    member = await NoteMember.objects.aget(note_id=note_id, user__kakao_id=3)
+    await sync_to_async(owner.post)(f"/api/notes/{note_id}/members/{member.pk}/kick")
+    assert (await next_info(y.ws))["memberCount"] == 2
+    ban = await NoteBan.objects.aget(note_id=note_id)
+    res = await sync_to_async(owner.delete)(f"/api/notes/{note_id}/kicked/{ban.pk}")
+    assert res.status_code == 204
+    assert await next_info(y.ws) == {"name": "이름 없는 노트", "memberCount": 2, "memberLimit": 4}
     await y.close()
 
 

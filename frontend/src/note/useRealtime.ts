@@ -34,7 +34,7 @@ export const MESSAGE_NOTE_PAPER = 103
 /** 장의 봉인 예정이 바뀜(주인이 봉인 시각을 바꿈): {type: 'note_page', key, dueAt, sealHour} (MESSAGE_NOTE_PAGE) */
 export const MESSAGE_NOTE_PAGE = 104
 
-/** 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·정원 변경): {type: 'note_info', name, memberCount, memberLimit} (MESSAGE_NOTE_INFO) */
+/** 노트 머리말이 바뀜(이름 변경·새 참여·내보내기·다시 허용·정원 변경): {type: 'note_info', name, memberCount, memberLimit} (MESSAGE_NOTE_INFO) */
 export const MESSAGE_NOTE_INFO = 105
 
 export type NoteInfo = { name: string; memberCount: number; memberLimit: number | null }
