@@ -113,8 +113,11 @@
   gap: 10px;
 }
 .avatars {
+  --avatar-size: 36px;
+  min-width: calc(var(--avatar-size) + (var(--avatar-slots, 1) - 1) * (var(--avatar-size) - 8px));
   display: flex;
   align-items: center;
+  justify-content: flex-end;
 }
 .avatar {
   width: 36px;
@@ -139,6 +142,9 @@
   font-size: 13px;
   color: var(--muted);
   padding: 0 6px;
+}
+.note-sub .me-label {
+  padding: 0 0 0 8px;
 }
 
 .note-body {
@@ -532,6 +538,7 @@
   position: relative;
 }
 .member-badge {
+  font-variant-numeric: tabular-nums;
   display: inline-flex;
   align-items: center;
   min-height: 36px;
@@ -837,9 +844,17 @@
   }
 }
 
-/* 지면 끝은 아래 칩·보기 칸에 가리지 않게 비운다 */
+/* 지면 위에 떠 있는 것만큼 스크롤 상자를 비운다. 그래야 지면의 어느 가장자리든 떠 있는 것 밖으로 끌어와 그릴 수 있다.
+   바닥은 늘 칩·보기 칸(--note-floor)이고, 그 위에 더 뜨는 것은 --cover-*에 더한다(집중 모드의 막대, 곡선 막대).
+   지면 위에 새로 띄우는 것은 여기에 반영한다. */
+.note-screen {
+  --note-curve-h: 48px;
+}
 .note-screen .page-viewport {
-  padding-bottom: var(--note-floor);
+  padding-bottom: calc(var(--note-floor) + var(--cover-bottom, 0px) + var(--cover-curve, 0px));
+}
+.note-screen .page-viewport:has(.curve-bar) {
+  --cover-curve: calc(var(--note-curve-h) + 8px);
 }
 
 /* 글 상자 옮기기 손잡이: 화면에서 일정한 크기로 보이도록 장 배율을 거꾸로 적용한다 */
@@ -1496,6 +1511,7 @@
 
 /* n점 곡선을 찍는 동안 화면 아래 가운데에 뜨는 완료·취소 막대 */
 .curve-bar {
+  height: var(--note-curve-h, 48px);
   position: fixed;
   left: 50%;
   /* 아래 칩·보기 칸 위 */
@@ -1610,6 +1626,9 @@
     max-width: 100%;
     justify-content: flex-end;
     gap: 3px;
+  }
+  .note-header .avatars {
+    --avatar-size: 28px;
   }
   .note-header .avatar {
     width: 28px;
@@ -2335,7 +2354,22 @@
   gap: 0;
 }
 .note-screen[data-focus] .page-viewport {
-  padding: 12px 12px var(--note-floor);
+  padding-top: calc(12px + var(--cover-top, 0px));
+  padding-right: calc(12px + var(--cover-right, 0px));
+  padding-left: calc(12px + var(--cover-left, 0px));
+}
+/* 떠 있는 막대가 덮는 만큼(크기는 Toolbar가 --note-toolbar-w·h로 알린다) */
+.note-screen[data-focus] .note-body[data-dock='left'] .page-viewport {
+  --cover-left: calc(var(--note-toolbar-w, 66px) + 12px);
+}
+.note-screen[data-focus] .note-body[data-dock='right'] .page-viewport {
+  --cover-right: calc(var(--note-toolbar-w, 66px) + 12px);
+}
+.note-screen[data-focus] .note-body[data-dock='top'] .page-viewport {
+  --cover-top: calc(var(--note-toolbar-h, 67px) + 12px);
+}
+.note-screen[data-focus] .note-body[data-dock='bottom'] .page-viewport {
+  --cover-bottom: calc(var(--note-toolbar-h, 67px) + 8px);
 }
 .note-screen[data-focus] .toolbar {
   position: fixed;
@@ -2385,7 +2419,17 @@
     transform: none;
   }
   .note-screen[data-focus] .page-viewport {
-    padding: 70px 8px var(--note-floor);
+    padding-top: calc(8px + var(--cover-top, 0px));
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+  /* 휴대폰에서는 왼쪽·오른쪽으로 골라 둔 막대도 위에 가로로 뜬다 */
+  .note-screen[data-focus] .note-body[data-dock] .page-viewport {
+    --cover-left: 0px;
+    --cover-right: 0px;
+  }
+  .note-screen[data-focus] .note-body:not([data-dock='bottom']) .page-viewport {
+    --cover-top: calc(var(--note-toolbar-h, 54px) + 8px);
   }
 }
 

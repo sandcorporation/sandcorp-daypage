@@ -1,7 +1,7 @@
-import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode, type Ref } from 'react'
 import { Link } from 'react-router'
 import { Logo } from '../components/Brand'
-import { useIsPhone } from '../components/useIsPhone'
+import { useIsPhone, useMediaQuery } from '../components/useIsPhone'
 import { Countdown } from './Countdown'
 import { NoteName } from './NoteName'
 import { formatPageDate, seqSuffix } from './time'
@@ -21,7 +21,10 @@ type Props = {
 export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, settings, titleRef }: Props) {
   const shown = [{ nickname: note.me.nickname, color: note.me.color, isMe: true }, ...peers]
   const isPhone = useIsPhone()
-  const faces = isPhone ? 2 : 6
+  // 좁은 폭에서는 얼굴을 줄이고 내 닉네임을 남은 시간 옆에 둔다
+  const isNarrow = useMediaQuery('(max-width: 1023px)') || isPhone
+  const isMedium = useMediaQuery('(max-width: 1279px)')
+  const faces = isNarrow ? 2 : isMedium ? 3 : 6
   const more = shown.length - faces
   const me = (
     <span className="me-label">
@@ -59,13 +62,19 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
               {seqSuffix(page.seq)} 페이지 ·{' '}
             </span>
             <Countdown until={page.dueAt} clockOffset={clockOffset} />
-            {isPhone && me}
+            {isNarrow && me}
           </p>
         </div>
       </div>
 
       <div className="note-header-right">
-        <div className="avatars" role="group" aria-label={`함께 있는 사람 ${shown.length}명`}>
+        {/* 아바타 자리는 가장 많이 보일 때(얼굴 + 「+n」)만큼 늘 잡아 둔다. 접속자 수로 머리글 줄이 바뀌면 그 아래 지면이 긋는 중에 밀린다 */}
+        <div
+          className="avatars"
+          role="group"
+          aria-label={`함께 있는 사람 ${shown.length}명`}
+          style={{ '--avatar-slots': faces + 1 } as CSSProperties}
+        >
           {shown.slice(0, faces).map((p, i) => {
             // 얼굴의 머리글자만으로는 누구인지 알 수 없어, 읽는 이름과 툴팁은 닉네임이다
             const name = p.isMe ? `${p.nickname}(나)` : p.nickname
@@ -88,7 +97,7 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
             </span>
           )}
         </div>
-        {!isPhone && me}
+        {!isNarrow && me}
         {settings}
         <Link to={`/note/${note.id}/history`} className="btn" aria-label="기록">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">

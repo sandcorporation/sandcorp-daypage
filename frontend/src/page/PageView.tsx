@@ -259,7 +259,10 @@ export function PageView({
     if (!el) return
     const update = () => {
       const box = pageViewBox(viewRef.current)
-      const s = zoom === 'fit' ? (fitHeight ? fitScaleIn(el.clientWidth, el.clientHeight, box) : fitScale(el.clientWidth, box.width)) : zoom
+      // 옆 여백(떠 있는 막대 자리)은 종이가 쓸 수 없는 폭이다
+      const style = getComputedStyle(el)
+      const width = el.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0)
+      const s = zoom === 'fit' ? (fitHeight ? fitScaleIn(width, el.clientHeight, box) : fitScale(width, box.width)) : zoom
       const frame = frameRef.current
       if (frame && s !== scaleRef.current && !restore.current) {
         const req = requested.current
