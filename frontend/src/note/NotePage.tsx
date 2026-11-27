@@ -39,6 +39,7 @@ import {
 } from "../components/useFocusOnArrival";
 import { eulReul } from "../josa";
 import { ErrorScreen, MessageCard } from "../pages/ErrorScreen";
+import { BottomArea } from "./BottomArea";
 import { ConnectionPill } from "./ConnectionPill";
 import { NewsButton } from "../news/NewsButton";
 import { PaperButton } from "./PaperButton";
@@ -1091,37 +1092,39 @@ export function NotePage({ initial }: Props) {
           <Cursors peers={presence.peers} scale={scale} />
         </PageView>
       </div>
-      {!focus && (
-        <div className="status-corner">
-          {/* 장 교체로 다시 붙는 동안은 알약을 그대로 둔다(알림은 새 페이지 알림 하나, #212) */}
-          <ConnectionPill
-            status={switching ? "connected" : status}
-            synced={switching || synced}
-            newVersion={newVersion}
+      <BottomArea>
+        {!focus && (
+          <div className="status-corner">
+            {/* 장 교체로 다시 붙는 동안은 알약을 그대로 둔다(알림은 새 페이지 알림 하나, #212) */}
+            <ConnectionPill
+              status={switching ? "connected" : status}
+              synced={switching || synced}
+              newVersion={newVersion}
+            />
+            <NewsButton />
+            <SuggestButton noteId={note.id} context={suggestionContext} />
+            <ShortcutsButton open={keysOpen} onOpen={setKeysOpen} />
+          </div>
+        )}
+        <div className="view-dock">
+          <ViewControl
+            fingerMoves={fingerMoves}
+            onFingerMoves={chooseFingerMoves}
+            locked={viewLock}
+            onLocked={chooseViewLock}
+            addSelect={tool === "select" ? selectAdd : undefined}
+            onAddSelect={setSelectAdd}
           />
-          <NewsButton />
-          <SuggestButton noteId={note.id} context={suggestionContext} />
-          <ShortcutsButton open={keysOpen} onOpen={setKeysOpen} />
+          <RotateControl
+            view={view}
+            keymap={keymap}
+            onRotate={(dir) => setView((v) => rotateView(v, dir))}
+            onMirror={() => setView(mirrorView)}
+            onReset={() => setView(VIEW_IDENTITY)}
+          />
+          <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
         </div>
-      )}
-      <div className="view-dock">
-        <ViewControl
-          fingerMoves={fingerMoves}
-          onFingerMoves={chooseFingerMoves}
-          locked={viewLock}
-          onLocked={chooseViewLock}
-          addSelect={tool === "select" ? selectAdd : undefined}
-          onAddSelect={setSelectAdd}
-        />
-        <RotateControl
-          view={view}
-          keymap={keymap}
-          onRotate={(dir) => setView((v) => rotateView(v, dir))}
-          onMirror={() => setView(mirrorView)}
-          onReset={() => setView(VIEW_IDENTITY)}
-        />
-        <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
-      </div>
+      </BottomArea>
       {confirmDelete && (
         <ConfirmDialog
           title={`‘${note.name}’${eulReul(note.name)} 지울까요?`}
