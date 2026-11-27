@@ -836,6 +836,20 @@
     bottom: 128px;
   }
 }
+/* 곡선 막대는 아래 칩 위에, 아래에 붙인 도구 막대가 있으면 그 위에 둔다 */
+@media (min-width: 1024px) {
+  .note-screen:not([data-focus]) .curve-bar {
+    bottom: 72px;
+  }
+  .note-screen:not([data-focus]) .note-body[data-dock='bottom'] .curve-bar {
+    bottom: 146px;
+  }
+}
+@media (min-width: 721px) and (max-width: 1023px) {
+  .note-screen:not([data-focus]) .note-body[data-dock='bottom'] .curve-bar {
+    bottom: 202px;
+  }
+}
 /* 터치 휴대폰: 도구 묶음이 두 줄이 된다 */
 @media (max-width: 500px) and (any-pointer: coarse) {
   .page-viewport {
@@ -2040,6 +2054,9 @@
     align-items: center;
     align-self: center;
     max-width: 100%;
+    /* 좁은 창에서는 끝 단추가 밀려나지 않게 줄을 바꾼다 */
+    flex-wrap: wrap;
+    justify-content: center;
   }
   .toolbar[data-dock='bottom'] {
     order: 2;
@@ -2090,10 +2107,25 @@
     display: none;
   }
 }
-/* 높이가 낮은 화면: 세로 도구 막대가 아래 칩(연결·배율)에 닿지 않게 간격을 줄인다 */
-@media (min-width: 721px) and (max-height: 900px) {
+/* 높이가 낮은 화면: 한 줄 세로 막대는 화면을 넘고 아래 칩(연결·배율)에 깔리므로 두 줄로 접는다.
+   좁은 폭에서는 머리글이 여러 줄이 되고, 1023px 이하는 배율 묶음이 칩 위로 올라가 높이가 더 필요하다. */
+@media (min-width: 721px) and (max-height: 1010px), (min-width: 721px) and (max-width: 1023px) and (max-height: 1110px) {
   .toolbar:not([data-dock='top']):not([data-dock='bottom']) {
+    display: grid;
+    grid-template-columns: repeat(2, 48px);
+    justify-items: center;
+    align-items: center;
     gap: 3px;
+  }
+  .toolbar:not([data-dock='top']):not([data-dock='bottom']) > :is(.toolbar-grip, .tool-sep) {
+    grid-column: 1 / -1;
+  }
+  .toolbar:not([data-dock='top']):not([data-dock='bottom']) > .tool-sep {
+    justify-self: stretch;
+  }
+  /* 글꼴 목록은 단추가 아니라 막대를 기준으로 연다(단추 기준이면 옆 줄 단추를 덮는다) */
+  .toolbar:not([data-dock='top']):not([data-dock='bottom']) > .font-picker {
+    position: static;
   }
 }
 .width-panel {
