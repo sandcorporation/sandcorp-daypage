@@ -3,11 +3,9 @@
 import datetime as dt
 import logging
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.db import transaction
 
-from . import clock, photos
+from . import broadcast, clock, photos
 from .models import Note, Page
 from .pages import _merge, current_key, doc_stats, drop_empty_text_boxes
 from .points import pack_points
@@ -56,9 +54,8 @@ def announce_roll(note_ids: set[str], key: str) -> None:
     """노트 접속자에게 페이지 교체를 알린다. key는 새로 열린 장의 키."""
     from .consumers import note_group
 
-    layer = get_channel_layer()
     for note_id in note_ids:
-        async_to_sync(layer.group_send)(note_group(note_id), {"type": "page.rolled", "key": key})
+        broadcast.send_now(note_group(note_id), {"type": "page.rolled", "key": key})
 
 
 def _announce_next(note_ids: set[str], now: dt.datetime) -> None:

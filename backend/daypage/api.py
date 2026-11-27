@@ -13,7 +13,7 @@ from ninja import Field, NinjaAPI, Schema
 from ninja.security import django_auth
 
 from . import health as health_checks
-from . import clock, membership, moderation, pages, paper, photos, rooms, sealing, shortcuts, suggestions
+from . import broadcast, clock, membership, moderation, pages, paper, photos, rooms, sealing, shortcuts, suggestions
 from .models import Note, NoteBan, NoteMember, Page, Photo, Suggestion
 
 
@@ -396,15 +396,9 @@ def announce_note_colors(note_id: str, colors: list[str]) -> None:
 
 def announce_note_event(note_id: str, event: dict) -> None:
     """노트에 접속해 있는 연결들에 알린다(저장이 끝난 뒤)."""
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
-
     from .consumers import note_group
 
-    def send() -> None:
-        async_to_sync(get_channel_layer().group_send)(note_group(note_id), event)
-
-    transaction.on_commit(send)
+    broadcast.send_after_commit(note_group(note_id), event)
 
 
 @api.get("/notes/{note_id}/pages")
@@ -509,17 +503,8 @@ def delete_note(request, note_id: str):
     note.delete()
     photos.delete_later(photo_keys)
     # 접속해 있던 사람들의 방을 닫아 '노트를 찾을 수 없어요'로 보낸다.
-    transaction.on_commit(lambda: announce_note_deleted(note_id))
+    announce_note_event(note_id, {"type": "note.deleted"})
     return HttpResponse(status=204)
-
-
-def announce_note_deleted(note_id: str) -> None:
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
-
-    from .consumers import note_group
-
-    async_to_sync(get_channel_layer().group_send)(note_group(note_id), {"type": "note.deleted"})
 
 
 # ── 참여자 내보내기(노트를 만든 사람만) ─────────────────────────

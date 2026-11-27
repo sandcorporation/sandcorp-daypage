@@ -13,12 +13,10 @@ import random
 import secrets
 import time
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.core.management.base import BaseCommand, CommandError
 from pycrdt import Doc, Map, XmlElement, XmlFragment, XmlText
 
-from daypage import clock, membership, pages
+from daypage import broadcast, clock, membership, pages
 from daypage.consumers import page_group
 from daypage.models import Note, NoteMember
 
@@ -554,7 +552,7 @@ class Command(BaseCommand):
         pages.append_update(page.id, update, clock.now())
         pages.compact(page.id)
         # 접속해 있는 사람에게도 바로 보이게 한다.
-        async_to_sync(get_channel_layer().group_send)(
+        broadcast.send_now(
             page_group(page.id), {"type": "hub.update", "page": page.id, "update": update, "from": "seed_sample"}
         )
         self.stdout.write(f"'{note.name}'({note.id}) {page.date} 페이지: 글 상자 {len(box_specs)}개, 낙서 {len(stroke_specs)}획")

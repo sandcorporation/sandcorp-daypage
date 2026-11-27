@@ -9,11 +9,9 @@
 
 import datetime as dt
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.db import transaction
 
-from . import clock
+from . import broadcast, clock
 from .models import AdminLog, Note, NoteBan, NoteMember, User
 
 # 정지 기간(일). None은 영구.
@@ -80,7 +78,7 @@ def suspend(staff: User, target: User, days: int | None, reason: str) -> dict:
     target.suspended_until = None if days is None else clock.now() + dt.timedelta(days=days)
     target.save(update_fields=["suspension_reason", "suspension_permanent", "suspended_until"])
     log(staff, "suspend_user", target_user_id=target.id, detail=f"{'영구' if days is None else f'{days}일'} · {reason}")
-    transaction.on_commit(lambda: _send_group(user_group(target.id), {"type": "user.suspended"}))
+    broadcast.send_after_commit(user_group(target.id), {"type": "user.suspended"})
     return suspension(target)
 
 
@@ -108,8 +106,7 @@ def close_note(staff: User, note: Note, reason: str) -> None:
     log(staff, "close_note", note=note, detail=reason)
     from .consumers import note_group
 
-    note_id = note.id
-    transaction.on_commit(lambda: _send_group(note_group(note_id), {"type": "note.closed"}))
+    broadcast.send_after_commit(note_group(note.id), {"type": "note.closed"})
 
 
 def reopen_note(staff: User, note: Note) -> None:
@@ -127,8 +124,7 @@ def kick(note: Note, member: NoteMember) -> None:
     with transaction.atomic():
         NoteBan.objects.get_or_create(note=note, user_id=member.user_id, defaults={"nickname": member.nickname})
         member.delete()
-    note_id, user_id = note.id, member.user_id
-    transaction.on_commit(lambda: _send_group(user_group(user_id), {"type": "member.kicked", "note": note_id}))
+    broadcast.send_after_commit(user_group(member.user_id), {"type": "member.kicked", "note": note.id})
 
 
 def is_kicked(note_id: str, user: User) -> bool:
@@ -174,7 +170,3 @@ def log(staff: User, action: str, note: Note | None = None, target_user_id: int 
         target_user_id=target_user_id,
         detail=detail[:300],
     )
-
-
-def _send_group(group: str, event: dict) -> None:
-    async_to_sync(get_channel_layer().group_send)(group, event)
