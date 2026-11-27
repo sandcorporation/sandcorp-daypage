@@ -23,7 +23,8 @@ from channels.exceptions import ChannelFull
 from channels.layers import get_channel_layer
 from pycrdt import Doc, create_update_message, merge_updates
 
-from . import awareness, memory, pages
+from . import awareness, memory, pages, presence_rules
+from .presence_rules import Holder, Slot
 from .models import Page
 
 logger = logging.getLogger(__name__)
@@ -32,8 +33,6 @@ logger = logging.getLogger(__name__)
 AWARENESS_EVERY = 0.05
 # 편집을 모았다가 저장하는 간격(초). 실시간 전달과 저장을 떼어 DB가 밀려도 전달이 멈추지 않게 한다.
 FLUSH_EVERY = 0.3
-# 이 시간 동안 갱신되지 않은 커서는 새로 온 사람에게 보내지 않는다. 클라이언트는 15초마다 갱신한다.
-PRESENCE_TTL = 35
 # 채널 레이어 그룹은 하루가 지나면 만료되므로 방이 열려 있는 동안 가끔 다시 가입한다.
 REGROUP_EVERY = 600
 # 놓은 메모리를 운영체제에 돌려주는 주기(초). 방이 닫힐 때도 돌려준다(memory.py).
@@ -77,7 +76,7 @@ class Room:
         # 방에 알려진 커서: clientID -> (clock, state, 받은 시각)
         self.presence: dict[int, tuple[int, dict, float]] = {}
         # 이 프로세스에서 clientID를 쥔 연결과 그 사용자(#228·#230)
-        self.holders: dict[int, tuple[Member, int]] = {}
+        self.holders: dict[int, Holder] = {}
         # clientID마다 방에 알려진 마지막 clock. 지운 뒤에도 남겨 다시 연결한 클라이언트의 clock을 그 뒤로 잇는다(#230).
         self.clocks: dict[int, int] = {}
         # 노트가 지워졌으면 저장·합치기를 하지 않는다
@@ -139,10 +138,7 @@ class Room:
     async def local_awareness(self, sender: Member, entries: list[awareness.Entry]) -> None:
         now = time.monotonic()
         self._remember(entries, now)
-        for client_id, clk, state in entries:
-            prev = self.aw_out.get(client_id)
-            if prev is None or clk >= prev[0]:
-                self.aw_out[client_id] = (clk, state)
+        self.aw_out = presence_rules.batch(self.aw_out, entries)
         if self.aw_task and not self.aw_task.done():
             return
         wait = self.aw_last + AWARENESS_EVERY - now
@@ -166,71 +162,44 @@ class Room:
         await self.to_peers({"type": "hub.awareness", "message": message}, volatile=True)
 
     def _push_awareness(self, entries: list[awareness.Entry], message: bytes) -> None:
-        """커서를 연결들에 보낸다. 받는 연결이 쥔 clientID의 항목은 빼고, 남는 것이 없으면 보내지 않는다.
-
-        클라이언트(y-protocols)는 자기 clientID라도 clock이 더 크면 받아들인다. 다시 연결한 연결은 clock에 shift를
-        더해 퍼뜨리므로(#230), 되돌려 받으면 지난 상태로 자기 커서를 덮고 clock을 키워 되풀이된다(#232).
-        """
-        own: dict[Member, set[int]] = {}
-        for client_id, _, _ in entries:
-            if (holder := self.holders.get(client_id)) is not None:
-                own.setdefault(holder[0], set()).add(client_id)
-        for m in self.members:
-            skip = own.get(m)
-            if not skip:
-                m.push(message, volatile=True)
-            elif rest := [e for e in entries if e[0] not in skip]:
-                m.push(awareness.encode_message(rest), volatile=True)
+        """커서를 연결들에 보낸다. 누구에게 무엇을 보낼지는 presence_rules.deliveries가 정한다(#232)."""
+        for m, rest in presence_rules.deliveries(entries, self.members, self.holders):
+            m.push(message if rest is None else awareness.encode_message(rest), volatile=True)
 
     def presence_entries(self) -> list[awareness.Entry]:
         """방에 살아 있는 지금 커서들."""
         now = time.monotonic()
-        return [(cid, clk, state) for cid, (clk, state, at) in self.presence.items() if now - at < PRESENCE_TTL]
+        return [(cid, clk, state) for cid, (clk, state, at) in self.presence.items() if presence_rules.alive(at, now)]
 
     def presence_message(self) -> bytes | None:
         """지금 커서들을 담은 메시지(다른 프로세스에 들어올 때 넘긴다)."""
         entries = self.presence_entries()
         return awareness.encode_message(entries) if entries else None
 
-    def held_by_other_user(self, client_id: int, user_id: int) -> bool:
-        """이 clientID를 이 프로세스에서 다른 사용자의 연결이 쥐고 있는가(그러면 user_id의 것일 수 없다)."""
-        holder = self.holders.get(client_id)
-        return holder is not None and holder[1] != user_id
-
-    def claimed(self, client_id: int) -> bool:
-        """이 clientID의 커서가 방에 살아 있는가(다른 연결이 이미 쓰고 있다)."""
+    def slot(self, client_id: int | None) -> Slot:
+        """방이 아는 이 clientID: 쥔 연결, 커서가 살아 있는지, 마지막 clock(presence_rules가 판단한다)."""
         entry = self.presence.get(client_id)
-        return entry is not None and time.monotonic() - entry[2] < PRESENCE_TTL
+        return Slot(
+            holder=self.holders.get(client_id),
+            alive=entry is not None and presence_rules.alive(entry[2], time.monotonic()),
+            last_clock=self.clocks.get(client_id, -1),
+        )
+
+    def hold(self, member: Member, user_id: int, client_id: int) -> None:
+        """사용자 user_id의 연결 member가 client_id의 커서를 쥔다(presence_rules가 쥘 수 있다고 정한 뒤)."""
+        self.holders[client_id] = Holder(member, user_id)
 
     def claim(self, member: Member, user_id: int, client_id: int) -> bool:
-        """사용자 user_id의 연결 member가 client_id의 커서를 쥔다. 쥐었으면 True.
-
-        쥔 연결이 없고 방에 살아 있지도 않으면(다른 프로세스가 퍼뜨린 것도 아니면) 쥔다. 같은 사용자의 다른 연결이
-        쥐고 있으면 넘겨받는다: 다시 연결한 클라이언트는 같은 clientID를 쓰는데, 옛 연결은 끊긴 줄 모른 채
-        한동안 남는다(#230). 다른 사용자의 연결이 쥔 것은 넘겨받지 못한다(#228).
-        """
-        holder = self.holders.get(client_id)
-        if holder is None:
-            if self.claimed(client_id):
-                return False
-        elif holder[1] != user_id:
+        """쥘 수 있으면(presence_rules.can_claim) 쥐고 True."""
+        if not presence_rules.can_claim(user_id, self.slot(client_id)):
             return False
-        self.holders[client_id] = (member, user_id)
+        self.hold(member, user_id, client_id)
         return True
-
-    def holds(self, member: Member, client_id: int | None) -> bool:
-        """member가 지금 이 clientID를 쥐고 있는가(넘겨준 옛 연결은 False)."""
-        holder = self.holders.get(client_id)
-        return holder is not None and holder[0] is member
 
     def release(self, member: Member) -> None:
         """나가는 연결이 쥔 clientID를 놓는다."""
-        for client_id in [cid for cid, (m, _) in self.holders.items() if m is member]:
+        for client_id in [cid for cid, holder in self.holders.items() if holder.conn is member]:
             del self.holders[client_id]
-
-    def last_clock(self, client_id: int) -> int:
-        """이 clientID로 방에 알려진 마지막 clock(없으면 -1)."""
-        return self.clocks.get(client_id, -1)
 
     def _remember(self, entries: list[awareness.Entry], now: float) -> None:
         for client_id, clk, state in entries:
