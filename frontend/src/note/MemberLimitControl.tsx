@@ -38,7 +38,14 @@ export function MemberLimitControl({ memberCount, memberLimit, editable, onChang
   useDismiss(ref, open, close, closeAndRefocus)
 
   const label = memberLabel(memberCount, memberLimit)
-  if (!editable) return <span className="member-badge">{label}</span>
+  // 자릿수가 늘어도(9→10명) 배지 폭이 그대로이게, 두 자리일 때의 폭을 잡아 둔다. 폭이 바뀌면 머리글 줄이 바뀔 수 있다
+  const widest = label.replace(/\d+/g, (n) => '0'.repeat(Math.max(2, n.length)))
+  if (!editable)
+    return (
+      <span className="member-badge" data-widest={widest}>
+        {label}
+      </span>
+    )
 
   // 고른 사이에 참여자가 늘어 고를 수 없게 된 값은 버린다
   const draft = picked === undefined || (picked !== null && picked < memberCount) ? memberLimit : picked
@@ -62,6 +69,7 @@ export function MemberLimitControl({ memberCount, memberLimit, editable, onChang
         ref={badgeRef}
         type="button"
         className="member-badge member-badge-btn"
+        data-widest={widest}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => {

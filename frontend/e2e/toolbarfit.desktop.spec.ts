@@ -1,6 +1,5 @@
-import { expect, test, type Page, type WebSocketRoute } from '@playwright/test'
-import * as encoding from 'lib0/encoding'
-import { nextFrames, openNote, zoomIn } from './helpers'
+import { expect, test, type Page } from '@playwright/test'
+import { fakePeers, nextFrames, openNote, zoomIn } from './helpers'
 
 // #207 흔한 노트북 창에서 세로 도구 막대가 화면을 넘거나 아래 칩(연결·배율)에 깔리지 않는다
 
@@ -196,37 +195,6 @@ test.describe('#216', () => {
     }
   }
 })
-
-/**
- * 접속자(presence)를 서버 없이 더하고 뺀다. 웹소켓을 그대로 서버에 잇고, 화면 쪽으로 awareness 메시지를 끼워 넣는다.
- * openNote보다 먼저 부른다.
- */
-async function fakePeers(page: Page) {
-  let socket: WebSocketRoute | undefined
-  await page.routeWebSocket(/\/ws\/notes\//, (ws) => {
-    ws.connectToServer()
-    socket = ws
-  })
-  let clock = 0
-  let shown = 0
-  return async (others: number) => {
-    const update = encoding.createEncoder()
-    const count = Math.max(others, shown)
-    clock++
-    encoding.writeVarUint(update, count)
-    for (let i = 0; i < count; i++) {
-      encoding.writeVarUint(update, 1000 + i)
-      encoding.writeVarUint(update, clock)
-      encoding.writeVarString(update, JSON.stringify(i < others ? { nickname: `푸른 펭귄${i}`, color: '#5E6270' } : null))
-    }
-    shown = others
-    const message = encoding.createEncoder()
-    encoding.writeVarUint(message, 1) // MESSAGE_AWARENESS
-    encoding.writeVarUint8Array(message, encoding.toUint8Array(update))
-    socket!.send(Buffer.from(encoding.toUint8Array(message)))
-    await expect(page.getByRole('group', { name: `함께 있는 사람 ${others + 1}명` })).toBeVisible()
-  }
-}
 
 // #218 그리는 중에 사람이 들고 나도 지면은 움직이지 않는다
 for (const size of [

@@ -4,6 +4,8 @@ import { Logo } from '../components/Brand'
 import { useIsPhone, useMediaQuery } from '../components/useIsPhone'
 import { Countdown } from './Countdown'
 import { NoteName } from './NoteName'
+import { PeopleMore } from './PeopleMore'
+import { displayName, initial } from './people'
 import { formatPageDate, seqSuffix } from './time'
 import type { NoteDetail, OpenPage, Peer } from './types'
 
@@ -32,6 +34,7 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
     </span>
   )
   const ref = useRef<HTMLElement>(null)
+  const avatarsRef = useRef<HTMLDivElement>(null)
   // 머리글 높이를 --note-header-h로 알린다. 툴바가 이 아래에 붙는다(휴대폰에서는 머리글이 두 줄로 높아진다).
   useLayoutEffect(() => {
     const el = ref.current
@@ -70,6 +73,8 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
       <div className="note-header-right">
         {/* 아바타 자리는 가장 많이 보일 때(얼굴 + 「+n」)만큼 늘 잡아 둔다. 접속자 수로 머리글 줄이 바뀌면 그 아래 지면이 긋는 중에 밀린다 */}
         <div
+          ref={avatarsRef}
+          tabIndex={-1}
           className="avatars"
           role="group"
           aria-label={`함께 있는 사람 ${shown.length}명`}
@@ -77,7 +82,7 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
         >
           {shown.slice(0, faces).map((p, i) => {
             // 얼굴의 머리글자만으로는 누구인지 알 수 없어, 읽는 이름과 툴팁은 닉네임이다
-            const name = p.isMe ? `${p.nickname}(나)` : p.nickname
+            const name = displayName(p)
             return (
               <span
                 key={`${p.nickname}-${i}`}
@@ -91,11 +96,7 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
               </span>
             )
           })}
-          {more > 0 && (
-            <span className="avatar avatar-more" role="img" aria-label={`그 밖에 ${more}명`}>
-              +{more}
-            </span>
-          )}
+          {more > 0 && <PeopleMore people={shown} hidden={more} fallback={avatarsRef} />}
         </div>
         {!isNarrow && me}
         {settings}
@@ -120,11 +121,4 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
       </div>
     </header>
   )
-}
-
-/** 닉네임의 이름씨 첫 글자(졸린 수달 → 수). */
-export function initial(nickname: string): string {
-  const parts = nickname.split(' ')
-  const noun = parts.length >= 2 ? parts[1] : parts[0]
-  return noun.charAt(0)
 }
