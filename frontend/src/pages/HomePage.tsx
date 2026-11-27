@@ -132,8 +132,10 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
       await api<void>(`/api/notes/${deleting.id}`, { method: 'DELETE' })
       setDeleting(null)
       onChanged()
-    } catch {
-      setError('노트를 지우지 못했어요. 잠시 후 다시 시도해 주세요.')
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 403 ? err.message : '노트를 지우지 못했어요. 잠시 후 다시 시도해 주세요.',
+      )
       setDeleting(null)
     } finally {
       setBusy(false)

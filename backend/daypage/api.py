@@ -192,8 +192,10 @@ class CreateNoteIn(Schema):
 def clean_limit(limit: int | None) -> int | None:
     if limit is None:
         return None
-    if not MIN_MEMBER_LIMIT <= limit <= MAX_MEMBER_LIMIT:
-        raise ApiError(400, "invalid_limit", "정원은 2명 이상이어야 해요.")
+    if limit < MIN_MEMBER_LIMIT:
+        raise ApiError(400, "invalid_limit", f"정원은 {MIN_MEMBER_LIMIT}명 이상이어야 해요.")
+    if limit > MAX_MEMBER_LIMIT:
+        raise ApiError(400, "invalid_limit", f"정원은 {MAX_MEMBER_LIMIT}명까지예요.")
     return limit
 
 
@@ -279,7 +281,9 @@ class UpdateNoteIn(Schema):
 
 
 def owned_note(request, note_id: str) -> Note:
+    """만든 사람만. 닫힌 노트·정지된 사용자는 note_detail과 같이 막는다."""
     note = get_object_or_404(Note, pk=note_id)
+    moderation.check_note(note, request.user)
     if note.owner_id != request.user.id:
         raise ApiError(403, "not_owner", "노트를 만든 사람만 바꿀 수 있어요.")
     return note
