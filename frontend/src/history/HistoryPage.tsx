@@ -107,12 +107,15 @@ export function HistoryPage() {
       const today = new Y.Doc()
       Y.applyUpdate(today, new Uint8Array(await api<ArrayBuffer>(`/api/notes/${noteId}/today`, { signal: abort.signal })))
       if (!isPageEmpty(today)) {
+        // 앞 장을 바로 보관했으면 오늘 장의 openedAt은 지난 경계다. 실제 시작은 앞 장이 닫힌 때다.
+        const lastClosed = pages.find((p) => p.key !== note.page.key)?.closedAt
+        const startedLate = lastClosed !== undefined && new Date(lastClosed) > new Date(note.page.openedAt)
         sources.push({
           page: {
             key: note.page.key,
             date: note.page.date,
             seq: note.page.seq,
-            openedAt: note.page.openedAt,
+            openedAt: startedLate ? lastClosed : note.page.openedAt,
             closedAt: note.page.dueAt,
             paper: normalizePaper(note.paper),
           },
