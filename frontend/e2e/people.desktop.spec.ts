@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
 import { fakePeers, nextFrames, openNote } from './helpers'
@@ -29,7 +29,7 @@ for (const size of [
     await nextFrames(page)
     const before = await headerAndPage(page)
 
-    await page.getByRole('button', { name: `함께 있는 사람 ${others + 1}명 모두 보기` }).click()
+    await page.getByRole('button', { name: `함께 있는 사람 ${others + 1}명 — 목록 보기` }).click()
     const list = page.getByRole('dialog', { name: `함께 있는 사람 ${others + 1}명` })
     await expect(list.getByRole('listitem')).toHaveCount(others + 1)
     await expect(list.getByRole('listitem').first()).toContainText('(나)')
@@ -37,10 +37,11 @@ for (const size of [
     await nextFrames(page)
     expect(await headerAndPage(page)).toEqual(before)
     if (process.env.E2E_SHOT_DIR) await page.screenshot({ path: `${process.env.E2E_SHOT_DIR}/220-list-${others + 1}-${size.width}x${size.height}.png` })
-    // 1280에서도 5명 사진을 남긴다: 얼굴이 다 보여 「+N」이 없고 목록은 닫힌다
+    // 1280에서도 5명 사진을 남긴다: 얼굴이 다 보여 「+N」이 없어도 목록은 열린 채 따라 바뀐다
     if (others > 4) {
       await setPeers(4)
-      await expect(page.getByRole('dialog')).toBeHidden()
+      await expect(page.getByRole('dialog', { name: '함께 있는 사람 5명' }).getByRole('listitem')).toHaveCount(5)
+      await page.keyboard.press('Escape')
       if (process.env.E2E_SHOT_DIR) await page.screenshot({ path: `${process.env.E2E_SHOT_DIR}/220-faces-5-${size.width}x${size.height}.png` })
     }
   })
@@ -51,7 +52,7 @@ test('#220 768 폭: 키보드로 열고 Esc로 닫으면 단추로 돌아오고,
   const setPeers = await fakePeers(page)
   await openNote(page)
   await setPeers(4)
-  const button = page.getByRole('button', { name: '함께 있는 사람 5명 모두 보기' })
+  const button = page.getByRole('button', { name: '함께 있는 사람 5명 — 목록 보기' })
   const list = page.getByRole('dialog', { name: '함께 있는 사람 5명' })
   // Space는 키보드(Tab)로 초점이 온 단추만 받는다(그 밖에는 지면 끌기, #200)
   await button.focus()
@@ -66,6 +67,71 @@ test('#220 768 폭: 키보드로 열고 Esc로 닫으면 단추로 돌아오고,
   }
   await button.click()
   await page.locator('.page-viewport').click({ position: { x: 40, y: 300 } })
+  await expect(list).toBeHidden()
+  await expect(button).toBeFocused()
+})
+
+// #246 「+N」이 없는 2명에서도 터치와 키보드로 이름을 본다
+const shot = async (page: Page, name: string) => {
+  if (process.env.E2E_SHOT_DIR) await page.screenshot({ path: `${process.env.E2E_SHOT_DIR}/246-${name}.png` })
+}
+
+async function twoPeople(page: Page, width: number, height: number) {
+  await page.setViewportSize({ width, height })
+  const setPeers = await fakePeers(page)
+  await openNote(page)
+  await setPeers(1)
+  await nextFrames(page)
+  return {
+    button: page.getByRole('button', { name: '함께 있는 사람 2명 — 목록 보기' }),
+    list: page.getByRole('dialog', { name: '함께 있는 사람 2명' }),
+  }
+}
+
+async function expectBothNames(list: Locator) {
+  await expect(list.getByRole('listitem')).toHaveCount(2)
+  await expect(list.getByRole('listitem').first()).toContainText('(나)')
+  await expect(list.getByText(NAMES[0], { exact: true })).toBeInViewport({ ratio: 1 })
+}
+
+/** 단추의 크기와, 그 네 가장자리 안쪽을 짚으면 단추가 잡히는지(다른 것에 덮이지 않았는지) */
+const touchTarget = (button: Locator) =>
+  button.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const spots = [[r.left + 4, r.y + r.height / 2], [r.right - 4, r.y + r.height / 2], [r.x + r.width / 2, r.top + 2], [r.x + r.width / 2, r.bottom - 2]]
+    return { width: r.width, height: r.height, reachable: spots.every(([x, y]) => el.contains(document.elementFromPoint(x, y))) }
+  })
+
+test.describe('#246 터치', () => {
+  test.use({ hasTouch: true })
+  for (const [width, height] of [[390, 844], [768, 1024]]) {
+    test(`#246 ${width} 터치: 얼굴을 누르면 두 사람 이름이 보인다`, async ({ page }) => {
+      const { button, list } = await twoPeople(page, width, height)
+      const target = await touchTarget(button)
+      expect(target.width).toBeGreaterThanOrEqual(44)
+      expect(target.height).toBeGreaterThanOrEqual(44)
+      expect(target.reachable).toBe(true)
+      const before = await headerAndPage(page)
+      await shot(page, `faces-${width}x${height}`)
+      await button.locator('.avatar').last().tap()
+      await expectBothNames(list)
+      await nextFrames(page)
+      expect(await headerAndPage(page)).toEqual(before)
+      await shot(page, `list-${width}x${height}`)
+    })
+  }
+})
+
+test('#246 1280 키보드: Tab으로 얼굴에 와 Enter로 열고, Esc로 닫으면 초점이 돌아온다', async ({ page }) => {
+  const { button, list } = await twoPeople(page, 1280, 800)
+  await page.getByRole('button', { name: /^노트 이름 바꾸기/ }).focus()
+  await page.keyboard.press('Tab')
+  await expect(button).toBeFocused()
+  await shot(page, 'focus-1280x800')
+  await page.keyboard.press('Enter')
+  await expectBothNames(list)
+  await shot(page, 'list-1280x800')
+  await page.keyboard.press('Escape')
   await expect(list).toBeHidden()
   await expect(button).toBeFocused()
 })

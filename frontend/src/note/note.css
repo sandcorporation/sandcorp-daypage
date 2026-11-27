@@ -135,19 +135,24 @@
   margin-left: -8px;
 }
 .avatar-more {
-  position: relative;
-  flex: 0 0 auto;
-  padding: 0;
   background: var(--muted-2);
-  font-family: inherit;
   font-size: 12px;
-  cursor: pointer;
 }
-/* 얼굴 크기는 그대로 두고 누르는 자리만 넓힌다 */
-.avatar-more::after {
-  content: '';
-  position: absolute;
-  inset: -8px -6px;
+/* 얼굴 묶음 전체가 목록 단추다. 누르는 자리는 44px 이상이고, 넘치는 높이는 음수 여백으로 거둬 머리글 높이를 바꾸지 않는다 */
+.avatars-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 44px;
+  height: 44px;
+  margin-block: calc((var(--avatar-size) - 44px) / 2);
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 .tool-pop-popover.people-pop {
   width: min(280px, calc(100vw - 16px));
