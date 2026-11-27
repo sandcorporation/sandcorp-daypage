@@ -2,7 +2,7 @@
 
 from django.db import IntegrityError, connection, transaction
 
-from . import clock
+from . import broadcast, clock
 from .models import Note, NoteMember, User
 from .nicknames import pick_color, pick_nickname
 
@@ -78,18 +78,16 @@ def announce_info(note_id: str) -> None:
     저장이 끝난 뒤 그때의 값을 읽어 보낸다(종이·색 알림과 같은 노트 그룹). 동시에 바뀌면 알림이
     거꾸로 도착할 수 있어 판(seq)을 싣는다.
     """
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
-
     from .consumers import note_group
 
     def send() -> None:
         info = current_info(note_id)
         if info is None:
             return
-        async_to_sync(get_channel_layer().group_send)(note_group(note_id), {"type": "note.info", **info})
+        broadcast.send_now(note_group(note_id), {"type": "note.info", **info})
 
-    transaction.on_commit(send)
+    # robust: 머리말을 읽다 실패해도 저장한 동작은 성공이고, Django가 예외를 오류 로그로 남긴다.
+    transaction.on_commit(send, robust=True)
 
 
 def membership(note_id: str, user: User) -> NoteMember | None:
