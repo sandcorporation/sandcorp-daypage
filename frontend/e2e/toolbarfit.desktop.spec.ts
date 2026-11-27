@@ -143,3 +143,55 @@ for (const size of [
     expect(await overlaps(page)).toEqual([])
   })
 }
+
+/** 도구 막대·곡선 막대·보기 칸·아래 칩의 단추 가운데 화면 밖이거나 다른 것에 덮여 누를 수 없는 것. 옆으로 밀어 보는 막대(휴대폰)의 단추는 밀어 놓고 본다. */
+const unpressable = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.toolbar button, .curve-bar button, .view-dock button, .status-corner button')]
+      .filter((b) => b.getClientRects().length > 0)
+      .flatMap((b) => {
+        const bar = b.closest<HTMLElement>('.toolbar')
+        if (bar && bar.scrollWidth > bar.clientWidth) b.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+        const r = b.getBoundingClientRect()
+        const name = b.getAttribute('aria-label') ?? b.textContent
+        if (r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight) return [`${name}: 화면 밖`]
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+        if (hit?.closest('button') === b) return []
+        return [`${name}: ${hit?.closest('button')?.getAttribute('aria-label') ?? hit?.className}에 덮임`]
+      }),
+  )
+
+// #216 떠 있는 것의 자리 표: 모드 × 막대 자리 × 폭. 보기 칸이 가장 넓은 터치 기기로 본다.
+test.describe('#216', () => {
+  test.use({ hasTouch: true })
+  for (const mode of ['보통', '집중']) {
+    for (const [dock, dockName] of [['left', '왼쪽'], ['bottom', '아래']]) {
+      for (const size of [
+        { width: 360, height: 740 },
+        { width: 390, height: 844 },
+        { width: 768, height: 1024 },
+        { width: 1024, height: 768 },
+        { width: 1280, height: 800 },
+      ]) {
+        test(`#216 ${mode} 모드 ${dockName} 막대 ${size.width}×${size.height}: 곡선 중 모든 단추가 화면 안에서 눌린다`, async ({ page }) => {
+          await page.setViewportSize(size)
+          await page.route('**/api/client-config', async (route) => {
+            const res = await route.fetch()
+            await route.fulfill({ response: res, json: { ...((await res.json()) as object), photos: true } })
+          })
+          await page.addInitScript((d) => localStorage.setItem('daypage:toolbar-dock', d), dock)
+          await openNote(page)
+          await expect(page.getByRole('button', { name: '사진', exact: true })).toBeVisible()
+          if (mode === '집중') await page.getByRole('button', { name: '집중 모드' }).click()
+          await startCurve(page)
+          await expect(page.getByRole('button', { name: '화면 고정' })).toBeVisible()
+          if (process.env.E2E_SHOT_DIR) await page.screenshot({ path: `${process.env.E2E_SHOT_DIR}/216-${mode === '집중' ? 'focus' : 'normal'}-${dock}-${size.width}x${size.height}.png` })
+          await expect.poll(() => overlaps(page), { timeout: 1_000 }).toEqual([])
+          expect(await unpressable(page)).toEqual([])
+          // 휴대폰의 막대는 화면 폭을 다 쓴다(좁게 눌려 몇 단추만 보이지 않게)
+          if (size.width <= 720) expect((await page.locator('.toolbar').boundingBox())!.width).toBeGreaterThan(size.width - 40)
+        })
+      }
+    }
+  }
+})
