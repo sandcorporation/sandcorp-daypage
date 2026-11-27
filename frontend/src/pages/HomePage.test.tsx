@@ -27,6 +27,28 @@ function renderHome() {
 
 afterEach(() => vi.unstubAllGlobals())
 
+function mockMeStatus(status: number) {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status, headers: { 'Content-Type': 'application/json' } })))
+}
+
+test('/api/me가 500이면 문제가 생겼어요 화면을 보여준다', async () => {
+  mockMeStatus(500)
+  renderHome()
+  expect(await screen.findByRole('heading', { name: '문제가 생겼어요' })).toBeInTheDocument()
+})
+
+test('/api/me가 401이면 공개 첫 화면을 보여준다', async () => {
+  mockMeStatus(401)
+  renderHome()
+  expect(await screen.findByRole('link', { name: /카카오로 시작하기/ })).toBeInTheDocument()
+})
+
+test('/api/me를 기다리는 동안 불러오는 중을 알린다', () => {
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
+  renderHome()
+  expect(screen.getByRole('status')).toHaveTextContent('불러오는 중')
+})
+
 test('비로그인 사용자에게 카카오로 시작하기를 보여준다', async () => {
   mockApi(() => ({ authenticated: false, notes: [] }))
   renderHome()
