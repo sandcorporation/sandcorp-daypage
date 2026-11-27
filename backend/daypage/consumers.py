@@ -144,8 +144,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         self.room: hub.Room | None = None
         self.conn: rooms.Conn | None = None
         self.heartbeat: asyncio.Task | None = None
-        # 이 연결이 보낸 awareness 상태: clientID -> clock. 나갈 때 다른 사람 화면에서 지운다.
-        self.presence: dict[int, int] = {}
+        # 이 연결의 awareness clientID와 마지막 clock. 나갈 때 이것만 다른 사람 화면에서 지운다(#228).
+        self.client_id: int | None = None
+        self.client_clock: int | None = None
         # 방이 넘겨준 메시지를 순서대로 보낸다. 느린 연결이 방 전체를 붙잡지 않게 연결마다 따로 보낸다.
         self.outbox: asyncio.Queue[bytes] = asyncio.Queue(OUTBOX_LIMIT)
         self.sender: asyncio.Task | None = None
@@ -158,7 +159,7 @@ class PageConsumer(AsyncWebsocketConsumer):
         # 자리 비움: 마지막 입력(편집·커서 변경) 시각과 저장소에 마지막으로 올린 시각
         self.last_input = 0.0
         self.input_reported = 0.0
-        self.cursor_states: dict[int, tuple] = {}
+        self.cursor_state: tuple | None = None
         # 닫기 시작했거나 보내다 끊긴 걸 안 연결. 더 보내지 않고 다시 닫지 않는다.
         self.closing = False
         # 닫는 코드를 전하려면 먼저 수락해야 한다.
@@ -437,9 +438,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         room = self.room
         await self.channel_layer.group_discard(note_group(self.note_id), self.channel_name)
         await self.channel_layer.group_discard(moderation.user_group(self.member.user_id), self.channel_name)
-        # 이 연결이 보낸 커서를 다른 사람 화면에서 지운다.
-        if self.presence:
-            await room.local_awareness(self, [(cid, clk + 1, None) for cid, clk in self.presence.items()])
+        # 이 연결의 커서를 다른 사람 화면에서 지운다. 되돌려 보낸 남의 것은 건드리지 않는다.
+        if self.client_clock is not None:
+            await room.local_awareness(self, [(self.client_id, self.client_clock + 1, None)])
         closed = await hub.hub().leave(room, self)
         await registry.remove(self.note_id, self.conn)
         # 이 장에 아무도 남지 않았으면(다른 프로세스 포함) 스냅샷으로 합친다.
@@ -487,8 +488,19 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.room.local_update(self, update, received_at)
         await self._note_input()
 
+    def _owns(self, client_id: int, state: dict | None) -> bool:
+        """이 연결이 다룰 수 있는 clientID인가(#228).
+
+        y-websocket 클라이언트는 받은 남의 awareness도 그대로 다시 보내고, 시간이 지나면 남의 것을 null로 보낸다.
+        그래서 연결마다 자기 clientID 하나만 받는다: 처음 상태를 보낸 clientID로 고정하되, 방에 이미 살아 있는
+        (다른 연결의) clientID는 고르지 않는다. 연결을 열자마자 자기 상태를 먼저 보내므로 보통 첫 항목이 자기 것이다.
+        """
+        if self.client_id is None and state is not None and not self.room.claimed(client_id):
+            self.client_id = client_id
+        return client_id == self.client_id
+
     async def receive_awareness(self, data: bytes) -> None:
-        """닉네임·색은 클라이언트가 보낸 값 대신 서버가 배정한 값으로 바꿔 퍼뜨린다."""
+        """자기 clientID의 커서만 받고, 닉네임·색은 클라이언트가 보낸 값 대신 서버가 배정한 값으로 바꿔 퍼뜨린다."""
         try:
             entries = awareness.decode_message(data)
         except Exception:
@@ -497,25 +509,28 @@ class PageConsumer(AsyncWebsocketConsumer):
         cleaned: list[awareness.Entry] = []
         moved = False
         for client_id, clk, state in entries:
+            if not self._owns(client_id, state):
+                continue
             if state is None:
-                self.presence.pop(client_id, None)
-                self.cursor_states.pop(client_id, None)
+                self.client_clock = None
+                self.cursor_state = None
                 cleaned.append((client_id, clk, None))
                 continue
             # 클라이언트는 같은 상태를 15초마다 다시 보낸다. 바뀐 것만 입력으로 친다(자리 비움 판정).
             seen = (json.dumps(state.get("cursor")), state.get("editingBoxId"))
-            if self.cursor_states.get(client_id, seen) != seen:
+            if self.cursor_state is not None and self.cursor_state != seen:
                 moved = True
-            self.cursor_states[client_id] = seen
+            self.cursor_state = seen
             state = {
                 "cursor": state.get("cursor"),
                 "editingBoxId": state.get("editingBoxId"),
                 "nickname": self.member.nickname,
                 "color": self.member.color,
             }
-            self.presence[client_id] = clk
+            self.client_clock = clk
             cleaned.append((client_id, clk, state))
-        await self.room.local_awareness(self, cleaned)
+        if cleaned:
+            await self.room.local_awareness(self, cleaned)
         if moved:
             await self._note_input()
 
