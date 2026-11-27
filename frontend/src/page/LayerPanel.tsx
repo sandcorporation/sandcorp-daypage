@@ -80,6 +80,15 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
   const [editing, setEditing] = useState<string | null>(null)
   const active = layers.find((l) => l.id === current)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const addRef = useRef<HTMLButtonElement>(null)
+  // 이름 칸을 키보드로 닫으면 그 줄의 이름 바꾸기 버튼으로 돌아간다
+  const renameRefs = useRef(new Map<string, HTMLButtonElement>())
+  const refocusRename = useRef<string | null>(null)
+  useEffect(() => {
+    if (editing !== null || refocusRename.current === null) return
+    renameRefs.current.get(refocusRename.current)?.focus()
+    refocusRename.current = null
+  }, [editing])
   const doomed = layers.find((l) => l.id === deleting)
   const doomedStats = doomed ? (stats.get(doomed.id) ?? { count: 0, authors: [] }) : null
 
@@ -136,12 +145,15 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
                     onFocus={(e) => e.currentTarget.select()}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
+                        e.preventDefault()
+                        refocusRename.current = layer.id
                         renameLayer(doc, layer.id, e.currentTarget.value, origin)
                         setEditing(null)
                       } else if (e.key === 'Escape') {
                         // 창까지 닫히지 않게 여기서 멈춘다
                         e.stopPropagation()
                         e.nativeEvent.stopImmediatePropagation()
+                        refocusRename.current = layer.id
                         setEditing(null)
                       }
                     }}
@@ -173,6 +185,10 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
                 </button>
               )}
               <button
+                ref={(el) => {
+                  if (el) renameRefs.current.set(layer.id, el)
+                  else renameRefs.current.delete(layer.id)
+                }}
                 type="button"
                 className="layer-icon-btn"
                 aria-label={`${layer.name} 이름 바꾸기`}
@@ -233,6 +249,7 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
       )}
       <div className="layer-foot">
         <button
+          ref={addRef}
           type="button"
           className="btn"
           disabled={full}
@@ -250,6 +267,7 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
           <ConfirmDialog
             title={`‘${doomed.name}’${eulReul(doomed.name)} 지울까요?`}
             confirmLabel="지우기"
+            fallbackFocus={() => addRef.current}
             onCancel={() => setDeleting(null)}
             onConfirm={() => {
               deleteLayer(doc, doomed.id, origin)

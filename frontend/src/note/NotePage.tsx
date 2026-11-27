@@ -32,6 +32,10 @@ import { hasSelection, useEditTools } from "../page/useEditTools";
 import { isTypingTarget, useUndo } from "../page/useUndo";
 import { useNavigate } from "react-router";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import {
+  ARRIVE_AT_TITLE,
+  useFocusOnArrival,
+} from "../components/useFocusOnArrival";
 import { eulReul } from "../josa";
 import { ErrorScreen, MessageCard } from "../pages/ErrorScreen";
 import { ConnectionPill } from "./ConnectionPill";
@@ -87,6 +91,8 @@ export function NotePage({ initial }: Props) {
   }, [fatal, note.id]);
   const { toast, show } = useToast();
   const navigate = useNavigate();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useFocusOnArrival(titleRef);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -768,7 +774,7 @@ export function NotePage({ initial }: Props) {
     setDeleting(true);
     try {
       await api<void>(`/api/notes/${note.id}`, { method: "DELETE" });
-      navigate("/");
+      navigate("/", ARRIVE_AT_TITLE);
     } catch {
       setDeleting(false);
       setConfirmDelete(false);
@@ -813,6 +819,7 @@ export function NotePage({ initial }: Props) {
       {/* 집중 모드에서는 머리글·아래 칩을 아예 그리지 않는다(툴바만 남는다) */}
       {!focus && (
         <NoteHeader
+          titleRef={titleRef}
           note={note}
           page={note.page}
           clockOffset={clockOffset}

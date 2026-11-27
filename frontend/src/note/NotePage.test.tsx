@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { FakeProvider } from '../test/fakeProvider'
+import { ARRIVE_AT_TITLE } from '../components/useFocusOnArrival'
 import { NotePage } from './NotePage'
 import type { NoteDetail } from './types'
 import { DEFAULT_KEYMAP, resetKeymapStore, setKeymap } from '../page/shortcuts'
@@ -48,6 +49,20 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.unstubAllGlobals())
+
+test('노트를 만들고 오면 새 화면의 제목에 초점을 둔다', () => {
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/note/n1', ...ARRIVE_AT_TITLE }]}>
+      <NotePage initial={NOTE} />
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('heading', { level: 1, name: '우리 노트' })).toHaveFocus()
+})
+
+test('링크로 들어오면 제목이 초점을 가져가지 않는다', () => {
+  renderNote()
+  expect(screen.getByRole('heading', { level: 1, name: '우리 노트' })).not.toHaveFocus()
+})
 
 test('수용 인원이 차면 대기 화면에서 순번을 보고, 차례가 오면 노트가 열린다', async () => {
   renderNote()

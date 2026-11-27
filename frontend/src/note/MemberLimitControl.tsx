@@ -23,6 +23,8 @@ export function MemberLimitControl({ memberCount, memberLimit, editable, onChang
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
+  const badgeRef = useRef<HTMLButtonElement>(null)
+
   const close = useCallback(() => setOpen(false), [])
   useDismiss(ref, open, close)
 
@@ -32,6 +34,7 @@ export function MemberLimitControl({ memberCount, memberLimit, editable, onChang
   return (
     <div className="member-control" ref={ref}>
       <button
+        ref={badgeRef}
         type="button"
         className="member-badge member-badge-btn"
         aria-expanded={open}
@@ -57,6 +60,8 @@ export function MemberLimitControl({ memberCount, memberLimit, editable, onChang
               type="button"
               className="member-delete"
               onClick={() => {
+                // 이 단추는 사라지므로, 확인 창이 닫힐 때 돌려줄 자리로 먼저 옮긴다
+                badgeRef.current?.focus()
                 setOpen(false)
                 onDelete()
               }}

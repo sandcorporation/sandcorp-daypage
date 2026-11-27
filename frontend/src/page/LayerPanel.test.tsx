@@ -214,6 +214,8 @@ describe('지우기', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: '지우기' }))
     expect(readLayers(doc).map((l) => l.id)).toEqual([BASE_LAYER_ID])
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    // 지운 레이어의 단추는 사라졌으니 목록 아래 단추로
+    expect(screen.getByRole('button', { name: '+ 새 레이어' })).toHaveFocus()
   })
 
   test('취소하면 그대로다', async () => {
@@ -223,6 +225,14 @@ describe('지우기', () => {
     await userEvent.click(screen.getByRole('button', { name: '레이어 2 지우기' }))
     await userEvent.click(screen.getByRole('button', { name: '취소' }))
     expect(readLayers(doc)).toHaveLength(2)
+  })
+
+  test.each(['{Enter}', '{Escape}'])('이름 바꾸기를 %s로 끝내면 초점이 이름 바꾸기 단추로 돌아온다', async (key) => {
+    const doc = createPageDoc('2026-10-16')
+    setup(doc)
+    await userEvent.click(screen.getByRole('button', { name: '레이어 1 이름 바꾸기' }))
+    await userEvent.keyboard(key)
+    expect(screen.getByRole('button', { name: '레이어 1 이름 바꾸기' })).toHaveFocus()
   })
 
   test('마지막 남은 레이어는 지울 수 없다', () => {

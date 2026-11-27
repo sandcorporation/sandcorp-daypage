@@ -575,6 +575,8 @@ export function Toolbar(props: Props) {
                   type="button"
                   className="btn eraser-clear"
                   onClick={() => {
+                    // 창이 닫히면 이 단추는 사라진다. 확인 창이 닫힐 때 창을 연 버튼으로 돌아오게 먼저 옮긴다
+                    widthRef.current?.focus()
                     setWidthOpen(false)
                     props.onClearPage?.()
                   }}

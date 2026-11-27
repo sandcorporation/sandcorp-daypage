@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
+import { ARRIVE_AT_TITLE } from '../components/useFocusOnArrival'
 import { HomePage } from './HomePage'
 
 type Handler = (url: string, init?: RequestInit) => unknown
@@ -91,6 +92,16 @@ test('새 노트를 만들면 그 노트로 이동한다', async () => {
   expect(JSON.parse(String(init?.body))).toEqual({ name: '캠핑 준비', memberLimit: 4 })
 })
 
+test('다른 화면에서 동작을 마치고 오면 제목에 초점을 둔다', async () => {
+  mockApi(() => ({ authenticated: true, notes: [] }))
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/', ...ARRIVE_AT_TITLE }]}>
+      <HomePage />
+    </MemoryRouter>,
+  )
+  expect(await screen.findByRole('heading', { level: 1, name: '새 노트 만들기' })).toHaveFocus()
+})
+
 test('내가 만든 노트만 지울 수 있고, 확인하면 지운 뒤 목록에서 사라진다', async () => {
   let notes = [
     { id: 'mine', name: '우리집 노트', isOwner: true, memberCount: 2, memberLimit: null },
@@ -116,6 +127,7 @@ test('내가 만든 노트만 지울 수 있고, 확인하면 지운 뒤 목록�
   expect(fetchMock).toHaveBeenCalledWith('/api/notes/mine', expect.objectContaining({ method: 'DELETE' }))
   await waitFor(() => expect(screen.queryByText('우리집 노트')).not.toBeInTheDocument())
   expect(screen.getByText('남의 노트')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: '새 노트 만들기' })).toHaveFocus()
 })
 
 test('삭제 확인 창에서 취소하면 지우지 않는다', async () => {
@@ -127,6 +139,7 @@ test('삭제 확인 창에서 취소하면 지우지 않는다', async () => {
   await userEvent.click(await screen.findByRole('button', { name: '노트 삭제: 우리집 노트' }))
   await userEvent.click(screen.getByRole('button', { name: '취소' }))
   expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '노트 삭제: 우리집 노트' })).toHaveFocus()
   expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
 })
 
