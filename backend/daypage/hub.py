@@ -76,6 +76,10 @@ class Room:
         self.peers: set[str] = set()
         # 방에 알려진 커서: clientID -> (clock, state, 받은 시각)
         self.presence: dict[int, tuple[int, dict, float]] = {}
+        # 이 프로세스에서 clientID를 쥔 연결과 그 사용자(#228·#230)
+        self.holders: dict[int, tuple[Member, int]] = {}
+        # clientID마다 방에 알려진 마지막 clock. 지운 뒤에도 남겨 다시 연결한 클라이언트의 clock을 그 뒤로 잇는다(#230).
+        self.clocks: dict[int, int] = {}
         # 노트가 지워졌으면 저장·합치기를 하지 않는다
         self.gone = False
         # 아직 저장하지 않은 편집
@@ -178,8 +182,39 @@ class Room:
         entry = self.presence.get(client_id)
         return entry is not None and time.monotonic() - entry[2] < PRESENCE_TTL
 
+    def claim(self, member: Member, user_id: int, client_id: int) -> bool:
+        """사용자 user_id의 연결 member가 client_id의 커서를 쥔다. 쥐었으면 True.
+
+        쥔 연결이 없고 방에 살아 있지도 않으면(다른 프로세스가 퍼뜨린 것도 아니면) 쥔다. 같은 사용자의 다른 연결이
+        쥐고 있으면 넘겨받는다: 다시 연결한 클라이언트는 같은 clientID를 쓰는데, 옛 연결은 끊긴 줄 모른 채
+        한동안 남는다(#230). 다른 사용자의 연결이 쥔 것은 넘겨받지 못한다(#228).
+        """
+        holder = self.holders.get(client_id)
+        if holder is None:
+            if self.claimed(client_id):
+                return False
+        elif holder[1] != user_id:
+            return False
+        self.holders[client_id] = (member, user_id)
+        return True
+
+    def holds(self, member: Member, client_id: int | None) -> bool:
+        """member가 지금 이 clientID를 쥐고 있는가(넘겨준 옛 연결은 False)."""
+        holder = self.holders.get(client_id)
+        return holder is not None and holder[0] is member
+
+    def release(self, member: Member) -> None:
+        """나가는 연결이 쥔 clientID를 놓는다."""
+        for client_id in [cid for cid, (m, _) in self.holders.items() if m is member]:
+            del self.holders[client_id]
+
+    def last_clock(self, client_id: int) -> int:
+        """이 clientID로 방에 알려진 마지막 clock(없으면 -1)."""
+        return self.clocks.get(client_id, -1)
+
     def _remember(self, entries: list[awareness.Entry], now: float) -> None:
         for client_id, clk, state in entries:
+            self.clocks[client_id] = max(clk, self.clocks.get(client_id, clk))
             if state is None:
                 self.presence.pop(client_id, None)
             else:
@@ -347,6 +382,7 @@ class Hub:
     async def leave(self, room: Room, member: Member) -> bool:
         """방에서 나간다. 마지막 연결이었으면 방을 닫고 True."""
         room.members.discard(member)
+        room.release(member)
         if room.members or self.rooms.get(room.page_id) is not room:
             return False
         del self.rooms[room.page_id]

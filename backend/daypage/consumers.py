@@ -147,6 +147,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         # 이 연결의 awareness clientID와 마지막 clock. 나갈 때 이것만 다른 사람 화면에서 지운다(#228).
         self.client_id: int | None = None
         self.client_clock: int | None = None
+        # 이 연결이 받은 clock에 더해 퍼뜨리는 값. 다시 연결한 클라이언트는 provider를 새로 만들어 clock을 처음부터
+        # 세는데, 남의 화면은 옛 clock보다 작은 것을 버린다. 방이 본 마지막 clock 뒤로 잇는다(#230).
+        self.clock_shift = 0
         # 방이 넘겨준 메시지를 순서대로 보낸다. 느린 연결이 방 전체를 붙잡지 않게 연결마다 따로 보낸다.
         self.outbox: asyncio.Queue[bytes] = asyncio.Queue(OUTBOX_LIMIT)
         self.sender: asyncio.Task | None = None
@@ -439,7 +442,7 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_discard(note_group(self.note_id), self.channel_name)
         await self.channel_layer.group_discard(moderation.user_group(self.member.user_id), self.channel_name)
         # 이 연결의 커서를 다른 사람 화면에서 지운다. 되돌려 보낸 남의 것은 건드리지 않는다.
-        if self.client_clock is not None:
+        if self.client_clock is not None and room.holds(self, self.client_id):
             await room.local_awareness(self, [(self.client_id, self.client_clock + 1, None)])
         closed = await hub.hub().leave(room, self)
         await registry.remove(self.note_id, self.conn)
@@ -488,16 +491,18 @@ class PageConsumer(AsyncWebsocketConsumer):
         await self.room.local_update(self, update, received_at)
         await self._note_input()
 
-    def _owns(self, client_id: int, state: dict | None) -> bool:
-        """이 연결이 다룰 수 있는 clientID인가(#228).
+    def _owns(self, client_id: int, clk: int, state: dict | None) -> bool:
+        """이 연결이 다룰 수 있는 clientID인가(#228·#230).
 
         y-websocket 클라이언트는 받은 남의 awareness도 그대로 다시 보내고, 시간이 지나면 남의 것을 null로 보낸다.
-        그래서 연결마다 자기 clientID 하나만 받는다: 처음 상태를 보낸 clientID로 고정하되, 방에 이미 살아 있는
-        (다른 연결의) clientID는 고르지 않는다. 연결을 열자마자 자기 상태를 먼저 보내므로 보통 첫 항목이 자기 것이다.
+        그래서 연결마다 자기 clientID 하나만 받는다: 처음 상태를 보낸 clientID로 고정하되, 다른 사용자의 연결이 쥔
+        clientID는 고르지 않는다. 연결을 열자마자 자기 상태를 먼저 보내므로 보통 첫 항목이 자기 것이다.
+        같은 사용자의 옛 연결이 쥔 것은 넘겨받는다(다시 연결). 넘겨준 옛 연결은 더 바꾸지도 지우지도 못한다.
         """
-        if self.client_id is None and state is not None and not self.room.claimed(client_id):
+        if self.client_id is None and state is not None and self.room.claim(self, self.member.user_id, client_id):
             self.client_id = client_id
-        return client_id == self.client_id
+            self.clock_shift = max(0, self.room.last_clock(client_id) + 1 - clk)
+        return client_id == self.client_id and self.room.holds(self, client_id)
 
     async def receive_awareness(self, data: bytes) -> None:
         """자기 clientID의 커서만 받고, 닉네임·색은 클라이언트가 보낸 값 대신 서버가 배정한 값으로 바꿔 퍼뜨린다."""
@@ -509,8 +514,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         cleaned: list[awareness.Entry] = []
         moved = False
         for client_id, clk, state in entries:
-            if not self._owns(client_id, state):
+            if not self._owns(client_id, clk, state):
                 continue
+            clk += self.clock_shift
             if state is None:
                 self.client_clock = None
                 self.cursor_state = None
