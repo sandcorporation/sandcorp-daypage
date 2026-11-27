@@ -61,6 +61,20 @@ test('누를 수 있는 단추가 없으면 Tab을 눌러도 초점이 창에 �
   expect(screen.getByRole('alertdialog')).toHaveFocus()
 })
 
+test('요청이 실패해 창이 남으면 초점이 창 안으로 돌아온다', () => {
+  const dialog = (busy: boolean) => (
+    <ConfirmDialog title="지울까요?" confirmLabel="삭제" busy={busy} onConfirm={() => {}} onCancel={() => {}}>
+      <p>되돌릴 수 없어요.</p>
+    </ConfirmDialog>
+  )
+  const { rerender } = render(dialog(false))
+  rerender(dialog(true))
+  // 브라우저는 disabled가 된 단추의 초점을 body로 보낸다(jsdom은 그러지 않아 직접 뺀다)
+  ;(document.activeElement as HTMLElement).blur()
+  rerender(dialog(false))
+  expect(button('취소')).toHaveFocus()
+})
+
 test.each(['{Escape}', '{Enter}'])('%s로 닫으면 초점이 연 단추로 돌아온다', async (key) => {
   render(<Harness />)
   await open()

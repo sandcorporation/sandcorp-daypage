@@ -36,6 +36,7 @@ import {
   ARRIVE_AT_TITLE,
   useFocusOnArrival,
 } from "../components/useFocusOnArrival";
+import { eulReul } from "../josa";
 import { ErrorScreen, MessageCard } from "../pages/ErrorScreen";
 import { ConnectionPill } from "./ConnectionPill";
 import { NewsButton } from "../news/NewsButton";
@@ -66,7 +67,7 @@ import {
 import { ShortcutsButton } from "./ShortcutsButton";
 import { uniquePeople, usePresence } from "./usePresence";
 import { useNewVersion } from "./useNewVersion";
-import { useRealtime, type FatalReason } from "./useRealtime";
+import { useRealtime, type FatalReason, type NoteInfo } from "./useRealtime";
 import type { NoteDetail } from "./types";
 import "./note.css";
 
@@ -453,6 +454,10 @@ export function NotePage({ initial }: Props) {
     (raw: unknown) => setNote((n) => ({ ...n, paper: normalizePaper(raw) })),
     [],
   );
+  const setNoteInfo = useCallback(
+    (info: NoteInfo) => setNote((n) => ({ ...n, ...info })),
+    [],
+  );
   const paper = normalizePaper(note.paper);
   // 종이 바꾸기: 화면은 바로 바꾸고 저장한다(실패하면 되돌린다). 다른 사람에게는 서버가 알린다.
   const changePaper = useCallback(
@@ -494,6 +499,7 @@ export function NotePage({ initial }: Props) {
     onNoteColors: setNoteColors,
     onNotePaper: setNotePaper,
     onNotePage: onNotePageChange,
+    onNoteInfo: setNoteInfo,
   });
   reconnectRef.current = reconnect;
   const rejoin = useCallback(() => {
@@ -1038,7 +1044,7 @@ export function NotePage({ initial }: Props) {
       </div>
       {confirmDelete && (
         <ConfirmDialog
-          title={`‘${note.name}’을 지울까요?`}
+          title={`‘${note.name}’${eulReul(note.name)} 지울까요?`}
           confirmLabel="삭제"
           busy={deleting}
           onConfirm={deleteNote}

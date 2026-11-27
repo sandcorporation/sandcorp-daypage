@@ -53,6 +53,11 @@ export function ConfirmDialog({ title, children, confirmLabel, busy = false, onC
     }
   }, [])
 
+  // 요청하는 동안 disabled가 된 단추는 초점을 잃는다. 실패해 창이 남으면 취소로 되돌린다.
+  useEffect(() => {
+    if (!busy && !dialogRef.current?.contains(document.activeElement)) cancelRef.current?.focus()
+  }, [busy])
+
   return (
     <div
       className="dialog-backdrop"

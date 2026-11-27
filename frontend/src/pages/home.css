@@ -239,6 +239,10 @@
   font-size: 14px;
   color: #b91c1c;
 }
+.dialog-body .form-error {
+  margin-top: 10px;
+  color: #b91c1c;
+}
 .note-list {
   flex: 999 1 420px;
   min-width: 0;

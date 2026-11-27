@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { useReorder } from './useReorder'
 import * as Y from 'yjs'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { eulReul } from '../josa'
 import { readStrokes } from './doc'
 import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 import {
@@ -264,7 +265,7 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
         </p>
         {doomed && doomedStats && (
           <ConfirmDialog
-            title={`‘${doomed.name}’을 지울까요?`}
+            title={`‘${doomed.name}’${eulReul(doomed.name)} 지울까요?`}
             confirmLabel="지우기"
             fallbackFocus={() => addRef.current}
             onCancel={() => setDeleting(null)}
