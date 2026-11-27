@@ -135,8 +135,41 @@
   margin-left: -8px;
 }
 .avatar-more {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 0;
   background: var(--muted-2);
+  font-family: inherit;
   font-size: 12px;
+  cursor: pointer;
+}
+/* 얼굴 크기는 그대로 두고 누르는 자리만 넓힌다 */
+.avatar-more::after {
+  content: '';
+  position: absolute;
+  inset: -8px -6px;
+}
+.tool-pop-popover.people-pop {
+  width: min(280px, calc(100vw - 16px));
+}
+.people-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.people-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.people-list .avatar {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.people-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .me-label {
   font-size: 13px;
@@ -550,6 +583,17 @@
   font-weight: 600;
   border: 0;
   font-family: inherit;
+}
+.member-badge[data-widest] {
+  flex-direction: column;
+  justify-content: center;
+  white-space: nowrap;
+}
+.member-badge[data-widest]::after {
+  content: attr(data-widest);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 .member-badge-btn {
   cursor: pointer;
