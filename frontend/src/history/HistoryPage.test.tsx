@@ -159,3 +159,21 @@ test('엮는 중 ‘취소’를 누르면 신호가 오고, 내려받지 않고
   await userEvent.click(screen.getByRole('button', { name: '책으로 저장 (PDF)' }))
   await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))
 })
+
+test('정원이 찬 노트에 참여하지 않은 사람에게는 노트 화면처럼 정원 참 초대 화면을 보인다', async () => {
+  const refuse = (code: string) =>
+    new Response(JSON.stringify({ code, detail: '' }), { status: 403, headers: { 'Content-Type': 'application/json' } })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/api/notes/n1') return refuse('note_full')
+      if (url === '/api/notes/n1/preview') return json({ name: '우리집', online: 2, isFull: true })
+      // 참여자가 아니면 기록 목록은 먼저 거절된다
+      return refuse('not_member')
+    }),
+  )
+  open()
+  expect(await screen.findByRole('status')).toHaveTextContent('정원이 찼어요')
+  expect(screen.getByRole('heading')).toHaveTextContent('우리집')
+  expect(screen.queryByText('노트를 찾을 수 없어요')).not.toBeInTheDocument()
+})

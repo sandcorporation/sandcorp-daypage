@@ -115,6 +115,21 @@ def test_closed_note_cannot_be_opened_by_members_until_reopened():
     assert list(AdminLog.objects.order_by("id").values_list("action", flat=True))[-2:] == ["close_note", "reopen_note"]
 
 
+def test_preview_of_closed_note_tells_it_is_closed_before_login():
+    _, _, note_id = note_with_guest()
+    admin = staff()
+    admin.post(f"/api/admin/notes/{note_id}/close", {"reason": "광고 글"}, content_type="application/json")
+
+    res = Client().get(f"/api/notes/{note_id}/preview")
+    assert res.status_code == 403
+    assert res.json()["code"] == "note_closed"
+    assert "광고 글" in res.json()["detail"]
+    assert "name" not in res.json()
+
+    admin.post(f"/api/admin/notes/{note_id}/reopen")
+    assert Client().get(f"/api/notes/{note_id}/preview").json() == {"name": "우리 노트", "online": 0, "isFull": False}
+
+
 def test_closing_needs_a_reason():
     owner, guest, note_id = note_with_guest()
     res = staff().post(f"/api/admin/notes/{note_id}/close", {"reason": "  "}, content_type="application/json")

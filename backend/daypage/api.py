@@ -217,6 +217,7 @@ def create_note(request, body: CreateNoteIn):
 @api.get("/notes/{note_id}/preview", auth=None)
 def preview(request, note_id: str):
     note = get_object_or_404(Note, pk=note_id)
+    moderation.check_open(note)
     return {"name": note.name, "online": online_count(note), "isFull": note.is_full()}
 
 
