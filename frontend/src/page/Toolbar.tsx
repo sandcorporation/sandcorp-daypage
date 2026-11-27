@@ -670,8 +670,8 @@ export function Toolbar(props: Props) {
         <button
           type="button"
           className="tool-btn"
-          aria-label={props.focus ? '집중 모드 끝내기' : '집중 모드'}
-          title={props.focus ? '집중 모드 끝내기 (Esc)' : `집중 모드${keyHint(keymap, 'focus')}: 머리글을 숨기고 종이만 크게`}
+          aria-label="집중 모드"
+          title={props.focus ? '집중 모드 (Esc로 끝내요)' : `집중 모드${keyHint(keymap, 'focus')}: 머리글을 숨기고 종이만 크게`}
           aria-pressed={!!props.focus}
           onClick={() => props.onFocus?.(!props.focus)}
         >

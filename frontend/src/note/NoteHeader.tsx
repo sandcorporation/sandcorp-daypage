@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Link } from 'react-router'
 import { Logo } from '../components/Brand'
+import { useIsPhone } from '../components/useIsPhone'
 import { Countdown } from './Countdown'
 import { NoteName } from './NoteName'
 import { formatPageDate, seqSuffix } from './time'
@@ -19,6 +20,7 @@ type Props = {
 
 export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, settings, titleRef }: Props) {
   const shown = [{ nickname: note.me.nickname, color: note.me.color, isMe: true }, ...peers]
+  const faces = useIsPhone() ? 2 : 6
   const ref = useRef<HTMLElement>(null)
   // 머리글 높이를 --note-header-h로 알린다. 툴바가 이 아래에 붙는다(휴대폰에서는 머리글이 두 줄로 높아진다).
   useLayoutEffect(() => {
@@ -55,8 +57,8 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
       </div>
 
       <div className="note-header-right">
-        <div className="avatars" aria-label={`함께 있는 사람 ${shown.length}명`}>
-          {shown.slice(0, 6).map((p, i) => (
+        <div className="avatars" role="group" aria-label={`함께 있는 사람 ${shown.length}명`}>
+          {shown.slice(0, faces).map((p, i) => (
             <span
               key={`${p.nickname}-${i}`}
               className="avatar"
@@ -66,7 +68,7 @@ export function NoteHeader({ note, page, clockOffset, peers, onRename, onShare, 
               {initial(p.nickname)}
             </span>
           ))}
-          {shown.length > 6 && <span className="avatar avatar-more">+{shown.length - 6}</span>}
+          {shown.length > faces && <span className="avatar avatar-more">+{shown.length - faces}</span>}
         </div>
         <span className="me-label">
           나: <b>{note.me.nickname}</b>

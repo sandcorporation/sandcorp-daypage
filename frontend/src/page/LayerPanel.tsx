@@ -210,8 +210,8 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
               <button
                 type="button"
                 className="layer-icon-btn"
-                aria-label={`${layer.name} ${layer.locked ? '잠금 풀기' : '잠그기'}`}
-                title={layer.locked ? '잠금 풀기' : '잠그기: 아무도 이 레이어에 그리거나 지우지 못해요'}
+                aria-label={`${layer.name} 잠그기`}
+                title="잠금: 잠근 레이어에는 아무도 그리거나 지우지 못해요"
                 aria-pressed={layer.locked}
                 onClick={() => setLayerLocked(doc, layer.id, !layer.locked, origin)}
               >
@@ -220,8 +220,8 @@ export function LayerPanel({ doc, origin, current, onCurrent, hidden, onToggleHi
               <button
                 type="button"
                 className="layer-icon-btn"
-                aria-label={`${layer.name} ${isHidden ? '보이기' : '숨기기'}`}
-                title={isHidden ? '보이기' : '내 화면에서만 숨기기'}
+                aria-label={`${layer.name} 보이기`}
+                title="내 화면에서만 보이기·숨기기"
                 aria-pressed={!isHidden}
                 onClick={() => onToggleHidden(layer.id)}
               >

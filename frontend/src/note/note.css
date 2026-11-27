@@ -1605,13 +1605,12 @@
   .note-sub-date {
     display: none;
   }
+  /* 390px에서는 한 줄에 들어간다. 더 좁으면 화면 밖으로 밀리지 않고 줄을 바꾼다 */
   .note-header-right {
     flex: 0 0 auto;
-    flex-wrap: nowrap;
-    gap: 4px;
-  }
-  .note-header-right .avatar:nth-child(n + 3) {
-    display: none;
+    max-width: 100%;
+    justify-content: flex-end;
+    gap: 3px;
   }
   .note-header .avatar {
     width: 28px;
@@ -1622,12 +1621,12 @@
     min-height: 34px;
     height: 34px;
     min-width: 34px;
-    padding: 0 8px;
+    padding: 0 6px;
   }
   .note-header .member-badge {
     font-size: 12px;
     min-height: 30px;
-    padding: 0 8px;
+    padding: 0 5px;
     white-space: nowrap;
   }
   /* 머리말 팝오버는 버튼이 아니라 머리말을 기준으로 연다(버튼 기준이면 화면 왼쪽 밖으로 나간다) */

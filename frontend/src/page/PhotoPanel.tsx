@@ -131,8 +131,8 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
                 <button
                   type="button"
                   className="layer-icon-btn"
-                  aria-label={`${name} ${isHidden ? '보이기' : '숨기기'}`}
-                  title={isHidden ? '보이기' : '내 화면에서만 숨기기'}
+                  aria-label={`${name} 보이기`}
+                  title="내 화면에서만 보이기·숨기기"
                   aria-pressed={!isHidden}
                   onClick={() => onToggleHidden(p.id)}
                 >
