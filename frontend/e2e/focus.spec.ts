@@ -202,3 +202,30 @@ test('#196 곡선 막대 「취소」에 초점을 두고 Esc를 누르면 곡�
   await expect(bar).toBeHidden()
   await expect(tool).toBeFocused()
 })
+
+test('#200 마우스로 연 도구 창을 Esc로 닫아도 Space+끌기는 화면을 옮기고 획을 긋거나 창을 다시 열지 않는다', async ({ page }) => {
+  const saved = await openNote(page)
+  const view = page.locator('.page-viewport')
+  const zoomIn = page.getByRole('button', { name: '확대' })
+  for (let i = 0; i < 4; i++) await zoomIn.click()
+  const opener = page.locator('button[aria-haspopup="dialog"]').filter({ has: page.locator('.width-name') })
+  await opener.click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(opener).toBeFocused()
+
+  const box = (await view.boundingBox())!
+  const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const before = await view.evaluate((el) => el.scrollTop)
+  await page.mouse.move(at.x, at.y)
+  await page.keyboard.down('Space')
+  await page.keyboard.down('Space')
+  await page.mouse.down()
+  await page.mouse.move(at.x, at.y - 120, { steps: 5 })
+  await page.mouse.up()
+  await page.keyboard.up('Space')
+  await expect.poll(() => view.evaluate((el) => el.scrollTop)).toBeGreaterThan(before)
+  await expect(page.getByRole('dialog')).toBeHidden()
+  expect(saved.strokes()).toHaveLength(0)
+})
