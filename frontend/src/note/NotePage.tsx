@@ -32,6 +32,7 @@ import { hasSelection, useEditTools } from "../page/useEditTools";
 import { isTypingTarget, useUndo } from "../page/useUndo";
 import { useNavigate } from "react-router";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { eulReul } from "../josa";
 import { ErrorScreen, MessageCard } from "../pages/ErrorScreen";
 import { ConnectionPill } from "./ConnectionPill";
 import { NewsButton } from "../news/NewsButton";
@@ -1031,7 +1032,7 @@ export function NotePage({ initial }: Props) {
       </div>
       {confirmDelete && (
         <ConfirmDialog
-          title={`‘${note.name}’을 지울까요?`}
+          title={`‘${note.name}’${eulReul(note.name)} 지울까요?`}
           confirmLabel="삭제"
           busy={deleting}
           onConfirm={deleteNote}
