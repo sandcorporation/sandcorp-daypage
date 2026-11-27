@@ -264,6 +264,15 @@ export function isPageEmpty(doc: Y.Doc): boolean {
   return strokesMap(doc).size === 0 && textboxesMap(doc).size === 0 && photosMap(doc).size === 0
 }
 
+/** 보관해도 기록에 남지 않는 장인지. 서버처럼 글자 없는 글 상자는 없는 것으로 본다(pages.py의 drop_empty_text_boxes). */
+export function isPageBlank(doc: Y.Doc): boolean {
+  return (
+    strokesMap(doc).size === 0 &&
+    photosMap(doc).size === 0 &&
+    Array.from(textboxesMap(doc).keys()).every((id) => !textBoxText(doc, id).replaceAll('\n', ''))
+  )
+}
+
 export function round(v: number): number {
   return Math.round(v * 10) / 10
 }

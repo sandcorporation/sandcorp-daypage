@@ -11,7 +11,7 @@ import { photoBase } from "../page/photos";
 import { usePhotoPicker } from "../page/usePhotoPicker";
 import { createTextBoxAt, removeLeftoverEmptyBoxes } from "../page/textbox";
 import { primeKeyboard } from "../page/keyboardProxy";
-import { updateTextBox } from "../page/doc";
+import { isPageBlank, updateTextBox } from "../page/doc";
 import { fontOf } from "../page/fonts";
 import { LayerPanel } from "../page/LayerPanel";
 import { useLayerList } from "../page/useLayers";
@@ -78,6 +78,12 @@ import type { NoteDetail } from "./types";
 import "./note.css";
 
 type Props = { initial: NoteDetail };
+
+/** 바로 보관한 장의 뒷말. 빈 장은 기록에 보이지 않는다(#212) */
+function archivedNote(doc: Y.Doc, synced: boolean): string {
+  if (!isPageBlank(doc)) return ". 지금 페이지를 기록으로 옮겼어요";
+  return synced ? ". 빈 페이지라 기록에는 남지 않아요" : "";
+}
 
 export function NotePage({ initial }: Props) {
   const [note, setNote] = useState(initial);
@@ -430,13 +436,10 @@ export function NotePage({ initial }: Props) {
     if (n > 0) show(`획 ${n}개를 지웠어요.`, { label: "되돌리기", onClick: undo });
   }, [edit, history, show, undo]);
 
+  // 곧 사라지는 알림에는 단추를 두지 않는다. 기록은 머리글의 「기록」으로 간다(#212)
   const notifyRolled = useCallback(
-    () =>
-      show("새 페이지가 열렸어요. 지난 페이지는 기록에 있어요", {
-        label: "기록 보기",
-        onClick: () => navigate(`/note/${note.id}/history`),
-      }),
-    [note.id, navigate, show],
+    () => show("새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요"),
+    [show],
   );
   const { hold: holdRolledNotice, keepForReload } = useRolledNotice(
     note.id,
@@ -446,6 +449,7 @@ export function NotePage({ initial }: Props) {
 
   // 오늘 장이 아니라고 닫혔거나 자정이 지났을 때 서버의 오늘 날짜를 다시 확인한다.
   const reconnectRef = useRef<() => void>(() => {});
+  const abandonSwitchRef = useRef<() => void>(() => {});
   const retryTimer = useRef<number | undefined>(undefined);
   const refreshToday = useCallback(async () => {
     window.clearTimeout(retryTimer.current);
@@ -458,15 +462,18 @@ export function NotePage({ initial }: Props) {
       const fresh = await api<NoteDetail>(`/api/notes/${note.id}`);
       if (fresh.page.key !== note.page.key) setNote(fresh);
       // 날짜가 그대로면(시계 차이 등) 잠시 뒤 같은 장으로 다시 붙는다.
-      else
+      else {
+        abandonSwitchRef.current();
         retryTimer.current = window.setTimeout(
           () => reconnectRef.current(),
           3000,
         );
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 404)
         return setFatal("notFound");
       // 네트워크 오류는 화면을 굳히지 않고 다시 시도한다.
+      abandonSwitchRef.current();
       retryTimer.current = window.setTimeout(() => void refreshToday(), 5000);
     }
   }, [note.id, note.page.key, keepForReload]);
@@ -521,7 +528,15 @@ export function NotePage({ initial }: Props) {
       ),
     [],
   );
-  const { provider, status, synced, queuePosition, reconnect } = useRealtime({
+  const {
+    provider,
+    status,
+    synced,
+    queuePosition,
+    reconnect,
+    switching,
+    abandonSwitch,
+  } = useRealtime({
     noteId: note.id,
     pageKey: note.page.key,
     doc,
@@ -533,6 +548,7 @@ export function NotePage({ initial }: Props) {
     onNoteInfo: setNoteInfo,
   });
   reconnectRef.current = reconnect;
+  abandonSwitchRef.current = abandonSwitch;
   // ‘다시 연결’ 단추는 화면과 함께 사라지므로 노트로 돌아오면 제목에 초점을 둔다
   const rejoined = useRef(false);
   useEffect(() => {
@@ -727,6 +743,8 @@ export function NotePage({ initial }: Props) {
   const changeSealHour = useCallback(
     async (sealHour: number) => {
       const releaseRolledNotice = holdRolledNotice();
+      // 응답이 올 때는 새 장일 수 있어, 쓰던 장의 상태는 보내기 전에 잡는다. 맞추기 전의 빈 문서는 믿지 않는다.
+      const wasSynced = synced;
       let saidKey: string | undefined;
       try {
         const res = await api<{ sealHour: number; page: NoteDetail["page"] }>(
@@ -739,7 +757,7 @@ export function NotePage({ initial }: Props) {
         if (archived) saidKey = res.page.key;
         show(
           `새 페이지가 열리는 시각을 ${String(res.sealHour).padStart(2, "0")}:00로 바꿨어요` +
-            (archived ? ". 지금 페이지를 기록으로 옮겼어요" : ""),
+            (archived ? archivedNote(doc, wasSynced) : ""),
         );
       } catch {
         show("시각을 바꾸지 못했어요. 잠시 뒤 다시 해 주세요.");
@@ -747,7 +765,7 @@ export function NotePage({ initial }: Props) {
         releaseRolledNotice(saidKey);
       }
     },
-    [note.id, note.page.key, show, holdRolledNotice],
+    [note.id, note.page.key, doc, synced, show, holdRolledNotice],
   );
   const changeLimit = useCallback(
     async (memberLimit: number | null) => {
@@ -1075,9 +1093,10 @@ export function NotePage({ initial }: Props) {
       </div>
       {!focus && (
         <div className="status-corner">
+          {/* 장 교체로 다시 붙는 동안은 알약을 그대로 둔다(알림은 새 페이지 알림 하나, #212) */}
           <ConnectionPill
-            status={status}
-            synced={synced}
+            status={switching ? "connected" : status}
+            synced={switching || synced}
             newVersion={newVersion}
           />
           <NewsButton />

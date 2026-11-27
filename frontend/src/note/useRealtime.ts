@@ -1,5 +1,5 @@
 import * as decoding from 'lib0/decoding'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { WebsocketProvider } from 'y-websocket'
 import * as Y from 'yjs'
 
@@ -74,6 +74,9 @@ type Options = {
   onNoteInfo?: (info: NoteInfo) => void
 }
 
+/** 장 교체로 다시 붙는 데 이보다 오래 걸리면 지금 연결 상태를 그대로 보인다 */
+const SWITCH_GRACE_MS = 10_000
+
 export function wsBaseUrl(noteId: string): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${window.location.host}/ws/notes/${noteId}/pages`
@@ -88,23 +91,64 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
   // 네트워크가 돌아오면 provider를 새로 만든다. 끊겼던 소켓은 닫기 핸드셰이크가 끝나지 않아
   // 기존 provider로는 한참 동안 다시 붙지 못한다.
   const [generation, setGeneration] = useState(0)
+  // 새 장으로 바뀌어 일부러 다시 붙는 중(#212). 화면은 이 동안 연결이 끊긴 것으로 보이지 않는다.
+  const [switching, setSwitching] = useState(false)
+  const switchTimer = useRef<number | undefined>(undefined)
+  /** 맞춰진 연결이 있었고 그 뒤로 진짜 끊김이 없었다. 이럴 때만 교체를 조용히 넘긴다. */
+  const healthy = useRef(false)
+  const connectedKey = useRef(pageKey)
+
+  const startSwitch = useCallback(() => {
+    if (!healthy.current) return
+    setSwitching(true)
+    window.clearTimeout(switchTimer.current)
+    switchTimer.current = window.setTimeout(() => {
+      healthy.current = false
+      setSwitching(false)
+    }, SWITCH_GRACE_MS)
+  }, [])
+  const endSwitch = useCallback(() => {
+    window.clearTimeout(switchTimer.current)
+    switchTimer.current = undefined
+    setSwitching(false)
+  }, [])
+  const loseConnection = useCallback(() => {
+    healthy.current = false
+    endSwitch()
+  }, [endSwitch])
+  /** 장이 바뀐 줄 알았는데 새 장을 얻지 못했다: 끊긴 상태를 그대로 보인다 */
+  const abandonSwitch = useCallback(() => {
+    if (switchTimer.current !== undefined) loseConnection()
+  }, [loseConnection])
+  useEffect(() => () => window.clearTimeout(switchTimer.current), [])
 
   useEffect(() => {
     // 같은 브라우저의 다른 탭과 직접 주고받지 않고 항상 서버를 거친다(서버가 봉인·권한을 판단).
     const p = new WebsocketProvider(wsBaseUrl(noteId), pageKey, doc, { disableBc: true, maxBackoffTime: 5000 })
     let everConnected = false
+    // 서버가 이 장을 닫겠다고 했다. 뒤따르는 끊김은 장애가 아니다.
+    let rolled = false
+    const roll = () => {
+      rolled = true
+      p.shouldConnect = false
+      startSwitch()
+      onNotToday()
+    }
+    if (connectedKey.current !== pageKey) {
+      connectedKey.current = pageKey
+      startSwitch()
+    }
     // 자정 교체 알림: 새 날짜의 빈 장으로 옮겨 간다.
     p.messageHandlers[MESSAGE_PAGE_ROLLED] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; key: string }
-      if (msg.type === 'page_rolled') {
-        p.shouldConnect = false
-        onNotToday()
-      }
+      if (msg.type === 'page_rolled') roll()
     }
     // 대기열 순번. 차례가 오면 서버가 같은 연결로 sync를 보내고, sync를 받으면 대기를 거둔다.
     p.messageHandlers[MESSAGE_QUEUED] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; position: number }
-      if (msg.type === 'queued') setQueuePosition(msg.position)
+      if (msg.type !== 'queued') return
+      loseConnection()
+      setQueuePosition(msg.position)
     }
     p.messageHandlers[MESSAGE_NOTE_COLORS] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; colors: string[] }
@@ -134,25 +178,32 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
       } else if (s === 'connecting') {
         setStatus(everConnected ? 'reconnecting' : 'connecting')
       } else {
+        if (!rolled) loseConnection()
         setStatus(navigator.onLine ? 'reconnecting' : 'offline')
       }
     }
     const onSync = (isSynced: boolean) => {
       setSynced(isSynced)
-      if (isSynced) setQueuePosition(null)
+      if (!isSynced) return
+      healthy.current = true
+      endSwitch()
+      setQueuePosition(null)
     }
     const onClose = (event: CloseEvent | null) => {
       const code = event?.code
       if (code === CLOSE.notToday) {
-        p.shouldConnect = false
-        onNotToday()
+        roll()
       } else if (code !== undefined && FATAL_CODES[code]) {
+        loseConnection()
         p.shouldConnect = false
         setQueuePosition(null)
         onFatal(FATAL_CODES[code])
       }
     }
-    const onOffline = () => setStatus('offline')
+    const onOffline = () => {
+      loseConnection()
+      setStatus('offline')
+    }
     const onOnline = () => {
       if (p.shouldConnect) setGeneration((g) => g + 1)
     }
@@ -178,5 +229,5 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
   /** 지금 provider를 버리고 새로 붙는다 */
   const reconnect = useCallback(() => setGeneration((g) => g + 1), [])
 
-  return { provider, status, synced, queuePosition, reconnect }
+  return { provider, status, synced, queuePosition, reconnect, switching, abandonSwitch }
 }
