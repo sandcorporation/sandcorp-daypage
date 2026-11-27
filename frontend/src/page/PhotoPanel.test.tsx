@@ -57,8 +57,15 @@ test('숨기기는 내 화면 설정으로 넘긴다', async () => {
   addPhoto(doc, photo('a', 1))
   rerender()
   expect(screen.getByText('내 화면에서 숨김', { exact: false })).toBeInTheDocument()
-  await userEvent.click(screen.getByRole('button', { name: '사진 1 보이기' }))
+  await userEvent.click(screen.getByRole('button', { name: '사진 1 보이기', pressed: false }))
   expect(props.onToggleHidden).toHaveBeenCalledWith('a')
+})
+
+test('보이는 사진의 보이기 단추는 눌림이다', () => {
+  const { doc, rerender } = setup()
+  addPhoto(doc, photo('a', 1))
+  rerender()
+  expect(screen.getByRole('button', { name: '사진 1 보이기', pressed: true })).toBeInTheDocument()
 })
 
 test('Alt+↑로 앞으로 보낸다', async () => {

@@ -87,15 +87,20 @@ describe('이름·순서·숨기기·불투명도', () => {
     const doc = createPageDoc('2026-10-16')
     const before = Y.encodeStateAsUpdate(doc)
     const props = setup(doc)
-    await userEvent.click(screen.getByRole('button', { name: '레이어 1 숨기기' }))
+    await userEvent.click(screen.getByRole('button', { name: '레이어 1 보이기' }))
     expect(props.onToggleHidden).toHaveBeenCalledWith(BASE_LAYER_ID)
     expect(Y.encodeStateAsUpdate(doc)).toEqual(before)
   })
 
-  test('숨긴 레이어는 보이기 버튼으로 바뀌고 흐리게 보인다', () => {
+  test('보이는 레이어의 보이기 단추는 눌림이다', () => {
+    setup(createPageDoc('2026-10-16'))
+    expect(screen.getByRole('button', { name: '레이어 1 보이기', pressed: true })).toBeInTheDocument()
+  })
+
+  test('숨긴 레이어는 보이기 단추가 풀리고 흐리게 보인다', () => {
     const doc = createPageDoc('2026-10-16')
     setup(doc, { hidden: new Set([BASE_LAYER_ID]) })
-    expect(screen.getByRole('button', { name: '레이어 1 보이기' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '레이어 1 보이기', pressed: false })).toBeInTheDocument()
     expect(rows()[0]).toHaveTextContent('내 화면에서 숨김')
   })
 
@@ -193,10 +198,10 @@ describe('잠그기', () => {
   test('자물쇠로 잠그고 풀면 문서에 반영되고, 잠김이 보인다', async () => {
     const doc = createPageDoc('2026-10-16')
     setup(doc)
-    await userEvent.click(screen.getByRole('button', { name: '레이어 1 잠그기' }))
+    await userEvent.click(screen.getByRole('button', { name: '레이어 1 잠그기', pressed: false }))
     expect(readLayers(doc)[0].locked).toBe(true)
     expect(rows()[0]).toHaveTextContent('잠김')
-    await userEvent.click(screen.getByRole('button', { name: '레이어 1 잠금 풀기' }))
+    await userEvent.click(screen.getByRole('button', { name: '레이어 1 잠그기', pressed: true }))
     expect(readLayers(doc)[0].locked).toBe(false)
   })
 })
