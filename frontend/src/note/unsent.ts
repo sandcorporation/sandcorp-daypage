@@ -1,4 +1,5 @@
-import { useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 import type { WebsocketProvider } from 'y-websocket'
 import type * as Y from 'yjs'
 
@@ -79,4 +80,46 @@ export function useLeaveWarning(on: boolean) {
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [on])
+}
+
+/**
+ * 누른 링크가 이 앱 안의 다른 화면으로 가는 평범한 이동이면 그 경로(#252). 새 탭·내려받기·다른 사이트·
+ * 수정 키를 누른 클릭은 노트를 떠나지 않으므로 null.
+ */
+export function inAppLeaveTarget(e: MouseEvent, here: Location): string | null {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return null
+  const a = e.target instanceof Element ? e.target.closest('a[href]') : null
+  if (!(a instanceof HTMLAnchorElement)) return null
+  if ((a.target && a.target !== '_self') || a.hasAttribute('download')) return null
+  const url = new URL(a.getAttribute('href')!, here.href)
+  if (url.origin !== here.origin) return null
+  if (url.pathname === here.pathname && url.search === here.search) return null
+  return url.pathname + url.search + url.hash
+}
+
+/**
+ * 참인 동안 앱 안 링크로 노트를 떠나려 하면 멈추고 묻는다(#252). 앱이 스스로 하는 이동(navigate)은 막지 않는다.
+ * BrowserRouter라 useBlocker를 쓸 수 없어, 링크 누르기를 먼저 받아 기본 동작을 막는다(Link는 막힌 누르기를 따르지 않는다).
+ */
+export function useInAppLeaveGuard(on: boolean) {
+  const navigate = useNavigate()
+  const [target, setTarget] = useState<string | null>(null)
+  useEffect(() => {
+    if (!on) return
+    const onClick = (e: MouseEvent) => {
+      const to = inAppLeaveTarget(e, window.location)
+      if (to === null) return
+      e.preventDefault()
+      setTarget(to)
+    }
+    document.addEventListener('click', onClick, true)
+    return () => document.removeEventListener('click', onClick, true)
+  }, [on])
+  const stay = useCallback(() => setTarget(null), [])
+  const leave = useCallback(() => {
+    if (target === null) return
+    setTarget(null)
+    navigate(target)
+  }, [navigate, target])
+  return { target, stay, leave }
 }
