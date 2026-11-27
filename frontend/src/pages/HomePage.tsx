@@ -6,6 +6,7 @@ import { logout, useMe, type MyNote, type Suspension } from '../auth/me'
 import { Brand, KakaoIcon, kakaoLoginHref } from '../components/Brand'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { MemberLimitPicker } from '../components/MemberLimitPicker'
+import { eulReul } from '../josa'
 import { ErrorScreen, LoadingScreen } from './ErrorScreen'
 import './home.css'
 
@@ -125,20 +126,28 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<MyNote | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  function closeDelete() {
+    // 응답을 기다리는 동안 Escape·바깥 누르기로 닫으면 실패 글이 보일 곳이 없다.
+    if (busy) return
+    setDeleting(null)
+    setDeleteError(null)
+  }
 
   async function confirmDelete() {
     if (!deleting) return
     setBusy(true)
+    setDeleteError(null)
     try {
       await api<void>(`/api/notes/${deleting.id}`, { method: 'DELETE' })
       setDeleting(null)
       onChanged()
     } catch (err) {
-      setError(
+      setDeleteError(
         err instanceof ApiError && err.status === 403 ? err.message : '노트를 지우지 못했어요. 잠시 후 다시 시도해 주세요.',
       )
-      setDeleting(null)
     } finally {
       setBusy(false)
     }
@@ -249,14 +258,19 @@ function MyNotes({ notes, onChanged, suspension }: { notes: MyNote[]; onChanged:
       </main>
       {deleting && (
         <ConfirmDialog
-          title={`‘${deleting.name}’을 지울까요?`}
+          title={`‘${deleting.name}’${eulReul(deleting.name)} 지울까요?`}
           confirmLabel="삭제"
           busy={busy}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleting(null)}
+          onCancel={closeDelete}
         >
           <p>오늘 페이지와 지난 기록까지 모두 바로 사라지고, 되돌릴 수 없어요.</p>
           {deleting.memberCount > 1 && <p>함께 쓰던 참여자 {deleting.memberCount - 1}명도 더는 볼 수 없어요.</p>}
+          {deleteError && (
+            <p className="form-error" role="alert">
+              {deleteError}
+            </p>
+          )}
         </ConfirmDialog>
       )}
     </div>
