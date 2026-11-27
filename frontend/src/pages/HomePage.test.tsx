@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { HomePage } from './HomePage'
@@ -162,4 +162,41 @@ test('삭제가 운영 조치로 막히면 서버가 준 글을 보인다', asyn
   await userEvent.click(screen.getByRole('button', { name: '삭제' }))
   expect(await screen.findByText(detail)).toBeInTheDocument()
   expect(screen.getByText('우리집 노트')).toBeInTheDocument()
+})
+
+test('삭제가 거절되면 글이 확인 창 안에만 뜨고, 창을 닫으면 만들기 폼에 남지 않는다', async () => {
+  const detail = '운영 정책에 따라 닫힌 노트예요. 사유: 광고 글'
+  const notes = Array.from({ length: 20 }, (_, i) => ({
+    id: `n${i}`,
+    name: `노트 ${i}`,
+    isOwner: true,
+    memberCount: 1,
+    memberLimit: null,
+  }))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'DELETE'
+        ? new Response(JSON.stringify({ code: 'note_closed', detail }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        : new Response(JSON.stringify({ authenticated: true, notes }), {
+            headers: { 'Content-Type': 'application/json' },
+          }),
+    ),
+  )
+  renderHome()
+  await userEvent.click(await screen.findByRole('button', { name: '노트 삭제: 노트 19' }))
+  await userEvent.click(screen.getByRole('button', { name: '삭제' }))
+
+  const dialog = screen.getByRole('alertdialog')
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(detail)
+  expect(screen.getAllByText(detail)).toHaveLength(1)
+
+  await userEvent.click(within(dialog).getByRole('button', { name: '취소' }))
+  expect(screen.queryByText(detail)).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: '노트 삭제: 노트 0' }))
+  expect(within(screen.getByRole('alertdialog')).queryByRole('alert')).not.toBeInTheDocument()
 })
