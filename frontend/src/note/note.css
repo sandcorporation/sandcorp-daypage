@@ -609,11 +609,19 @@
   top: calc(100% + 8px);
   z-index: 40;
   width: 260px;
+  /* 창의 위는 머리글 아랫변보다 낮지 않다: 남은 화면 높이를 넘으면 창 안에서 스크롤한다 */
+  max-height: calc(100dvh - var(--note-header-h, 96px) - 12px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px;
   background: var(--white);
   border: 1.5px solid var(--line);
   border-radius: 14px;
   box-shadow: 0 12px 30px rgba(31, 33, 40, 0.14);
+}
+/* 열린 팝오버가 도구 막대(z 25)·아래 칩 묶음(z 30)에 덮이지 않게 */
+.note-header:has(.member-popover) {
+  z-index: 35;
 }
 .member-help {
   margin: 10px 0 0;
@@ -1698,12 +1706,6 @@
   .note-header .member-popover {
     right: 10px;
     top: calc(100% + 4px);
-    max-height: calc(100dvh - var(--note-header-h, 96px) - 12px);
-    overflow-y: auto;
-  }
-  /* 열린 팝오버가 아래 칩·도구 묶음(z 30)에 덮이지 않게 */
-  .note-header:has(.member-popover) {
-    z-index: 35;
   }
 }
 
