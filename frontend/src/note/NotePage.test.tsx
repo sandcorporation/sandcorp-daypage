@@ -789,4 +789,50 @@ describe('떠나기 전 확인', () => {
     act(() => latest().emit('connection-close', [{ code: 4410 }]))
     expect(leaving()).toBe(false)
   })
+
+  // #252 앱 안 링크(「기록」)로 노트를 떠날 때도 묻는다
+  function renderRoutes() {
+    render(
+      <MemoryRouter initialEntries={['/note/n1']}>
+        <Routes>
+          <Route path="/note/n1" element={<NotePage initial={NOTE} />} />
+          <Route path="/note/n1/history" element={<p>기록 화면</p>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+  }
+  const history = () => screen.getByRole('link', { name: '기록' })
+
+  test('오프라인에서 그리고 「기록」을 누르면 묻고, 머무르면 그대로 노트에 남는다', async () => {
+    renderRoutes()
+    live()
+    offline()
+    draw()
+    await userEvent.click(history())
+    const dialog = screen.getByRole('alertdialog', { name: '아직 보내지 못한 변경이 있어요' })
+    expect(screen.getByRole('button', { name: '머무르기' })).toHaveFocus()
+    await userEvent.keyboard('{Escape}')
+    expect(dialog).not.toBeInTheDocument()
+    expect(screen.queryByText('기록 화면')).not.toBeInTheDocument()
+    expect(history()).toHaveFocus()
+  })
+
+  test('묻는 창에서 떠나기를 누르면 기록으로 간다', async () => {
+    renderRoutes()
+    live()
+    offline()
+    draw()
+    await userEvent.click(history())
+    await userEvent.click(screen.getByRole('button', { name: '떠나기' }))
+    expect(screen.getByText('기록 화면')).toBeInTheDocument()
+  })
+
+  test('온라인에서 그리고 「기록」을 누르면 묻지 않고 바로 간다', async () => {
+    renderRoutes()
+    live()
+    draw()
+    await userEvent.click(history())
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByText('기록 화면')).toBeInTheDocument()
+  })
 })

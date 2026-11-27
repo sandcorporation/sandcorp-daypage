@@ -74,7 +74,7 @@ import { ShortcutsButton } from "./ShortcutsButton";
 import { uniquePeople, usePresence } from "./usePresence";
 import { useNewVersion } from "./useNewVersion";
 import { useRealtime, type FatalReason, type NoteInfo } from "./useRealtime";
-import { useLeaveWarning, useUnsentChanges } from "./unsent";
+import { useInAppLeaveGuard, useLeaveWarning, useUnsentChanges } from "./unsent";
 import { useRolledNotice } from "./useRolledNotice";
 import type { NoteDetail } from "./types";
 import "./note.css";
@@ -559,6 +559,7 @@ export function NotePage({ initial }: Props) {
     blocked: fatal !== null || queuePosition !== null,
   });
   useLeaveWarning(unsent);
+  const leaveGuard = useInAppLeaveGuard(unsent);
   // ‘다시 연결’ 단추는 화면과 함께 사라지므로 노트로 돌아오면 제목에 초점을 둔다
   const rejoined = useRef(false);
   useEffect(() => {
@@ -1151,6 +1152,17 @@ export function NotePage({ initial }: Props) {
               함께 쓰던 참여자 {note.memberCount - 1}명도 더는 볼 수 없어요.
             </p>
           )}
+        </ConfirmDialog>
+      )}
+      {leaveGuard.target !== null && (
+        <ConfirmDialog
+          title="아직 보내지 못한 변경이 있어요"
+          confirmLabel="떠나기"
+          cancelLabel="머무르기"
+          onConfirm={leaveGuard.leave}
+          onCancel={leaveGuard.stay}
+        >
+          <p>연결이 끊긴 동안 쓴 것이에요. 떠나면 사라져요.</p>
         </ConfirmDialog>
       )}
       {confirmClear !== null && (

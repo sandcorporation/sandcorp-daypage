@@ -4,6 +4,8 @@ type Props = {
   title: string
   children: ReactNode
   confirmLabel: string
+  /** 그대로 두는 단추의 말(기본 「취소」) */
+  cancelLabel?: string
   busy?: boolean
   onConfirm: () => void
   onCancel: () => void
@@ -17,7 +19,7 @@ const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), selec
  * 되돌릴 수 없는 일을 하기 전에 묻는 창. 실수로 누르지 않도록 처음 포커스는 취소에 둔다.
  * 열려 있는 동안 Tab은 창 안에서 돌고, 닫히면 초점을 창을 연 단추로 돌려준다.
  */
-export function ConfirmDialog({ title, children, confirmLabel, busy = false, onConfirm, onCancel, fallbackFocus }: Props) {
+export function ConfirmDialog({ title, children, confirmLabel, cancelLabel = '취소', busy = false, onConfirm, onCancel, fallbackFocus }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
   // 부르는 쪽이 그릴 때마다 새 함수를 넘겨도 초점 효과는 열릴 때와 닫힐 때만 돈다.
@@ -75,7 +77,7 @@ export function ConfirmDialog({ title, children, confirmLabel, busy = false, onC
         <div className="dialog-body">{children}</div>
         <div className="dialog-actions">
           <button ref={cancelRef} type="button" className="btn" onClick={onCancel} disabled={busy}>
-            취소
+            {cancelLabel}
           </button>
           <button type="button" className="btn btn-danger" onClick={onConfirm} disabled={busy}>
             {busy ? '지우는 중…' : confirmLabel}

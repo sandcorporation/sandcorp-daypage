@@ -3,7 +3,7 @@ import type { WebsocketProvider } from 'y-websocket'
 import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from 'y-protocols/awareness'
 import * as Y from 'yjs'
 import { addStroke } from '../page/doc'
-import { UNSENT_START, unsentAfter, useLeaveWarning, useUnsentChanges, warnOnLeave, type Unsent, type UnsentEvent } from './unsent'
+import { inAppLeaveTarget, UNSENT_START, unsentAfter, useLeaveWarning, useUnsentChanges, warnOnLeave, type Unsent, type UnsentEvent } from './unsent'
 
 // #250 끊긴 채 쓴 것이 있으면 탭을 떠나기 전에 묻는다. 서버에 닿으면(다시 맞추면) 묻지 않는다.
 
@@ -107,4 +107,31 @@ test('장(문서)이 바뀌면 옛 장의 남은 변경은 세지 않는다', ()
   expect(hook.result.current).toBe(false)
   draw(next)
   expect(hook.result.current).toBe(true)
+})
+
+describe('inAppLeaveTarget', () => {
+  const here = new URL('http://localhost/note/n1') as unknown as Location
+  const click = (attrs: Record<string, string>, init: MouseEventInit = {}) => {
+    const a = document.createElement('a')
+    Object.entries(attrs).forEach(([k, v]) => a.setAttribute(k, v))
+    const span = document.createElement('span')
+    a.append(span)
+    document.body.append(a)
+    const e = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ...init })
+    Object.defineProperty(e, 'target', { value: span })
+    a.remove()
+    return inAppLeaveTarget(e, here)
+  }
+  test.each<[string, Record<string, string>, MouseEventInit, string | null]>([
+    ['앱 안 다른 화면', { href: '/note/n1/history' }, {}, '/note/n1/history'],
+    ['홈', { href: '/' }, {}, '/'],
+    ['같은 화면', { href: '/note/n1#x' }, {}, null],
+    ['다른 사이트', { href: 'https://example.com/' }, {}, null],
+    ['새 탭', { href: '/x', target: '_blank' }, {}, null],
+    ['내려받기', { href: '/x', download: '' }, {}, null],
+    ['수정 키', { href: '/x' }, { metaKey: true }, null],
+    ['가운데 단추', { href: '/x' }, { button: 1 }, null],
+  ])('%s', (_, attrs, init, want) => {
+    expect(click(attrs, init)).toBe(want)
+  })
 })
