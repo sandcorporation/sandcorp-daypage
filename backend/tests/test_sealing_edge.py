@@ -540,3 +540,51 @@ def test_sealed_snapshot_is_revalidated_while_late_edits_can_still_merge(note, a
     at(DUE + dt.timedelta(hours=1))
     settled = client.get(url)
     assert "immutable" in settled["Cache-Control"]
+
+
+def lost_so_far(y: YClient) -> int:
+    """기다리지 않고 지금까지 받아 둔 메시지에서 「버린 편집」 수를 더한다."""
+    lost = 0
+    while not y.ws.output_queue.empty():
+        msg = y.ws.output_queue.get_nowait()
+        if msg["type"] == "websocket.send" and msg["bytes"] and msg["bytes"][0] == MESSAGE_EDITS_LOST:
+            lost += json.loads(msg["bytes"][2:])["count"]
+    return lost
+
+
+async def next_lost(y: YClient) -> int:
+    while True:
+        msg = await y.ws.receive_output(timeout=3)
+        assert msg["type"] == "websocket.send", msg
+        if msg["bytes"][0] == MESSAGE_EDITS_LOST:
+            return json.loads(msg["bytes"][2:])["count"]
+        await y._handle(msg)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
+async def test_seal_now_tells_only_the_connection_whose_held_edit_was_dropped(monkeypatch, moment, settings):
+    """(#278) 바로 봉인 때 방이 모아 두던 편집 중 버린 것은 그 편집을 보낸 연결에만 알린다. 잃지 않은 사람은 받지 않는다."""
+    settings.ROLL_CLOSE_AFTER = 30  # 교체 알림 뒤에도 옛 연결이 열려 있다
+    monkeypatch.setattr(hub, "FLUSH_EVERY", 3600)  # 주기 저장은 시험이 직접 부른다
+    moment["now"] = kst(2026, 10, 16, 23, 30)
+    note_id, owner, (guest,) = await setup_note(2)
+    a = await join(owner, note_id, "2026-10-16")
+    b = await join(guest, note_id, "2026-10-16")
+    (room,) = hub.hub().rooms.values()
+    await send_edit(a, lambda d: (new_box(d, "old-box"), type_text(d, "old-box", "앞 장")))
+    await until(lambda: room.received == 1)
+    await room.flush()
+    await send_edit(a, lambda d: type_text(d, "old-box", " 끝"))  # 모아 두는 사이 봉인된다
+    await until(lambda: room.received == 2)
+
+    res = await sync_to_async(owner.patch)(f"/api/notes/{note_id}", {"sealHour": 23}, content_type="application/json")
+    assert res.json()["page"]["key"] == "2026-10-16-2"
+    await next_rolled(a)
+    await next_rolled(b)
+    await room.flush()
+
+    assert await next_lost(a) == 1
+    assert lost_so_far(b) == 0
+    await a.close()
+    await b.close()

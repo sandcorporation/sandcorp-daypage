@@ -67,6 +67,21 @@ async def send_carried(layer, page_id: int, update: bytes) -> None:
     await layer.group_send(page_group(page_id), {"type": "hub.update", "page": page_id, "from": "carry", "update": update})
 
 
+def _merge(updates: list[bytes]) -> bytes:
+    return updates[0] if len(updates) == 1 else merge_updates(*updates)
+
+
+def _runs(held: list[tuple[Member, bytes]]) -> list[tuple[Member, list[bytes]]]:
+    """받은 차례대로, 같은 연결이 잇달아 보낸 편집끼리 묶는다."""
+    runs: list[tuple[Member, list[bytes]]] = []
+    for sender, update in held:
+        if runs and runs[-1][0] is sender:
+            runs[-1][1].append(update)
+        else:
+            runs.append((sender, [update]))
+    return runs
+
+
 class Room:
     def __init__(self, hub: "Hub", page_id: int) -> None:
         self.hub = hub
@@ -86,8 +101,8 @@ class Room:
         self.clocks: dict[int, int] = {}
         # 노트가 지워졌으면 저장·합치기를 하지 않는다
         self.gone = False
-        # 아직 저장하지 않은 편집
-        self.pending: list[bytes] = []
+        # 아직 저장하지 않은 편집과 보낸 연결(장이 닫혀 버리면 버린 수를 그 연결에만 알린다, #278)
+        self.pending: list[tuple[Member, bytes]] = []
         self.pending_at = None
         self.flusher: asyncio.Task | None = None
         # 저장은 방마다 하나씩만 돈다(#260). received는 이 방이 받은 편집 수, saved는 그중 앞에서부터 커밋된 수.
@@ -147,7 +162,7 @@ class Room:
             if m is not sender:
                 m.push(message)
         await self.to_peers({"type": "hub.update", "update": update})
-        self.pending.append(update)
+        self.pending.append((sender, update))
         self.pending_at = self.pending_at or received_at
         self.received += 1
         self._schedule_flush()
@@ -248,19 +263,19 @@ class Room:
     async def _save(self) -> None:
         if not self.pending or self.gone or self.sealed:
             return
-        updates, received_at, through = self.pending, self.pending_at, self.received
+        held, received_at, through = self.pending, self.pending_at, self.received
         self.pending, self.pending_at = [], None
-        merged = updates[0] if len(updates) == 1 else merge_updates(*updates)
+        merged = _merge([u for _, u in held])
         try:
             count = await db(pages.append_update)(self.page_id, merged, received_at)
         except pages.PageSealed:
             # 받은 시각에 장이 이미 닫혔다(#266, #268): 앞 장에는 넣지 않고 boundary가 정한 대로 지금 장으로 옮긴다.
             self.sealed = True
             await self._saved_changed()
-            key, lost = await self._carry(merged, received_at)
-            # 모아 둔 편집이라 누구 것인지 모른다: 버린 수는 모두에게 알린다
+            key, lost = await self._carry(held, received_at)
+            # 버린 수는 그 편집을 보낸 연결에만 알린다(#278). 교체는 모두에게.
             for m in list(self.members):
-                await m.page_sealed(key, lost)
+                await m.page_sealed(key, lost.get(m, 0))
             return
         except Page.DoesNotExist:  # 그사이 노트가 지워졌다
             self.gone = True
@@ -270,7 +285,7 @@ class Room:
             return
         except Exception:
             # 저장하지 못한 편집을 앞에 되돌려 놓는다. saved가 넘어가지 않으니 기다리던 확인도 나가지 않는다.
-            self.pending = updates + self.pending
+            self.pending = held + self.pending
             self.pending_at = received_at
             if self.closed:
                 raise
@@ -285,16 +300,23 @@ class Room:
             except Exception:  # 편집은 이미 저장됐다. 합치기는 다음 기회에 한다.
                 logger.exception("장 %s 합치기 실패", self.page_id)
 
-    async def _carry(self, update: bytes, received_at) -> tuple[str | None, int]:
-        """저장을 거절당한 편집을 지금 장으로 옮기고 (그 장의 키, 버린 편집 수)를 돌려준다. 실패하면 키가 None(편집은 버린다)."""
-        try:
-            carried = await self.carry_late(update, received_at)
-        except Exception:
-            logger.exception("장 %s 봉인 뒤 편집을 새 장으로 옮기지 못했다", self.page_id)
-            return None, 0
-        if carried.page.id == self.page_id:
-            return None, 0
-        return pages.page_key(carried.page.date, carried.page.seq), carried.lost
+    async def _carry(self, held: list[tuple[Member, bytes]], received_at) -> tuple[str | None, dict[Member, int]]:
+        """저장을 거절당한 편집을 지금 장으로 옮기고 (그 장의 키, 연결마다 버린 편집 수)를 돌려준다. 실패하면 키가 None
+        (편집은 버린다). 받은 차례를 지키며 같은 연결이 잇달아 보낸 것끼리 묶어 옮긴다(앞 편집에 기대는 편집이 있다)."""
+        key: str | None = None
+        lost: dict[Member, int] = {}
+        for sender, updates in _runs(held):
+            try:
+                carried = await self.carry_late(_merge(updates), received_at)
+            except Exception:
+                logger.exception("장 %s 봉인 뒤 편집을 새 장으로 옮기지 못했다", self.page_id)
+                return None, {}
+            if carried.page.id == self.page_id:
+                return None, {}
+            key = pages.page_key(carried.page.date, carried.page.seq)
+            if carried.lost:
+                lost[sender] = lost.get(sender, 0) + carried.lost
+        return key, lost
 
     async def carry_late(self, update: bytes, received_at, base: bytes | None = None) -> pages.Carried:
         """닫힌 이 장으로 온 편집을 나눠 옮긴다(pages.carry_late). 옮긴 것은 지금 장을 연 방들에 넘긴다.
