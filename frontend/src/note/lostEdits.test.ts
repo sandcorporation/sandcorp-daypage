@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { addLost, LOST_JOINS_ROLL_FOR_MS, lostText, rolledText } from './lostEdits'
 
-const BASE = '새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요'
+const BASE = '새 페이지가 열렸어요'
 
 describe('장이 바뀌는 순간 버린 편집 알림(#268)', () => {
   test('막 받은 버린 수는 새 페이지 알림에 붙는다', () => {

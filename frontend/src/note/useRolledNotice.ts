@@ -1,4 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type * as Y from 'yjs'
+import { isPageBlank } from '../page/doc'
+
+/** 넘어간 앞 장 */
+export type LeftPage = {
+  key: string
+  /** 기록에 남을 것이 있었나. 새로고침으로 앞 화면이 없으면 모른다(null) */
+  written: boolean | null
+  /** 노트의 새 페이지 시각이 함께 바뀌었다(만든 사람이 바꿔 넘어갔다) */
+  rescheduled: boolean
+}
 
 /** 새 버전 때문에 새로고침하기 전에 보고 있던 장의 키를 남기는 자리 */
 const reloadMark = (noteId: string) => `daypage:rolledFrom:${noteId}`
@@ -29,11 +40,28 @@ function writeMark(noteId: string, pageKey: string) {
 /**
  * 보고 있던 장이 새 장으로 바뀌면 한 번 알린다(#208). 바뀐 길(page_rolled·4409·제 시각 타이머)은 가리지 않는다.
  */
-export function useRolledNotice(noteId: string, pageKey: string, notify: () => void) {
+export function useRolledNotice(
+  noteId: string,
+  pageKey: string,
+  sealHour: number,
+  doc: Y.Doc,
+  notify: (left: LeftPage) => void,
+) {
   // 이 화면이 이미 알고 있는 장
   const [firstKey] = useState(() => readMark(noteId) ?? pageKey)
   const told = useRef(firstKey)
   const [holds, setHolds] = useState(0)
+  // 장이 바뀌는 render에서 앞 장의 모습을 남긴다
+  const shown = useRef({ pageKey, sealHour, doc })
+  const left = useRef<LeftPage | null>(null)
+  if (shown.current.pageKey !== pageKey) {
+    left.current = {
+      key: shown.current.pageKey,
+      written: !isPageBlank(shown.current.doc),
+      rescheduled: shown.current.sealHour !== sealHour,
+    }
+  }
+  shown.current = { pageKey, sealHour, doc }
 
   useEffect(() => {
     removeMark(noteId)
@@ -41,8 +69,9 @@ export function useRolledNotice(noteId: string, pageKey: string, notify: () => v
 
   useEffect(() => {
     if (holds > 0 || told.current === pageKey) return
+    const from = told.current
     told.current = pageKey
-    notify()
+    notify(left.current ?? { key: from, written: null, rescheduled: false })
   }, [pageKey, holds, notify])
 
   /**

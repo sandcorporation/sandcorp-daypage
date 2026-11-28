@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
-import { useToast } from "../components/Toast";
+import { useToast, type ToastAction } from "../components/Toast";
 import { useAnnouncer } from "../components/useAnnouncer";
-import { addLost, lostText, rolledText, type LostEdits } from "./lostEdits";
+import {
+  addLost,
+  addToShown,
+  lostText,
+  rolledText,
+  type LostEdits,
+} from "./lostEdits";
 import { useTypingHold } from "./useTypingHold";
 import type { EraseFilter, EraserMode } from "../page/erase";
 import * as Y from "yjs";
@@ -79,7 +85,7 @@ import { uniquePeople, usePresence } from "./usePresence";
 import { useNewVersion } from "./useNewVersion";
 import { useRealtime, type FatalReason, type NoteInfo } from "./useRealtime";
 import { useInAppLeaveGuard, useLeaveWarning, useUnsentChanges } from "./unsent";
-import { useRolledNotice } from "./useRolledNotice";
+import { useRolledNotice, type LeftPage } from "./useRolledNotice";
 import type { NoteDetail } from "./types";
 import "./note.css";
 
@@ -108,7 +114,7 @@ export function NotePage({ initial }: Props) {
         setBlockedDetail(e.message);
     });
   }, [fatal, note.id]);
-  const { toast, show } = useToast();
+  const { toast, show, kept } = useToast();
   const navigate = useNavigate();
   const titleRef = useRef<HTMLHeadingElement>(null);
   useFocusOnArrival(titleRef);
@@ -478,28 +484,58 @@ export function NotePage({ initial }: Props) {
     if (n > 0) show(`획 ${n}개를 지웠어요.`, { label: "되돌리기", onClick: undo });
   }, [edit, history, show, undo]);
 
-  // 장이 바뀌는 순간 서버가 버린 편집 수(#268). 곧 이어 오는 새 페이지 알림에 붙인다.
+  // 장이 바뀌는 순간 저장하지 못한 편집 수(#268). 새 페이지 알림에 붙인다.
   const lostEdits = useRef<LostEdits | null>(null);
+  // 지금 말한 새 페이지 알림. 그 뒤에 온 버린 수는 이 알림에 붙여 다시 띄운다.
+  const rolledNotice = useRef<{ text: string; action?: ToastAction } | null>(
+    null,
+  );
+  // 두 알림 모두 놓치면 「쓴 것이 다 지워졌다」로 읽혀, 다음 입력 뒤에도 한동안 남긴다(#280)
   const onEditsLost = useCallback(
     (count: number) => {
-      lostEdits.current = addLost(lostEdits.current, count, Date.now());
-      show(lostText(lostEdits.current.count));
+      const showing = kept();
+      const add = showing ? addToShown : addLost;
+      lostEdits.current = add(lostEdits.current, count, Date.now());
+      const rolled = showing === "rolled" ? rolledNotice.current : null;
+      if (rolled)
+        show(
+          rolledText(rolled.text, lostEdits.current, Date.now()),
+          rolled.action,
+          "rolled",
+        );
+      else show(lostText(lostEdits.current.count), undefined, "lost");
     },
-    [show],
+    [show, kept],
   );
-  // 곧 사라지는 알림에는 단추를 두지 않는다. 기록은 머리글의 「기록」으로 간다(#212)
-  const notifyRolled = useCallback(() => {
-    const text = rolledText(
-      "새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요",
-      lostEdits.current,
-      Date.now(),
-    );
-    lostEdits.current = null;
-    show(text);
-  }, [show]);
+  const notifyRolled = useCallback(
+    (left: LeftPage) => {
+      const base = left.rescheduled
+        ? "새 페이지가 열렸어요. 만든 사람이 새 페이지 시각을 바꿨어요"
+        : "새 페이지가 열렸어요";
+      // 빈 장은 기록에 남지 않아 볼 것이 없다. 남았는지 모르면 기록 목록을 연다.
+      const history = `/note/${note.id}/history`;
+      const action =
+        left.written === false
+          ? undefined
+          : {
+              label: "지난 페이지 보기",
+              onClick: () =>
+                navigate(left.written ? `${history}/${left.key}` : history),
+            };
+      const now = Date.now();
+      const text = rolledText(base, lostEdits.current, now);
+      // 이 알림에 붙지 않은 낡은 수는 뒤에 이어 세지 않는다
+      if (text === base) lostEdits.current = null;
+      rolledNotice.current = { text: base, action };
+      show(text, action, "rolled");
+    },
+    [show, note.id, navigate],
+  );
   const { hold: holdRolledNotice, keepForReload } = useRolledNotice(
     note.id,
     note.page.key,
+    note.sealHour,
+    doc,
     notifyRolled,
   );
 

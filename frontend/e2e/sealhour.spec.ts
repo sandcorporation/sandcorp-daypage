@@ -84,7 +84,7 @@ test('#208 바로 보관: 함께 있던 사람은 새 페이지 알림을, 주�
   await nextFrames(page)
   await nextFrames(guest)
 
-  await expect.poll(() => said(guest)).toEqual(['새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요'])
+  await expect.poll(() => said(guest)).toEqual(['새 페이지가 열렸어요. 만든 사람이 새 페이지 시각을 바꿨어요'])
   expect(await said(page)).toEqual([expect.stringMatching(/바꿨어요\. 빈 페이지라 기록에는 남지 않아요$/)])
   for (const screen of [page, guest]) await expect(screen.getByText('실시간 연결됨 · 자동 저장')).toBeAttached()
   await expect(guest.getByRole('link', { name: '기록', exact: true })).toBeVisible()
