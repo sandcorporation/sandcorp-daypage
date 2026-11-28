@@ -820,6 +820,28 @@
   cursor: not-allowed;
 }
 
+/* 고른 것 지우기: 고른 것이 있을 때만, 어느 기기에서나 */
+.delete-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 16px;
+  background: var(--white);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(31, 33, 40, 0.08);
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.delete-selected:hover {
+  background: var(--paper-dark);
+}
+
 /* 손가락·화면 고정: 터치 기기에서만 */
 .view-control {
   display: none;

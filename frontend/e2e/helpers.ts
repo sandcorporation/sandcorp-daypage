@@ -223,3 +223,19 @@ export async function fakePeers(page: Page) {
     await expect(page.getByRole('group', { name: `함께 있는 사람 ${others + 1}명` })).toBeVisible()
   }
 }
+
+/** 이 뒤로 여는 웹소켓에서 서버가 보내 준 문서(새로고침 뒤 서버에 남은 것을 본다). */
+export function serverDoc(page: Page) {
+  const doc = new Y.Doc()
+  let synced = false
+  page.on('websocket', (ws) => {
+    ws.on('framereceived', ({ payload }) => {
+      if (typeof payload === 'string') return
+      const decoder = decoding.createDecoder(new Uint8Array(payload))
+      if (decoding.readVarUint(decoder) !== MESSAGE_SYNC) return
+      const type = syncProtocol.readSyncMessage(decoder, encoding.createEncoder(), doc, 'server')
+      if (type === syncProtocol.messageYjsSyncStep2) synced = true
+    })
+  })
+  return { synced: () => synced, strokes: () => doc.getMap('strokes').size }
+}
