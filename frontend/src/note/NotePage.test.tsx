@@ -668,6 +668,57 @@ describe('새 페이지 알림', () => {
     await waitFor(() => expect(heard(`${NOTICE}. 장이 바뀌는 순간 2개는 저장되지 않았어요`)).toHaveLength(1))
   })
 
+  // 장이 바뀌면 편집 칸이 사라져 초점이 body로 간다. 이어 친 글자가 단축키가 되면 안 된다(#272)
+  test.each([
+    ['포인터 입력', () => fireEvent.pointerDown(document.body)],
+    ['Tab', () => fireEvent.keyDown(document.body, { key: 'Tab', code: 'Tab' })],
+  ])('글 상자에 쓰던 중 장이 바뀌면 %s 전까지 글자 단축키를 받지 않는다(#272)', async (_, release) => {
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    renderNote()
+    connect()
+    fireEvent.click(screen.getByRole('button', { name: '글씨' }))
+    const frame = document.querySelector('.page-frame') as HTMLElement
+    const at = { pointerId: 1, pointerType: 'mouse', clientX: 120, clientY: 100, button: 0 }
+    fireEvent.pointerDown(frame, { ...at, buttons: 1 })
+    fireEvent.pointerUp(frame, at)
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', '글 상자'))
+
+    const before = latest()
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await waitFor(() => expect(latest()).not.toBe(before))
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: '글 상자' })).not.toBeInTheDocument())
+
+    const press = (code: string, shiftKey = false) => fireEvent.keyDown(document.body, { code, shiftKey })
+    const pressed = (name: string | RegExp) => screen.getByRole('button', { name }).getAttribute('aria-pressed')
+    press('KeyM')
+    press('KeyR')
+    press('KeyR', true)
+    press('KeyS')
+    press('KeyV')
+    press('KeyF')
+    expect(pressed('좌우 뒤집기')).toBe('false')
+    expect(screen.getByRole('group', { name: '돌리기·뒤집기' })).not.toHaveAttribute('data-changed')
+    expect(pressed('집중 모드')).toBe('false')
+    expect(pressed('글씨')).toBe('true')
+
+    release()
+    press('KeyM')
+    expect(pressed('좌우 뒤집기')).toBe('true')
+  })
+
+  test('글 상자 밖에 있을 때 장이 바뀌면 단축키는 그대로다(#272)', async () => {
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+    renderNote()
+    connect()
+    const before = latest()
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await waitFor(() => expect(latest()).not.toBe(before))
+    fireEvent.keyDown(document.body, { code: 'KeyM' })
+    expect(screen.getByRole('button', { name: '좌우 뒤집기' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
   test('교체가 오래 걸리면 지금 연결 상태를 보인다', async () => {
     vi.useFakeTimers()
     try {
