@@ -93,6 +93,9 @@ ROOM_REGISTRY_URL = env("ROOM_REGISTRY_URL", REDIS_URL)
 
 # 증분이 이만큼 쌓이면 스냅샷으로 합친다.
 COMPACT_EVERY = int(env("COMPACT_EVERY", "200"))
+# 장이 바뀌었다고 알린 연결을 이만큼(초) 기다렸다가 닫는다(#266). 서버가 먼저 닫으면 그사이 클라이언트가 보낸
+# 편집이 서버에 닿고도 읽히지 않아 사라진다. 알림을 받은 클라이언트는 곧 새 장으로 옮기며 스스로 닫는다.
+ROLL_CLOSE_AFTER = float(env("ROLL_CLOSE_AFTER", "10"))
 
 CHANNEL_LAYERS = {
     "default": {

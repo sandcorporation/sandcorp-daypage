@@ -160,17 +160,85 @@ def load_doc(page_id: int) -> Doc:
 
 
 def append_update(page_id: int, update: bytes, received_at: dt.datetime) -> int:
-    """증분 하나를 저장한다. 받은 시각 기준으로 지난 장이거나 봉인됐으면 거부한다.
+    """증분 하나를 저장한다. 받은 시각이 봉인 예정(due_at) 뒤면 거부한다.
 
-    봉인 작업과 같은 Page 행 잠금을 잡아 봉인 직전·직후의 경합을 막는다.
+    봉인 작업과 같은 Page 행 잠금을 잡아 봉인 직전·직후의 경합을 막는다. due_at 전에 받았는데 서버가 모아 두던
+    사이 봉인이 먼저 돌았으면 봉인된 장에 마저 합친다(#266, sealing.absorb_late). 그 장의 기간에 그린 것이다.
     돌려주는 값은 아직 합쳐지지 않은 증분 수.
     """
+    from . import sealing
+
     with transaction.atomic():
         page = Page.objects.select_for_update().get(pk=page_id)
-        if page.sealed_at is not None or received_at >= page.due_at:
+        if received_at >= page.due_at:
             raise PageSealed
+        if page.sealed_at is not None:
+            sealing.absorb_late(page, update)
+            return 0
         PageUpdate.objects.create(page=page, update=update)
         return PageUpdate.objects.filter(page=page).count()
+
+
+def _piece_prefix(key: str) -> str:
+    """지우개가 자른 조각은 원래 획 id의 앞 16자를 잇는다(frontend/src/page/doc.ts pieceId)."""
+    return key[:16]
+
+
+def late_strokes(base: bytes, update: bytes) -> dict[str, dict]:
+    """봉인 예정 뒤 옛 장으로 온 갱신 update가 새로 그은 획: {id: 필드}. base는 그 갱신 전 방의 문서.
+
+    옛 장에 있던 획을 고친 것(옮기기·지우개 조각·지우기)은 넣지 않는다. 옛 장은 봉인 때 모습 그대로 남고,
+    새 장에는 그 획이 없기 때문이다.
+    """
+    doc = Doc()
+    doc.apply_update(base)
+    strokes = doc.get("strokes", type=Map)
+    before = set(strokes.keys())
+    prefixes = {_piece_prefix(k) for k in before}
+    doc.apply_update(update)
+    result = {}
+    for key in set(strokes.keys()) - before:
+        if _piece_prefix(key) in prefixes:
+            continue
+        value = strokes.get(key)
+        if isinstance(value, Map):
+            fields = value.to_py()
+            # 레이어는 옛 장의 것이라 새 장에 없다: 기본 레이어에 둔다
+            fields.pop("layer", None)
+            result[key] = {k: bytes(v) if isinstance(v, bytearray) else v for k, v in fields.items()}
+    return result
+
+
+def carry_refused(page_id: int, update: bytes, received_at: dt.datetime) -> tuple[Page, bytes | None]:
+    """봉인 예정이 앞당겨져(주인이 봉인 시각을 이미 지난 시각으로 바꿈) 방이 저장하지 못한 편집 update의 새 획을
+    지금 장으로 옮긴다. 저장된 장 문서가 그 갱신 전 상태다(앞선 편집은 저장됐다)."""
+    note_id = Page.objects.filter(pk=page_id).values_list("note_id", flat=True).get()
+    strokes = late_strokes(_state_update(page_id), update)
+    return carry_strokes(note_id, page_id, strokes, received_at)
+
+
+def _state_update(page_id: int) -> bytes:
+    doc = load_doc(page_id)
+    return doc.get_update()
+
+
+def carry_strokes(note_id: str, old_page_id: int, strokes: dict[str, dict], received_at: dt.datetime) -> tuple[Page, bytes | None]:
+    """봉인 예정 뒤 옛 장에 그은 획을 지금 쓰는 장의 같은 자리로 옮긴다(#266). (지금 장, 저장한 갱신).
+
+    지금 장이 아직 옛 장이면(봉인 예정이 뒤로 미뤄졌다) 옮기지 않는다. 새 장이 없으면 연다.
+    """
+    note = Note.objects.get(pk=note_id)
+    page = open_page(note, received_at)
+    if page.id == old_page_id or not strokes:
+        return page, None
+    doc = Doc()
+    target = doc.get("strokes", type=Map)
+    with doc.transaction():
+        for key, fields in strokes.items():
+            target[key] = Map(fields)
+    update = doc.get_update()
+    append_update(page.id, update, received_at)
+    return page, update
 
 
 def _merge(page: Page) -> Doc:

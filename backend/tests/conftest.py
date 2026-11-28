@@ -17,6 +17,8 @@ def _test_settings(settings):
     settings.ALLOWED_HOSTS = ["localhost", "testserver"]
     # 이 컴퓨터의 cgroup과 상관없이 수용 인원 제한을 끈다(test_capacity가 따로 켠다).
     settings.CGROUP_CPU_MAX_PATH = "/nonexistent/cpu.max"
+    # 장 교체를 알린 연결을 바로 닫는다(늦게 닫기를 보는 시험만 켠다, #266).
+    settings.ROLL_CLOSE_AFTER = 0
     rooms.reset_registry()
     admission.reset_store()
     yield

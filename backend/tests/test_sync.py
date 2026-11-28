@@ -123,13 +123,15 @@ async def test_update_received_after_midnight_is_dropped(fixed_clock):
     assert "late" not in await page_state(note_id)
 
 
-async def test_update_to_sealed_page_is_dropped():
+async def test_update_received_before_due_is_kept_even_if_the_page_was_sealed_first():
+    """봉인 예정 전에 받은 편집은 봉인이 먼저 돌았어도 그 장에 남는다(#266)."""
     note_id, owner, _ = await setup_note()
     a = await join(owner, note_id, "2026-10-15")
     await sync_to_async(Page.objects.filter(note_id=note_id).update)(sealed_at=TODAY)
     await a.add_stroke("sealed")
-    assert await expect_close(a.ws) == 4409
-    assert "sealed" not in await page_state(note_id)
+    await a.sync()
+    assert "sealed" in await page_state(note_id)
+    await a.close()
 
 
 async def test_updates_are_compacted_into_snapshot(settings):

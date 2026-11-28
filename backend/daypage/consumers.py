@@ -40,7 +40,7 @@ from pycrdt import (
 
 from . import admission, awareness, clock, hub, membership, moderation, pages, presence_rules, rooms
 from .hub import EMPTY_UPDATE, db, page_group  # noqa: F401  page_group은 다른 모듈이 여기서 가져간다
-from .models import Note, NoteMember, User
+from .models import Note, NoteMember, Page, User
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +173,9 @@ class PageConsumer(AsyncWebsocketConsumer):
         self.cursor_state: tuple | None = None
         # 닫기 시작했거나 보내다 끊긴 걸 안 연결. 더 보내지 않고 다시 닫지 않는다.
         self.closing = False
+        # 장이 바뀌었다고 이 연결에 알렸는지, 알린 뒤 늦게 닫는 태스크(#266)
+        self.rolled = False
+        self.roll_closer: asyncio.Task | None = None
         # 마지막으로 권한을 본 시각(clock.now), 다시 보다 막혀 닫은 코드, 같은 때 두 번 묻지 않게 하는 자물쇠(#256)
         self.checked_at: dt.datetime | None = None
         self.revoked: int | None = None
@@ -427,8 +430,11 @@ class PageConsumer(AsyncWebsocketConsumer):
         except ClientDisconnected:
             pass
 
-    async def page_sealed(self) -> None:
-        await self.close(code=CLOSE_NOT_TODAY)
+    async def page_sealed(self, key: str | None) -> None:
+        if key is None:
+            await self.close(code=CLOSE_NOT_TODAY)
+        else:
+            await self._tell_rolled(key)
 
     async def page_gone(self) -> None:
         await self.close(code=CLOSE_NOT_FOUND)
@@ -461,6 +467,8 @@ class PageConsumer(AsyncWebsocketConsumer):
             self.sender.cancel()
         if self.answering:
             self.answering.cancel()
+        if self.roll_closer:
+            self.roll_closer.cancel()
         if self.waiting and not self.waiting.done():
             # 들어가는 도중이면 마저 들어간 뒤 평소처럼 나간다(방에 반쯤 들어간 채 남지 않게).
             if not self.entering:
@@ -528,11 +536,29 @@ class PageConsumer(AsyncWebsocketConsumer):
             return
         # 봉인 경계는 받은 시각으로 바로 판정한다(DB를 기다리지 않는다).
         received_at = clock.now()
-        if self.due_at is not None and received_at >= self.due_at:
-            await self.close(code=CLOSE_NOT_TODAY)
+        if self.room.sealed or (self.due_at is not None and received_at >= self.due_at):
+            await self._carry_late(update, received_at)
             return
         await self.room.local_update(self, update, received_at)
         await self._note_input()
+
+    async def _carry_late(self, update: bytes, received_at: dt.datetime) -> None:
+        """봉인 예정 뒤 옛 장으로 온 편집(#266). 옛 장에는 넣지 않고, 새로 그은 획은 지금 장의 같은 자리로 옮긴 뒤
+        장이 바뀌었다고 알린다. 옛 장 획을 고친 것은 버린다(옛 장은 봉인 때 모습 그대로)."""
+        strokes = await db(pages.late_strokes)(self.room.ydoc.get_update(), update)
+        try:
+            page, moved = await db(pages.carry_strokes)(self.note_id, self.page_id, strokes, received_at)
+        except (Note.DoesNotExist, Page.DoesNotExist):
+            return await self.close(code=CLOSE_NOT_FOUND)
+        if page.id == self.page_id:
+            # 봉인 예정이 뒤로 미뤄졌는데 아직 못 들었다: 아직 이 장이다
+            self.due_at = page.due_at
+            if not self.room.sealed:
+                await self.room.local_update(self, update, received_at)
+            return
+        if moved is not None:
+            await hub.send_carried(self.channel_layer, page.id, moved)
+        await self._tell_rolled(pages.page_key(page.date, page.seq))
 
     async def _answer(self, before: asyncio.Task | None, room: hub.Room, through: int, data: bytes) -> None:
         """sync step1에 답한다. 앞선 답이 먼저 나가고, 방이 받은 편집 through개가 커밋돼야 나간다.
@@ -591,11 +617,26 @@ class PageConsumer(AsyncWebsocketConsumer):
     # ── 노트 그룹 알림 ─────────────────────────────────────────
 
     async def page_rolled(self, event) -> None:
-        """페이지 교체: 새 장의 키를 알리고 이 방을 닫는다. 클라이언트는 새 장 방으로 옮겨 간다."""
+        """페이지 교체: 새 장의 키를 알린다. 클라이언트는 새 장 방으로 옮겨 간다."""
         if event["key"] == self.key:
             return
-        payload = json.dumps({"type": "page_rolled", "key": event["key"]}, separators=(",", ":")).encode()
+        await self._tell_rolled(event["key"])
+
+    async def _tell_rolled(self, key: str) -> None:
+        """새 장의 키를 한 번 알리고, settings.ROLL_CLOSE_AFTER 뒤에도 남아 있으면 닫는다. 바로 닫지 않는다: 알림이 가는 사이
+        클라이언트가 보낸 편집도 읽어 옛 장(봉인 예정 전에 받은 것)이나 새 장(뒤에 받은 획)에 남긴다."""
+        if self.rolled:
+            return
+        self.rolled = True
+        payload = json.dumps({"type": "page_rolled", "key": key}, separators=(",", ":")).encode()
         await self.send(bytes_data=bytes([MESSAGE_PAGE_ROLLED]) + write_message(payload))
+        if settings.ROLL_CLOSE_AFTER <= 0:
+            await self.close(code=CLOSE_NOT_TODAY)
+        else:
+            self.roll_closer = asyncio.create_task(self._close_after_roll())
+
+    async def _close_after_roll(self) -> None:
+        await asyncio.sleep(settings.ROLL_CLOSE_AFTER)
         await self.close(code=CLOSE_NOT_TODAY)
 
     async def note_page(self, event) -> None:
