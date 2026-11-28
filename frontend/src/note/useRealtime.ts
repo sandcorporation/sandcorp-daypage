@@ -85,6 +85,13 @@ type Options = {
 /** 장 교체로 다시 붙는 데 이보다 오래 걸리면 지금 연결 상태를 그대로 보인다 */
 const SWITCH_GRACE_MS = 10_000
 
+/**
+ * 맞춰진 연결에서 이만큼 아무것도 받지 못하면 소켓이 말없이 죽었다고 보고 새로 붙는다(#258). 서버는 보낼 것이
+ * 없어도 consumers.KEEPALIVE_EVERY(10초)마다 빈 커서를 보내니, 그 한 번을 놓칠 여유 5초를 더했다. y-websocket은
+ * 30초(바꿀 수 없는 상수 messageReconnectTimeout)를 기다려 그동안 칩이 「실시간 연결됨」으로 남는다.
+ */
+export const SILENT_AFTER_MS = 15_000
+
 export function wsBaseUrl(noteId: string): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${window.location.host}/ws/notes/${noteId}/pages`
@@ -220,12 +227,21 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
       if (p.shouldConnect) setGeneration((g) => g + 1)
     }
 
+    // 대기열에서는(맞추기 전) 서버가 빈 커서를 보내지 않으니 맞춰진 연결만 본다
+    const watchdog = window.setInterval(() => {
+      if (p.wsconnected && p.synced && Date.now() - p.wsLastMessageReceived > SILENT_AFTER_MS) {
+        loseConnection()
+        setGeneration((g) => g + 1)
+      }
+    }, 1_000)
+
     p.on('status', onStatus)
     p.on('sync', onSync)
     p.on('connection-close', onClose)
     window.addEventListener('offline', onOffline)
     window.addEventListener('online', onOnline)
     return () => {
+      window.clearInterval(watchdog)
       p.off('status', onStatus)
       p.off('sync', onSync)
       p.off('connection-close', onClose)
