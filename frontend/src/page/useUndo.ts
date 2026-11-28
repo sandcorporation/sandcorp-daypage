@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as Y from 'yjs'
-import { createUndoManager } from './undo'
+import { changeInStep, createUndoManager, type UndoStep } from './undo'
 
 export function useUndo(doc: Y.Doc, origin: unknown) {
   const [manager, setManager] = useState<Y.UndoManager | null>(null)
@@ -27,6 +27,11 @@ export function useUndo(doc: Y.Doc, origin: unknown) {
       undo: () => manager?.undo(),
       redo: () => manager?.redo(),
       stopCapturing: () => manager?.stopCapturing(),
+      inStep: (prev: UndoStep, change: () => void): UndoStep => {
+        if (manager) return changeInStep(manager, prev, change)
+        change()
+        return null
+      },
     }),
     [state, manager],
   )

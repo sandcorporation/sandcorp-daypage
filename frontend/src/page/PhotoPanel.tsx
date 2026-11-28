@@ -3,7 +3,7 @@ import { useReorder } from './useReorder'
 import * as Y from 'yjs'
 import { useAnnouncer } from '../components/useAnnouncer'
 import { usePhotos } from './PhotoLayer'
-import { deletePhoto, movePhoto, PHOTO_LIMIT, photoUrl, type Photo } from './photos'
+import { deletePhoto, movePhoto, PHOTO_LIMIT, photoNames, photoUrl, type Photo } from './photos'
 
 const EYE = 'M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z'
 const EYE_OFF = 'M2 10s3-6 8-6c2 0 3.6.8 4.9 1.8M18 10s-3 6-8 6c-2 0-3.6-.8-4.9-1.8M3 17L17 3'
@@ -36,12 +36,6 @@ type Props = {
   addBlocked: string | null
 }
 
-/** 사진 이름: 넣은 순서로 사진 1, 2, 3 */
-function names(photos: Photo[]): Map<string, string> {
-  const byAdded = [...photos].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
-  return new Map(byAdded.map((p, i) => [p.id, `사진 ${i + 1}`]))
-}
-
 /**
  * 사진 패널: 이 페이지에 붙은 사진을 레이어 패널처럼 한눈에 보고 붙이기·빼기·겹치는 순서·숨기기를 한다.
  * 줄을 누르면 그 사진이 있는 자리로 지면을 옮긴다.
@@ -54,7 +48,7 @@ export function PhotoPanel({ doc, origin, base, hidden, onToggleHidden, onHighli
   })
   useEffect(() => () => highlightRef.current?.(null), [])
   const photos = usePhotos(doc)
-  const label = names(photos)
+  const label = photoNames(photos)
   const indexOf = (id: string) => photos.findIndex((p) => p.id === id)
   const { node: announced, announce } = useAnnouncer()
   function move(id: string, to: number) {

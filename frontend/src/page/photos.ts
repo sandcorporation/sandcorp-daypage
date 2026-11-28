@@ -75,6 +75,12 @@ export function readPhotos(doc: Y.Doc): Photo[] {
     .map(({ p }) => p)
 }
 
+/** 사진 이름: 넣은 순서로 사진 1, 2, 3(겹치는 순서를 바꿔도 이름은 그대로) */
+export function photoNames(photos: Photo[]): Map<string, string> {
+  const byAdded = [...photos].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+  return new Map(byAdded.map((p, i) => [p.id, `사진 ${i + 1}`]))
+}
+
 /** 새로 붙이는 사진의 순서: 맨 앞 */
 export function nextPhotoOrder(doc: Y.Doc): number {
   return readPhotos(doc).reduce((top, p, i) => Math.max(top, p.order ?? i), -1) + 1
