@@ -159,6 +159,8 @@ class PageConsumer(AsyncWebsocketConsumer):
         # 방이 넘겨준 메시지를 순서대로 보낸다. 느린 연결이 방 전체를 붙잡지 않게 연결마다 따로 보낸다.
         self.outbox: asyncio.Queue[bytes] = asyncio.Queue(OUTBOX_LIMIT)
         self.sender: asyncio.Task | None = None
+        # sync step1에 답하는 태스크(마지막 것). 답은 받은 차례대로, 앞서 받은 편집이 커밋된 뒤에 나간다(#260).
+        self.answering: asyncio.Task | None = None
         # 수용 인원: 대기열 항목, 대기 태스크, 대기 중 받아 둔 메시지, 서비스 접속 목록에 올렸는지
         self.waiter: admission.Waiter | None = None
         self.waiting: asyncio.Task | None = None
@@ -457,6 +459,8 @@ class PageConsumer(AsyncWebsocketConsumer):
             await asyncio.gather(self.heartbeat, return_exceptions=True)
         if self.sender:
             self.sender.cancel()
+        if self.answering:
+            self.answering.cancel()
         if self.waiting and not self.waiting.done():
             # 들어가는 도중이면 마저 들어간 뒤 평소처럼 나간다(방에 반쯤 들어간 채 남지 않게).
             if not self.entering:
@@ -514,11 +518,10 @@ class PageConsumer(AsyncWebsocketConsumer):
     async def _receive_sync(self, data: bytes) -> None:
         sync_type = data[1]
         if sync_type == YSyncMessageType.SYNC_STEP1:
-            # 동기화를 요청받으면 쌓아 둔 편집부터 저장한다(저장된 상태와 보내는 상태를 맞춘다).
-            await self.room.flush()
-            reply = handle_sync_message(data[1:], self.room.ydoc)
-            if reply is not None:
-                await self.send(bytes_data=reply)
+            # 답(step2)은 방이 지금까지 받은 편집이 모두 커밋된 뒤에 나간다. 클라이언트는 이 답을 「앞서 보낸 내 편집이
+            # 저장됐다」로 읽는다(frontend/src/note/unsent.ts). 강제로 저장하지 않고 주기 저장을 기다리며, 기다리는 동안
+            # 이 연결의 다른 메시지는 막지 않는다.
+            self.answering = asyncio.create_task(self._answer(self.answering, self.room, self.room.received, data))
             return
         update = read_message(data[2:])
         if not update or update == EMPTY_UPDATE:
@@ -530,6 +533,17 @@ class PageConsumer(AsyncWebsocketConsumer):
             return
         await self.room.local_update(self, update, received_at)
         await self._note_input()
+
+    async def _answer(self, before: asyncio.Task | None, room: hub.Room, through: int, data: bytes) -> None:
+        """sync step1에 답한다. 앞선 답이 먼저 나가고, 방이 받은 편집 through개가 커밋돼야 나간다.
+        봉인·삭제로 저장할 수 없으면 답하지 않는다(연결은 방이 닫는다)."""
+        if before is not None:
+            await asyncio.wait([before])
+        if not await room.saved_through(through) or self.closing:
+            return
+        reply = handle_sync_message(data[1:], room.ydoc)
+        if reply is not None:
+            await self.send(bytes_data=reply)
 
     def _seat(self) -> presence_rules.Seat:
         return presence_rules.Seat(self, self.member.user_id, self.client_id, self.clock_shift)
