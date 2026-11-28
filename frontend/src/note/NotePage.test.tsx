@@ -9,6 +9,7 @@ import { NotePage } from './NotePage'
 import type * as Y from 'yjs'
 import { addStroke, addTextBox, readTextBoxes } from '../page/doc'
 import type { NoteDetail } from './types'
+import { addPhoto } from '../page/photos'
 import { DEFAULT_KEYMAP, resetKeymapStore, setKeymap } from '../page/shortcuts'
 
 vi.mock('y-websocket', async () => ({ WebsocketProvider: (await import('../test/fakeProvider')).FakeProvider }))
@@ -36,8 +37,13 @@ function renderNote() {
   render(
     <MemoryRouter>
       <NotePage initial={NOTE} />
+      <Where />
     </MemoryRouter>,
   )
+}
+
+function Where() {
+  return <span data-testid="where">{useLocation().pathname}</span>
 }
 
 beforeEach(() => {
@@ -567,7 +573,7 @@ describe('성공한 쓰기 알림', () => {
 
 // 새 장으로 바뀌면 빈 종이만 남지 않게 알린다(#208)
 describe('새 페이지 알림', () => {
-  const NOTICE = '새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요'
+  const NOTICE = '새 페이지가 열렸어요'
   const SAVED = '새 페이지가 열리는 시각을 02:00로 바꿨어요. 빈 페이지라 기록에는 남지 않아요'
   const NEXT: NoteDetail = {
     ...NOTE,
@@ -619,7 +625,7 @@ describe('새 페이지 알림', () => {
     await act(async () => latest().emit('status', [{ status: 'connecting' }]))
     await act(async () => latest().emit('status', [{ status: 'connected' }]))
     await act(async () => latest().emit('sync', [true]))
-    await waitFor(() => expect(said).toEqual([NOTICE]))
+    await waitFor(() => expect(said).toEqual([`${NOTICE}. 만든 사람이 새 페이지 시각을 바꿨어요`]))
     expect(pill()).toBe(LIVE)
     expect(screen.queryByRole('button', { name: '기록 보기' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '기록' })).toHaveAttribute('href', '/note/n1/history')
@@ -666,6 +672,103 @@ describe('새 페이지 알림', () => {
     await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
     drop(4409, before)
     await waitFor(() => expect(heard(`${NOTICE}. 장이 바뀌는 순간 2개는 저장되지 않았어요`)).toHaveLength(1))
+  })
+
+  const PHOTO = { id: 'ph1', x: 100, y: 100, width: 200, height: 150, src: 'a.jpg', author: '말랑한 고양이', createdAt: 1 }
+
+  /** 옛 장에 무언가 쓴 뒤 장을 넘긴다 */
+  async function rollWritten() {
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+    renderNote()
+    connect()
+    const before = latest()
+    act(() => void addPhoto(before.doc, PHOTO, { local: true }))
+    return before
+  }
+  const notice = () => document.querySelector('.toast')
+
+  test('새 페이지 알림은 다음 입력 전까지, 그 뒤로도 10초는 남는다(#280)', async () => {
+    vi.useFakeTimers()
+    try {
+      const before = await rollWritten()
+      await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+      await act(() => vi.advanceTimersByTimeAsync(60_000))
+      expect(notice()).toHaveTextContent(NOTICE)
+      fireEvent.pointerDown(document.body)
+      await act(() => vi.advanceTimersByTimeAsync(9_900))
+      expect(notice()).toHaveTextContent(NOTICE)
+      await act(() => vi.advanceTimersByTimeAsync(200))
+      expect(notice()).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('「지난 페이지 보기」는 기록의 그 장을 연다(#280)', async () => {
+    const before = await rollWritten()
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await userEvent.click(await screen.findByRole('button', { name: '지난 페이지 보기' }))
+    expect(screen.getByTestId('where')).toHaveTextContent(`/note/n1/history/${NOTE.page.key}`)
+  })
+
+  test('늦게 온 버린 수는 새 페이지 알림을 덮지 않고 붙는다(#280)', async () => {
+    const before = await rollWritten()
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await screen.findByRole('button', { name: '지난 페이지 보기' })
+    await act(async () => before.receive(106, { type: 'edits_lost', count: 1 }))
+    expect(notice()).toHaveTextContent(`${NOTICE}. 장이 바뀌는 순간 1개는 저장되지 않았어요`)
+    expect(screen.getByRole('button', { name: '지난 페이지 보기' })).toBeInTheDocument()
+  })
+
+  test('빈 장이 넘어가면 볼 지난 페이지가 없어 단추를 두지 않고, 만든 사람이 시각을 바꿨으면 까닭을 말한다(#280)', async () => {
+    const next = { ...NEXT, sealHour: 2 }
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? next : {}))
+    renderNote()
+    connect()
+    await act(async () => latest().receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await waitFor(() => expect(notice()?.textContent).toBe(`${NOTICE}. 만든 사람이 새 페이지 시각을 바꿨어요`))
+  })
+
+  test.each(['옮기기', '크기 조절'])('사진 %s 손잡이를 놓기 전에 장이 바뀌면 저장되지 않은 것으로 센다(#280)', async (kind) => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    const before = await rollWritten()
+    fireEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
+    const grip = await screen.findByRole('button', { name: `사진 1 ${kind}` })
+    const at = { pointerId: 1, pointerType: 'mouse', button: 0 }
+    fireEvent.pointerDown(grip, { ...at, clientX: 100, clientY: 100, buttons: 1 })
+    fireEvent.pointerMove(grip, { ...at, clientX: 180, clientY: 160, buttons: 1 })
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await waitFor(() => expect(notice()).toHaveTextContent(`${NOTICE}. 장이 바뀌는 순간 1개는 저장되지 않았어요`))
+  })
+
+  test.each([
+    ['separator', '글 상자 폭 조절'],
+    ['button', '글 상자 옮기기·서식 (끌어서 옮기기, 눌러서 서식)'],
+  ])('글 상자 손잡이(%s %s)를 놓기 전에 장이 바뀌면 저장되지 않은 것으로 센다(#280)', async (role, name) => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    const before = await rollWritten()
+    act(() => void addTextBox(before.doc, { id: 't1', x: 100, y: 400, width: 200, color: '#000000', font: 'hand', fontSize: 20, author: '말랑한 고양이' }, { local: true }))
+    fireEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
+    const handle = await screen.findByRole(role, { name })
+    const at = { pointerId: 1, pointerType: 'mouse', button: 0 }
+    fireEvent.pointerDown(handle, { ...at, clientX: 100, clientY: 100, buttons: 1 })
+    fireEvent.pointerMove(handle, { ...at, clientX: 180, clientY: 100, buttons: 1 })
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await waitFor(() => expect(notice()).toHaveTextContent(`${NOTICE}. 장이 바뀌는 순간 1개는 저장되지 않았어요`))
+  })
+
+  test('잡기만 하고 움직이지 않았으면 세지 않는다(#280)', async () => {
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+    const before = await rollWritten()
+    fireEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
+    const grip = await screen.findByRole('button', { name: '사진 1 옮기기' })
+    fireEvent.pointerDown(grip, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 100, clientY: 100, buttons: 1 })
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await screen.findByRole('button', { name: '지난 페이지 보기' })
+    expect(notice()).not.toHaveTextContent('저장되지 않았어요')
   })
 
   // 교체 알림 뒤에도 옛 연결을 서버가 닫을 때까지 두어 늦게 온 「저장 안 됨」을 받는다(#278, rollover.ts)

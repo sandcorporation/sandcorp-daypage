@@ -15,6 +15,7 @@ import { deletePhoto, photoNames, photosMap, PHOTO_MIN_SIDE, photoUrl, readPhoto
 import { PAN_START_EVENT } from './touchPan'
 import { NUDGE_X } from './textbox'
 import type { UndoStep } from './undo'
+import { usePendingEdit } from './pendingEdits'
 
 /** 장의 사진 목록(보이는 것만). 사진 맵이 바뀔 때마다 다시 읽는다. */
 export function usePhotos(doc: Y.Doc): Photo[] {
@@ -193,6 +194,12 @@ function PhotoControl({ name, photo, doc, scale, origin, onPreview, onRemoved, i
       window.removeEventListener('scroll', onScroll, { capture: true })
       frame?.removeEventListener(PAN_START_EVENT, cancel)
     }
+  })
+
+  usePendingEdit(() => {
+    const held = start.current !== null
+    start.current = null
+    return held && !!drag && (drag.x !== photo.x || drag.y !== photo.y || drag.width !== photo.width || drag.height !== photo.height)
   })
 
   function begin(kind: 'move' | 'resize', e: ReactPointerEvent<HTMLElement>) {

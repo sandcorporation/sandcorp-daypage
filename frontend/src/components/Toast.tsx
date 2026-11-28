@@ -6,19 +6,44 @@ export type ToastAction = { label: string; onClick: () => void }
 
 /** 버튼이 달린 알림은 누를 틈을 주려고 더 오래 둔다 */
 const ACTION_DURATION = 6000
+/** 놓치면 안 되는 알림(keep)은 다음 입력까지 두고, 그 뒤로도 이만큼 둔다(#280) */
+export const KEPT_AFTER_INPUT_MS = 10_000
 
 export function useToast(duration = 2200) {
-  const [message, setMessage] = useState<{ text: string; action?: ToastAction } | null>(null)
+  const [message, setMessage] = useState<{ text: string; action?: ToastAction; keep?: string } | null>(null)
   const timer = useRef<number | undefined>(undefined)
 
+  const keptNow = useRef<string | null>(null)
+
+  const hide = useCallback(() => {
+    keptNow.current = null
+    window.clearTimeout(timer.current)
+    setMessage(null)
+  }, [])
+
+  /** keep을 주면 시간이 아니라 다음 입력부터 세어 사라진다. 값은 지금 떠 있는지 kept()로 묻는 이름이다. */
   const show = useCallback(
-    (text: string, action?: ToastAction) => {
-      setMessage({ text, action })
+    (text: string, action?: ToastAction, keep?: string) => {
+      keptNow.current = keep ?? null
+      setMessage({ text, action, keep })
       window.clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => setMessage(null), action ? Math.max(duration, ACTION_DURATION) : duration)
+      if (!keep) timer.current = window.setTimeout(hide, action ? Math.max(duration, ACTION_DURATION) : duration)
     },
-    [duration],
+    [duration, hide],
   )
+  const kept = useCallback(() => keptNow.current, [])
+
+  useEffect(() => {
+    if (!message?.keep) return
+    const types = ['pointerdown', 'keydown'] as const
+    const stopListening = () => types.forEach((t) => window.removeEventListener(t, onInput, true))
+    function onInput() {
+      stopListening()
+      timer.current = window.setTimeout(hide, KEPT_AFTER_INPUT_MS)
+    }
+    types.forEach((t) => window.addEventListener(t, onInput, true))
+    return stopListening
+  }, [message, hide])
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
@@ -40,8 +65,7 @@ export function useToast(duration = 2200) {
               if (back instanceof HTMLElement && back.isConnected) back.focus()
               else focusSpot(document.querySelector('main'))
             }
-            window.clearTimeout(timer.current)
-            setMessage(null)
+            hide()
             action.onClick()
           }}
         >
@@ -51,5 +75,5 @@ export function useToast(duration = 2200) {
     </div>
   )
 
-  return { toast, show }
+  return { toast, show, kept }
 }

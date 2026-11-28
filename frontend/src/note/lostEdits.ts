@@ -20,6 +20,11 @@ export function addLost(prev: LostEdits | null, count: number, now: number): Los
   return { count, at: now }
 }
 
+/** 아직 떠 있는 알림의 수에 더한다(그 알림이 말하던 수를 잃지 않게 오래됐어도 이어 센다) */
+export function addToShown(prev: LostEdits | null, count: number, now: number): LostEdits {
+  return { count: (prev?.count ?? 0) + count, at: now }
+}
+
 /** 새 페이지 알림 글. 막 받은 버린 수가 있으면 함께 말한다. */
 export function rolledText(base: string, lost: LostEdits | null, now: number): string {
   if (!lost || now - lost.at >= LOST_JOINS_ROLL_FOR_MS) return base

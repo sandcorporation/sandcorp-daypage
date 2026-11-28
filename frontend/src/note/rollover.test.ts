@@ -2,7 +2,9 @@ import { describe, expect, test } from 'vitest'
 import { rollAfter, type RollEvent, type RollPhase, type RollStep } from './rollover'
 
 const ROLLED: RollEvent = { type: 'rolled' }
-const SWITCHED: RollEvent = { type: 'switched' }
+const SWITCHED: RollEvent = { type: 'switched', pending: 0 }
+/** 놓기 전의 끌기가 하나 있는 채로 화면이 다른 장으로 바뀐다 */
+const SWITCHED_DRAGGING: RollEvent = { type: 'switched', pending: 1 }
 const EDIT: RollEvent = { type: 'edit' }
 const LOST2: RollEvent = { type: 'lost', count: 2 }
 const CLOSED: RollEvent = { type: 'closed' }
@@ -36,6 +38,12 @@ const TABLE: [RollPhase, RollEvent, RollStep][] = [
   ['done', EDIT, step('done')],
   ['done', LOST2, step('done')],
   ['done', SWITCHED, step('done')],
+  // 놓기 전에 장이 바뀐 끌기는 어느 문서에도 쓰지 못한다: 화면이 바뀌는 자리에서 센다(#280)
+  ['live', SWITCHED_DRAGGING, step('done', 1, true)], // 교체 알림 전에 제 시각 타이머로 새 장을 읽었다
+  ['rolled', SWITCHED_DRAGGING, step('draining', 1)],
+  ['closed', SWITCHED_DRAGGING, step('closed', 1, true)],
+  ['draining', SWITCHED_DRAGGING, step('draining')],
+  ['done', SWITCHED_DRAGGING, step('done')],
 ]
 
 describe('장 교체 때 옛 장 연결의 전이표', () => {

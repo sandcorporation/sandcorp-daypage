@@ -2,6 +2,7 @@ import * as decoding from 'lib0/decoding'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { WebsocketProvider } from 'y-websocket'
 import * as Y from 'yjs'
+import { takePendingEdits } from '../page/pendingEdits'
 import { DRAIN_MAX_MS, rollAfter, type RollEvent, type RollPhase } from './rollover'
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline'
@@ -132,6 +133,13 @@ export function useRealtime({
   /** 맞춰진 연결이 있었고 그 뒤로 진짜 끊김이 없었다. 이럴 때만 교체를 조용히 넘긴다. */
   const healthy = useRef(false)
   const connectedKey = useRef(pageKey)
+  // 장이 바뀌는 render에서 놓지 않은 끌기를 걷는다: effect 때는 앞 장의 손잡이가 이미 사라진 뒤다(#280)
+  const shownKey = useRef(pageKey)
+  const dropped = useRef(0)
+  if (shownKey.current !== pageKey) {
+    shownKey.current = pageKey
+    dropped.current += takePendingEdits()
+  }
   /** 마지막으로 받아 쓴 머리말의 판. 판은 서버 전체에서 커지므로 다시 연결해도 이어 쓴다. */
   const infoSeq = useRef(0)
 
@@ -295,7 +303,9 @@ export function useRealtime({
       window.removeEventListener('online', onOnline)
       setProvider(null)
       // 교체 알림을 받은 연결은 서버가 닫을 때까지 두어 늦은 편집을 보내고 버린 수를 받는다(#278). 그 밖에는 바로 닫는다.
-      step({ type: 'switched' })
+      const pending = dropped.current
+      dropped.current = 0
+      step({ type: 'switched', pending })
       if (phase === 'draining') drainTimer = window.setTimeout(() => step({ type: 'closed' }), DRAIN_MAX_MS)
     }
     // 콜백은 바뀌어도 다시 연결하지 않는다.

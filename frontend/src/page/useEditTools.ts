@@ -52,6 +52,7 @@ import {
   type Handle,
   type Matrix,
 } from './transform'
+import { usePendingEdit } from './pendingEdits'
 
 /** 지우개 반지름(장 좌표). 화면의 지우개 동그라미도 이 크기로 그린다. */
 export const ERASER_RADIUS = 10
@@ -403,6 +404,36 @@ export function useEditTools(
       },
     }
   }, [doc, origin, hiddenLayers, currentLayer, eraserRadius, eraserMode, eraseFilter, showEraseTargets, strokeIndex, bump])
+
+  usePendingEdit(() => {
+    const d = drag.current
+    drag.current = null
+    if (!d) return false
+    switch (d.kind) {
+      case 'move':
+      case 'scale':
+      case 'rotate':
+        return d.m.some((v, i) => v !== IDENTITY[i])
+      case 'erase':
+        return d.ids.size > 0
+      case 'rub':
+        return d.hits.size > 0 || d.whole.size > 0
+      case 'lassoErase':
+        return d.path.length >= 3 && strokesInLasso(editableStrokes(readStrokes(doc), readLayers(doc), hiddenLayers), d.path).length > 0
+      default:
+        // 고르기(상자·올가미)는 문서를 바꾸지 않는다
+        return false
+    }
+  })
+  // 장이 바뀌면 앞 장에서 끌던 미리보기를 거둔다
+  useEffect(
+    () => () => {
+      drag.current = null
+      live.setMove(null)
+      live.setEraseTargets([])
+    },
+    [doc, live],
+  )
 
   const pointerTool = useMemo<PointerTool | undefined>(() => {
     const editable = () => editableStrokes(readStrokes(doc), readLayers(doc), hiddenLayers)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { usePendingEdit } from './pendingEdits'
 
 const IDLE = { dragging: null, over: null, above: false }
 
@@ -89,6 +90,13 @@ export function useReorder(onReorder: (from: string, to: string) => void) {
   }, [])
 
   useEffect(() => () => stop.current(), [])
+
+  usePendingEdit(() => {
+    const d = drag.current
+    if (!d?.active || !d.over) return false
+    d.over = null
+    return true
+  })
 
   /** 줄(li)에 펼친다. 마우스·펜은 줄 어디서든 끌 수 있다. */
   const rowProps = (id: string) => ({

@@ -13,6 +13,7 @@ import { clampBoxWidth, fitBoxInPage, nudgeBox, removeIfEmpty, shouldRemoveOnBlu
 import type { ToolKind } from './tools'
 import { PAN_START_EVENT } from './touchPan'
 import type { EditPreview } from './useEditTools'
+import { usePendingEdit } from './pendingEdits'
 
 /** 서식 막대의 화면 폭(px, 대략). 장 오른쪽 끝에서 잘리지 않게 자리를 정할 때 쓴다. */
 const FORMAT_BAR_WIDTH = 480
@@ -232,6 +233,13 @@ function TextBoxView({
       window.removeEventListener('scroll', onScroll, { capture: true })
       frame?.removeEventListener(PAN_START_EVENT, cancelDrag)
     }
+  })
+
+  usePendingEdit(() => {
+    const s = dragStart.current
+    dragStart.current = null
+    // 놓을 때처럼 4px 미만은 누른 것이라 잃은 편집이 아니다
+    return !!s && s.moved >= 4
   })
 
   function startDrag(kind: 'move' | 'resize', e: ReactPointerEvent<HTMLElement>) {
