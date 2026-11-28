@@ -1,4 +1,5 @@
 import type { Stroke } from './doc'
+import { drawnLine, pointsDrawnAs } from './drawnLine'
 import type { Point } from './geometry'
 
 /**
@@ -174,4 +175,15 @@ export function cutStroke(stroke: Stroke, path: Point[], radius: number): number
   }
   const minLength = Math.max(1, stroke.width / 2)
   return pieces.filter((p) => p.length >= 6 && polylineLength(p) >= minLength)
+}
+
+/**
+ * 범위 지우개로 획을 자른다. 펜 획은 저장된 점이 아니라 화면에 그려진 중심선(굵기 포함)을 잘라, 남은 조각이
+ * 자르기 전 보이던 자리 그대로 그려지게 한다(#263). 형광펜·채색은 점을 그대로 이어 그리므로 점 그대로 자른다.
+ * 돌려주는 값은 cutStroke와 같다.
+ */
+export function cutDrawnStroke(stroke: Stroke, path: Point[], radius: number): number[][] | null {
+  if (stroke.tool !== 'pen') return cutStroke(stroke, path, radius)
+  const pieces = cutStroke({ ...stroke, points: drawnLine(stroke) }, path, radius)
+  return pieces && pieces.map((p) => pointsDrawnAs(stroke, p))
 }

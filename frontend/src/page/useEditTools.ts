@@ -31,7 +31,7 @@ import {
   type Rect,
 } from './hit'
 import { useStrokeIndex } from './strokeIndex'
-import { cutStroke, erasesWhole, filterStrokes, type EraseFilter, type EraserMode } from './erase'
+import { cutDrawnStroke, erasesWhole, filterStrokes, type EraseFilter, type EraserMode } from './erase'
 import type { PointerTool } from './PageView'
 import type { ToolKind } from './tools'
 import {
@@ -385,7 +385,7 @@ export function useEditTools(
           const cuts: StrokeCut[] = []
           for (const id of d.hits) {
             const s = readOne(id)
-            const pieces = s && cutStroke(s, d.path, eraserRadius)
+            const pieces = s && cutDrawnStroke(s, d.path, eraserRadius)
             if (!pieces) continue
             if (pieces.length === 0) remove.push(id)
             else cuts.push({ id, pieces })
