@@ -1514,7 +1514,15 @@ export function PageView({
 
   return (
     <ViewContext.Provider value={view}>
-    <div ref={viewportRef} className="page-viewport" style={viewLocked ? { overflow: 'hidden' } : undefined}>
+    {/* 넘치면 브라우저가 이 칸에 키보드 초점을 주고 화살표·PageUp/Down으로 움직인다. 화면 고정이면 움직이지 않는다.
+        tabIndex는 주지 않는다: 넘치지 않을 때 빈 정지점이 생기고, 지면 누르기가 초점을 옮긴다(focusSpot과도 겹친다) */}
+    <div
+      ref={viewportRef}
+      className="page-viewport"
+      role="region"
+      aria-label={viewLocked ? '종이' : '종이 — 화살표로 움직이기'}
+      style={viewLocked ? { overflow: 'hidden' } : undefined}
+    >
       <div
         ref={frameRef}
         className="page-frame"

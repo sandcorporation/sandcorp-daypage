@@ -592,3 +592,18 @@ describe('#189 곡선 중 누를 수 있는 요소의 Enter·Space·Escape는 �
     dialog.remove()
   })
 })
+
+describe('#269 종이 칸의 접근 이름', () => {
+  // 넘치는 스크롤 상자는 브라우저가 Tab 정지점으로 만들고 화살표·PageUp/Down으로 움직인다. tabindex는 주지 않는다.
+  test('화살표로 움직인다고 말하는 이름의 영역이고, 포커스는 브라우저에 맡긴다', () => {
+    render(<PageView doc={new Y.Doc()} tool="pen" ink="#000" widthLevel={1} author="나" />)
+    const region = screen.getByRole('region', { name: '종이 — 화살표로 움직이기' })
+    expect(region).toHaveClass('page-viewport')
+    expect(region).not.toHaveAttribute('tabindex')
+  })
+
+  test('화면 고정이면 화살표로 움직이지 않으므로 이름은 「종이」다', () => {
+    render(<PageView doc={new Y.Doc()} tool="pen" ink="#000" widthLevel={1} author="나" viewLocked />)
+    expect(screen.getByRole('region', { name: '종이' })).toHaveClass('page-viewport')
+  })
+})
