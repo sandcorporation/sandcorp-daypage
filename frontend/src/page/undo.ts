@@ -14,3 +14,19 @@ export function createUndoManager(doc: Y.Doc, origin: unknown): Y.UndoManager {
     captureTimeout: 300,
   })
 }
+
+/** 이어지는 작업 한 묶음의 되돌리기 단계. 첫 작업 전에는 null. */
+export type UndoStep = Y.UndoManager['undoStack'][number] | null
+
+/**
+ * change를 prev 단계에 잇는다(누른 간격과 상관없이 되돌리기 한 번). prev가 맨 위 단계가 아니면
+ * (처음이거나, 그사이 되돌렸거나 다른 작업을 했으면) 새 단계로 시작한다. 뒤의 작업은 합치지 않는다.
+ * 이어 갈 단계를 돌려준다.
+ */
+export function changeInStep(manager: Y.UndoManager, prev: UndoStep, change: () => void): UndoStep {
+  if (prev && manager.undoStack.at(-1) === prev) manager.lastChange = Date.now()
+  else manager.stopCapturing()
+  change()
+  manager.stopCapturing()
+  return manager.undoStack.at(-1) ?? null
+}

@@ -1124,6 +1124,7 @@ export function NotePage({ initial }: Props) {
               onPreview={setPhotoDrag}
               hidden={hiddenPhotos}
               onRemoved={() => show("사진을 뺐어요")}
+              inStep={history.inStep}
             />
           )}
           <Cursors peers={presence.peers} scale={scale} />

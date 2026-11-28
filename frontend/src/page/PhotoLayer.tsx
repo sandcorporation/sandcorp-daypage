@@ -1,11 +1,20 @@
 import { focusSpot } from '../components/focusSpot'
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import * as Y from 'yjs'
-import { PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
+import { LINE_GAP, PAGE_HEIGHT, PAGE_WIDTH } from './geometry'
 import { usePageViewTransform } from './viewContext'
 import { pageDeltaOf } from './viewTransform'
-import { deletePhoto, photosMap, PHOTO_MIN_SIDE, photoUrl, readPhotos, updatePhoto, type Photo } from './photos'
+import { deletePhoto, photoNames, photosMap, PHOTO_MIN_SIDE, photoUrl, readPhotos, updatePhoto, type Photo } from './photos'
 import { PAN_START_EVENT } from './touchPan'
+import { NUDGE_X } from './textbox'
+import type { UndoStep } from './undo'
 
 /** 장의 사진 목록(보이는 것만). 사진 맵이 바뀔 때마다 다시 읽는다. */
 export function usePhotos(doc: Y.Doc): Photo[] {
@@ -66,6 +75,8 @@ type ControlsProps = {
   hidden?: ReadonlySet<string>
   /** 지면에서 사진을 뺀 뒤(알림 자리) */
   onRemoved?: () => void
+  /** 이어 누른 화살표를 되돌리기 한 단계로 묶는다(useUndo) */
+  inStep: (prev: UndoStep, change: () => void) => UndoStep
 }
 
 /** 끄는 결과: 옮기면 장 안에, 키우면 가로세로 비율을 지키며 장 안에 */
@@ -88,22 +99,59 @@ export function dragResult(kind: 'move' | 'resize', p: Photo, dx: number, dy: nu
   return { id: p.id, x: p.x, y: p.y, width, height: Math.round(width * ratio) }
 }
 
+/** Shift를 누른 화살표의 걸음 배수 */
+const BIG_STEP = 4
+
+const ARROWS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+}
+
+/**
+ * 손잡이의 화살표 키 결과(화살표가 아니면 null). 옮기기는 글 상자 손잡이와 같은 걸음(가로 NUDGE_X, 세로 한 줄),
+ * 크기는 오른쪽·아래가 키우고 왼쪽·위가 줄인다(폭으로 NUDGE_X). 장 안에 두는 규칙은 끌 때와 같다.
+ */
+function nudgeResult(kind: 'move' | 'resize', p: Photo, key: string, big: boolean): PhotoDrag | null {
+  const arrow = ARROWS[key]
+  if (!arrow) return null
+  const [ax, ay] = arrow
+  const k = big ? BIG_STEP : 1
+  if (kind === 'resize') return dragResult(kind, p, (ax + ay) * NUDGE_X * k, 0)
+  return dragResult(kind, p, ax * NUDGE_X * k, ay * LINE_GAP * k)
+}
+
 /**
  * 선택·이동 도구일 때 사진마다 옮기기 손잡이·크기 손잡이·빼기 단추를 보인다(장 맨 위 레이어).
  * 사진 몸통은 누르지 않아 사진 위에 쓴 획을 그대로 고를 수 있다.
  */
-export function PhotoControls({ doc, scale, origin, onPreview, hidden, onRemoved }: ControlsProps) {
+export function PhotoControls({ doc, scale, origin, onPreview, hidden, onRemoved, inStep }: ControlsProps) {
   const photos = usePhotos(doc)
+  // 번호는 숨긴 사진까지 세어 사진 패널의 이름과 같게 한다
+  const names = photoNames(photos)
   return (
     <>
       {photos.filter((p) => !hidden?.has(p.id)).map((p) => (
-        <PhotoControl key={p.id} photo={p} doc={doc} scale={scale} origin={origin} onPreview={onPreview} onRemoved={onRemoved} />
+        <PhotoControl
+          key={p.id}
+          name={names.get(p.id) ?? '사진'}
+          photo={p}
+          doc={doc}
+          scale={scale}
+          origin={origin}
+          onPreview={onPreview}
+          onRemoved={onRemoved}
+          inStep={inStep}
+        />
       ))}
     </>
   )
 }
 
-function PhotoControl({ photo, doc, scale, origin, onPreview, onRemoved }: ControlsProps & { photo: Photo }) {
+function PhotoControl({ name, photo, doc, scale, origin, onPreview, onRemoved, inStep }: ControlsProps & { name: string; photo: Photo }) {
+  /** 지금 초점이 있는 손잡이에서 화살표로 만든 되돌리기 단계 */
+  const step = useRef<UndoStep>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<PhotoDrag | null>(null)
   const start = useRef<{
@@ -188,6 +236,22 @@ function PhotoControl({ photo, doc, scale, origin, onPreview, onRemoved }: Contr
     }
   }
 
+  function nudge(kind: 'move' | 'resize', e: ReactKeyboardEvent<HTMLElement>) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return
+    const next = nudgeResult(kind, photo, e.key, e.shiftKey)
+    if (!next) return
+    // 장 스크롤이나 화살표에 둔 화면 단축키로 새지 않게
+    e.preventDefault()
+    e.stopPropagation()
+    const { x, y, width, height } = next
+    if (x === photo.x && y === photo.y && width === photo.width && height === photo.height) return
+    step.current = inStep(step.current, () => updatePhoto(doc, photo.id, { x, y, width, height }, origin))
+  }
+
+  function endStep() {
+    step.current = null
+  }
+
   return (
     <div
       ref={rootRef}
@@ -200,8 +264,10 @@ function PhotoControl({ photo, doc, scale, origin, onPreview, onRemoved }: Contr
         data-page-ui=""
         className="photo-grip"
         style={ui}
-        aria-label="사진 옮기기"
-        title="끌어서 옮기기"
+        aria-label={`${name} 옮기기`}
+        title="끌어서 옮기기 · 화살표 키로 한 걸음(Shift는 크게)"
+        onKeyDown={(e) => nudge('move', e)}
+        onBlur={endStep}
         onPointerDown={(e) => begin('move', e)}
         onPointerMove={move}
         onPointerUp={end}
@@ -216,8 +282,8 @@ function PhotoControl({ photo, doc, scale, origin, onPreview, onRemoved }: Contr
         data-page-ui=""
         className="photo-remove"
         style={ui}
-        aria-label="사진 빼기"
-        title="사진 빼기"
+        aria-label={`${name} 빼기`}
+        title={`${name} 빼기`}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           // 단추는 사진과 함께 사라진다
@@ -228,12 +294,15 @@ function PhotoControl({ photo, doc, scale, origin, onPreview, onRemoved }: Contr
       >
         ×
       </button>
-      <span
+      <button
+        type="button"
         data-page-ui=""
         className="photo-handle"
         style={ui}
-        role="separator"
-        aria-label="사진 크기 조절"
+        aria-label={`${name} 크기 조절`}
+        title="끌어서 크기 조절 · 화살표 키로 한 걸음(Shift는 크게)"
+        onKeyDown={(e) => nudge('resize', e)}
+        onBlur={endStep}
         onPointerDown={(e) => begin('resize', e)}
         onPointerMove={move}
         onPointerUp={end}

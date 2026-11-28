@@ -62,7 +62,7 @@ export function snapBoxPosition(p: Point, width: number = MIN_BOX_WIDTH): Point 
   }
 }
 
-const NUDGE_X = 8
+export const NUDGE_X = 8
 
 /** 옮기기 손잡이에서 화살표 키로 옮길 위치. 화살표가 아니면 null. */
 export function nudgeBox(box: { x: number; y: number; width: number }, key: string): Point | null {
