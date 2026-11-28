@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useToast } from "../components/Toast";
+import { useAnnouncer } from "../components/useAnnouncer";
 import { addLost, lostText, rolledText, type LostEdits } from "./lostEdits";
 import { useTypingHold } from "./useTypingHold";
 import type { EraseFilter, EraserMode } from "../page/erase";
@@ -305,6 +306,34 @@ export function NotePage({ initial }: Props) {
   const [zoom, setZoom] = useState<Zoom>("fit");
   // 보기 돌리기·뒤집기: 이 탭의 메모리에만 둔다(서버·저장소·계정 설정에 넣지 않는다). 새로고침하면 원위치.
   const [view, setView] = useState<ViewTransform>(VIEW_IDENTITY);
+  // 원위치·맞추기를 누를 때마다 하나씩 늘어 종이 맨 위로 보낸다(PageView home)
+  const [home, setHome] = useState(0);
+  const { node: viewNews, announce: announceView } = useAnnouncer();
+  const rotate = useCallback(
+    (dir: 1 | -1) => {
+      setView((v) => rotateView(v, dir));
+      announceView(`${dir > 0 ? "" : "반"}시계 방향으로 90도 돌렸어요`);
+    },
+    [announceView],
+  );
+  const flip = useCallback(() => {
+    setView(mirrorView);
+    announceView(view.mirror ? "뒤집기를 풀었어요" : "좌우로 뒤집었어요");
+  }, [view.mirror, announceView]);
+  const resetView = useCallback(() => {
+    setView(VIEW_IDENTITY);
+    setHome((n) => n + 1);
+    announceView("원위치");
+  }, [announceView]);
+  /** 단추·단축키로 바꾸는 배율(핀치·Ctrl+휠은 연속이라 알리지 않는다) */
+  const chooseZoom = useCallback(
+    (z: Zoom) => {
+      setZoom(z);
+      if (z === "fit") setHome((n) => n + 1);
+      announceView(z === "fit" ? "화면에 맞췄어요" : `${Math.round(z * 100)}%`);
+    },
+    [announceView],
+  );
   const [focusId, setFocusId] = useState<string | null>(null);
   const [editingBoxId, setEditingBoxId] = useState<string | null>(null);
   const clearFocus = useCallback(() => setFocusId(null), []);
@@ -722,28 +751,28 @@ export function NotePage({ initial }: Props) {
           edit.deleteSelected();
           break;
         case "zoomIn":
-          setZoom(stepZoom(scale, 1));
+          chooseZoom(stepZoom(scale, 1));
           break;
         case "zoomOut":
-          setZoom(stepZoom(scale, -1));
+          chooseZoom(stepZoom(scale, -1));
           break;
         case "zoomFit":
-          setZoom("fit");
+          chooseZoom("fit");
           break;
         case "focus":
           toggleFocus(!focus);
           break;
         case "rotateCw":
-          setView((v) => rotateView(v, 1));
+          rotate(1);
           break;
         case "rotateCcw":
-          setView((v) => rotateView(v, -1));
+          rotate(-1);
           break;
         case "mirror":
-          setView(mirrorView);
+          flip();
           break;
         case "viewReset":
-          setView(VIEW_IDENTITY);
+          resetView();
           break;
         case "eyedropper":
           setPicking(true);
@@ -760,7 +789,7 @@ export function NotePage({ initial }: Props) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [keymap, undo, redo, edit, scale, focus, toggleFocus, heldAfterTyping]);
+  }, [keymap, undo, redo, edit, scale, focus, toggleFocus, heldAfterTyping, chooseZoom, rotate, flip, resetView]);
 
   const rename = useCallback(
     async (name: string) => {
@@ -1086,6 +1115,7 @@ export function NotePage({ initial }: Props) {
           onScale={setScale}
           zoom={zoom}
           view={view}
+          home={home}
           onZoom={setZoom}
           onPointerMove={presence.setCursor}
           overlay={edit.overlay}
@@ -1158,11 +1188,12 @@ export function NotePage({ initial }: Props) {
           <RotateControl
             view={view}
             keymap={keymap}
-            onRotate={(dir) => setView((v) => rotateView(v, dir))}
-            onMirror={() => setView(mirrorView)}
-            onReset={() => setView(VIEW_IDENTITY)}
+            onRotate={rotate}
+            onMirror={flip}
+            onReset={resetView}
           />
-          <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
+          <ZoomControl scale={scale} zoom={zoom} onZoom={chooseZoom} />
+          {viewNews}
         </div>
       </BottomArea>
       {confirmDelete && (

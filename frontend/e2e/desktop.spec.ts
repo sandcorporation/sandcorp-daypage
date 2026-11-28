@@ -47,9 +47,9 @@ test('#89 R·Shift+R·M·Shift+0 단축키와 버튼, 90도에서 맞춤 배율�
 
   // 버튼: 돌리면 원위치 버튼이 강조된다
   const reset = page.getByRole('button', { name: '돌리기·뒤집기 원위치' })
-  await expect(reset).toHaveAttribute('aria-pressed', 'false')
+  await expect(reset).toHaveAccessibleDescription('지금 원위치예요')
   await page.getByRole('button', { name: '시계 방향으로 돌리기', exact: true }).click()
-  await expect(reset).toHaveAttribute('aria-pressed', 'true')
+  await expect(reset).toHaveAccessibleDescription('보기가 돌아가거나 뒤집혀 있어요')
   await page.getByRole('button', { name: '좌우 뒤집기', exact: true }).click()
   await expect(page.getByRole('button', { name: '좌우 뒤집기', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await reset.click()
@@ -91,4 +91,37 @@ test('#89 폰 폭 390px: 돌리기 버튼이 화면 안에 있고 가로로 넘�
   expect(m.inside).toBe(true)
   expect(m.overlapZoom).toBe(false)
   expect(m.overlapStatus).toBe(false)
+})
+
+// #275 원위치·맞추기는 스크롤을 종이 맨 위로 되돌린다
+test('#275 돌린 채 아래로 스크롤해도 원위치·화면에 맞추기를 누르면 종이 맨 위가 보인다', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 })
+  await openNote(page)
+  const viewport = page.locator('.page-viewport')
+  const scrollTop = () => viewport.evaluate((el) => el.scrollTop)
+  const toBottom = async () => {
+    await viewport.evaluate((el) => el.scrollTo(0, el.scrollHeight))
+    expect(await scrollTop()).toBeGreaterThan(100)
+  }
+
+  await page.keyboard.press('r')
+  await expect.poll(() => matrixOf(page)).not.toBe('none')
+  await toBottom()
+  await page.getByRole('button', { name: '돌리기·뒤집기 원위치' }).click()
+  await expect.poll(() => matrixOf(page)).toBe('none')
+  await expect.poll(scrollTop).toBe(0)
+
+  // 이미 맞춤 상태에서 누르는 맞추기(버튼·0)
+  await toBottom()
+  await page.getByRole('button', { name: '화면에 맞추기' }).click()
+  await expect.poll(scrollTop).toBe(0)
+  await toBottom()
+  await page.keyboard.press('0')
+  await expect.poll(scrollTop).toBe(0)
+
+  // 확대해 둔 데서 맞추기
+  await page.getByRole('button', { name: '확대' }).click()
+  await toBottom()
+  await page.keyboard.press('0')
+  await expect.poll(scrollTop).toBe(0)
 })

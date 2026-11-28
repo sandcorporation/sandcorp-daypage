@@ -708,6 +708,27 @@ describe('새 페이지 알림', () => {
     expect(pressed('좌우 뒤집기')).toBe('true')
   })
 
+  test('보기·배율을 바꾸면 낭독기에 짧게 알린다(#275)', () => {
+    renderNote()
+    connect()
+    const press = (code: string, shiftKey = false) => fireEvent.keyDown(document.body, { code, shiftKey })
+    const said = (text: string) => expect(screen.getAllByRole('status').map((n) => n.textContent?.trim())).toContain(text)
+    press('KeyR')
+    said('시계 방향으로 90도 돌렸어요')
+    press('KeyR', true)
+    said('반시계 방향으로 90도 돌렸어요')
+    press('KeyM')
+    said('좌우로 뒤집었어요')
+    press('KeyM')
+    said('뒤집기를 풀었어요')
+    press('Digit0', true)
+    said('원위치')
+    press('Digit0')
+    said('화면에 맞췄어요')
+    fireEvent.click(screen.getByRole('button', { name: '확대' }))
+    said(screen.getByRole('button', { name: '화면에 맞추기' }).textContent!)
+  })
+
   test('글 상자 밖에 있을 때 장이 바뀌면 단축키는 그대로다(#272)', async () => {
     vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
     renderNote()

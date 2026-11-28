@@ -132,6 +132,8 @@ type Props = {
   editPreview?: EditPreview
   /** 이 탭에서만 쓰는 보기 변환(회전·거울). 장 좌표와 문서는 그대로다. */
   view?: ViewTransform
+  /** 값이 바뀌면(원위치·화면에 맞추기를 누를 때마다) 종이 맨 위·가로 가운데로 스크롤한다. 배율·보기가 같아도 옮긴다. */
+  home?: number
 }
 
 export function PageView({
@@ -177,6 +179,7 @@ export function PageView({
   overlay,
   editPreview,
   view = VIEW_IDENTITY,
+  home = 0,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -251,6 +254,14 @@ export function PageView({
     }
   }
   viewRef.current = view
+  // 종이 맨 위로 가는 중에는 가운데·기준점을 지키지 않는다(지키면 돌린 채 밀린 자리가 원위치의 빈 종이로 남는다)
+  const homeRef = useRef(home)
+  const homePending = useRef(false)
+  if (homeRef.current !== home) {
+    homeRef.current = home
+    homePending.current = true
+    centerKeep.current = null
+  }
   const lockedRef = useRef(viewLocked)
   lockedRef.current = viewLocked
 
@@ -264,7 +275,7 @@ export function PageView({
       const width = el.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0)
       const s = zoom === 'fit' ? (fitHeight ? fitScaleIn(width, el.clientHeight, box) : fitScale(width, box.width)) : zoom
       const frame = frameRef.current
-      if (frame && s !== scaleRef.current && !restore.current) {
+      if (frame && s !== scaleRef.current && !restore.current && !homePending.current) {
         const req = requested.current
         requested.current = null
         const box = el.getBoundingClientRect()
@@ -307,6 +318,15 @@ export function PageView({
     vp.scrollTop += rect.top + at.y - (box.top + vp.clientHeight / 2)
     if (Math.abs(scale - targetScale.current) < 1e-9) centerKeep.current = null
   }, [view, scale])
+
+  // 위의 스크롤 보정들 뒤에 둔다. 새 배율이 그려질 때까지 기다린다.
+  useLayoutEffect(() => {
+    const vp = viewportRef.current
+    if (!homePending.current || !vp || Math.abs(scale - targetScale.current) >= 1e-9) return
+    homePending.current = false
+    vp.scrollLeft = (vp.scrollWidth - vp.clientWidth) / 2
+    vp.scrollTop = 0
+  }, [home, view, scale])
 
   // 두 손가락 스크롤: 손가락 이벤트가 번갈아 오면 가운데 점이 ±소수점으로 흔들리는데, 스크롤 값이 정수로 반올림되며
   // 한쪽으로 조금씩 쌓였다. 소수점은 모아 두었다가 1px이 될 때 반영한다.
