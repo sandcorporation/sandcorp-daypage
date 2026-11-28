@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { nextFrames, openNote } from './helpers'
+import { nextFrames, openNote, savedStrokes } from './helpers'
 
 // #170 새 페이지 시각: 키보드로 고르는 동안은 저장하지 않고, Enter로만 바꾼다
 
@@ -89,4 +89,30 @@ test('#208 바로 보관: 함께 있던 사람은 새 페이지 알림을, 주�
   for (const screen of [page, guest]) await expect(screen.getByText('실시간 연결됨 · 자동 저장')).toBeAttached()
   await expect(guest.getByRole('link', { name: '기록', exact: true })).toBeVisible()
   await guestContext.close()
+})
+
+// #280 선택 도구로 획을 끄는 중(놓기 전)에 장이 넘어가면 그 옮기기는 어느 장에도 남지 않는다
+test('#280 획을 끌던 중에 장이 넘어가면 저장되지 않았다고 알리고 단추는 그 장의 기록을 연다', async ({ page }) => {
+  const hour = (new Date().getUTCHours() + 9) % 24
+  test.skip(hour === 0, 'KST 0시대에는 지난 봉인 시각을 고를 수 없다')
+  const saved = await openNote(page)
+  const box = (await page.locator('.page-frame').boundingBox())!
+  await page.mouse.move(box.x + 60, box.y + 60)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 200, box.y + 60, { steps: 4 })
+  await page.mouse.up()
+  await savedStrokes(page, saved, 1)
+  await page.getByRole('button', { name: /^선택·이동/ }).click()
+  await page.mouse.move(box.x + 130, box.y + 60)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 130, box.y + 160, { steps: 4 })
+
+  // 만든 사람의 다른 창에서 바꾼 것처럼 API로 바꾼다
+  const noteId = new URL(page.url()).pathname.split('/')[2]
+  const csrf = (await page.context().cookies()).find((c) => c.name === 'csrftoken')?.value ?? ''
+  await page.context().request.patch(`/api/notes/${noteId}`, { data: { sealHour: hour }, headers: { 'X-CSRFToken': csrf, Referer: page.url() } })
+  await expect(page.locator('.toast')).toHaveText(/장이 바뀌는 순간 1개는 저장되지 않았어요/)
+  await page.mouse.up()
+  await page.getByRole('button', { name: '지난 페이지 보기' }).click()
+  await expect(page).toHaveURL(new RegExp(`/note/${noteId}/history/\\d{4}-\\d{2}-\\d{2}`))
 })

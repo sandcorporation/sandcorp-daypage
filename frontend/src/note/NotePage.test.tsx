@@ -729,12 +729,12 @@ describe('새 페이지 알림', () => {
     await waitFor(() => expect(notice()?.textContent).toBe(`${NOTICE}. 만든 사람이 새 페이지 시각을 바꿨어요`))
   })
 
-  test('사진을 놓기 전에 장이 바뀌면 저장되지 않은 것으로 센다(#280)', async () => {
+  test.each(['옮기기', '크기 조절'])('사진 %s 손잡이를 놓기 전에 장이 바뀌면 저장되지 않은 것으로 센다(#280)', async (kind) => {
     HTMLElement.prototype.setPointerCapture = () => {}
     HTMLElement.prototype.releasePointerCapture = () => {}
     const before = await rollWritten()
     fireEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
-    const grip = await screen.findByRole('button', { name: '사진 1 옮기기' })
+    const grip = await screen.findByRole('button', { name: `사진 1 ${kind}` })
     const at = { pointerId: 1, pointerType: 'mouse', button: 0 }
     fireEvent.pointerDown(grip, { ...at, clientX: 100, clientY: 100, buttons: 1 })
     fireEvent.pointerMove(grip, { ...at, clientX: 180, clientY: 160, buttons: 1 })
@@ -742,13 +742,16 @@ describe('새 페이지 알림', () => {
     await waitFor(() => expect(notice()).toHaveTextContent(`${NOTICE}. 장이 바뀌는 순간 1개는 저장되지 않았어요`))
   })
 
-  test('글 상자를 끄는 중에 장이 바뀌면 저장되지 않은 것으로 센다(#280)', async () => {
+  test.each([
+    ['separator', '글 상자 폭 조절'],
+    ['button', '글 상자 옮기기·서식 (끌어서 옮기기, 눌러서 서식)'],
+  ])('글 상자 손잡이(%s %s)를 놓기 전에 장이 바뀌면 저장되지 않은 것으로 센다(#280)', async (role, name) => {
     HTMLElement.prototype.setPointerCapture = () => {}
     HTMLElement.prototype.releasePointerCapture = () => {}
     const before = await rollWritten()
     act(() => void addTextBox(before.doc, { id: 't1', x: 100, y: 400, width: 200, color: '#000000', font: 'hand', fontSize: 20, author: '말랑한 고양이' }, { local: true }))
     fireEvent.click(screen.getByRole('button', { name: /^선택·이동/ }))
-    const handle = await screen.findByRole('separator', { name: '글 상자 폭 조절' })
+    const handle = await screen.findByRole(role, { name })
     const at = { pointerId: 1, pointerType: 'mouse', button: 0 }
     fireEvent.pointerDown(handle, { ...at, clientX: 100, clientY: 100, buttons: 1 })
     fireEvent.pointerMove(handle, { ...at, clientX: 180, clientY: 100, buttons: 1 })
