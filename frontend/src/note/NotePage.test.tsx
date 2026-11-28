@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { FakeProvider } from '../test/fakeProvider'
+import { CHECK_AFTER_MS } from './unsent'
+import { SILENT_AFTER_MS } from './useRealtime'
 import { ARRIVE_AT_TITLE, type ArrivalState } from '../components/useFocusOnArrival'
 import { NotePage } from './NotePage'
 import type * as Y from 'yjs'
@@ -765,19 +767,65 @@ describe('떠나기 전 확인', () => {
     })
   const offline = () => act(() => void window.dispatchEvent(new Event('offline')))
   const draw = () => act(() => void stroke(latest().doc))
+  /** 그리고 서버가 받았다고 답할 때까지(#258) */
+  const drawAndConfirm = () => {
+    vi.useFakeTimers()
+    draw()
+    act(() => void vi.advanceTimersByTime(CHECK_AFTER_MS))
+    act(() => latest().answerChecks())
+    vi.useRealTimers()
+  }
 
   beforeEach(() => vi.stubGlobal('fetch', async () => new Response('{}', { status: 404 })))
+  afterEach(() => void vi.useRealTimers())
 
   test('오프라인에서 그리면 묻고, 다시 맞추면 묻지 않는다', () => {
+    vi.useFakeTimers()
     renderNote()
     live()
     draw()
+    // #258 서버가 받았다고 답하기 전에는 온라인에서 그린 것도 남은 것이다
+    expect(leaving()).toBe(true)
+    act(() => void vi.advanceTimersByTime(CHECK_AFTER_MS))
+    act(() => latest().answerChecks())
     expect(leaving()).toBe(false)
+    vi.useRealTimers()
     offline()
     draw()
     expect(leaving()).toBe(true)
     live()
     expect(leaving()).toBe(false)
+  })
+
+  // #258 소켓이 말없이 죽으면(오프라인 사건 없이) 곧 새로 붙고, 그동안 그린 것은 남는다
+  test('맞춘 연결에서 한동안 아무것도 받지 못하면 새로 붙고, 그 사이 그린 것을 묻는다', () => {
+    vi.useFakeTimers()
+    renderNote()
+    live()
+    const dead = latest()
+    dead.synced = true
+    dead.wsLastMessageReceived = Date.now()
+    draw()
+    act(() => void vi.advanceTimersByTime(SILENT_AFTER_MS - 1_000))
+    expect(latest()).toBe(dead)
+    act(() => void vi.advanceTimersByTime(2_000))
+    expect(latest()).not.toBe(dead)
+    expect(leaving()).toBe(true)
+    vi.useRealTimers()
+  })
+
+  test('맞춘 연결에서 무엇이든 계속 받으면 새로 붙지 않는다', () => {
+    vi.useFakeTimers()
+    renderNote()
+    live()
+    const p = latest()
+    p.synced = true
+    for (let i = 0; i < 3; i++) {
+      p.wsLastMessageReceived = Date.now()
+      act(() => void vi.advanceTimersByTime(SILENT_AFTER_MS - 1_000))
+    }
+    expect(latest()).toBe(p)
+    vi.useRealTimers()
   })
 
   test('남은 변경이 있어도 막힘 화면이 되면 묻지 않는다', () => {
@@ -830,7 +878,7 @@ describe('떠나기 전 확인', () => {
   test('온라인에서 그리고 「기록」을 누르면 묻지 않고 바로 간다', async () => {
     renderRoutes()
     live()
-    draw()
+    drawAndConfirm()
     await userEvent.click(history())
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(screen.getByText('기록 화면')).toBeInTheDocument()
