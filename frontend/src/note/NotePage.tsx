@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useToast } from "../components/Toast";
 import { addLost, lostText, rolledText, type LostEdits } from "./lostEdits";
+import { useTypingHold } from "./useTypingHold";
 import type { EraseFilter, EraserMode } from "../page/erase";
 import * as Y from "yjs";
 import { PageView, type PointerTool } from "../page/PageView";
@@ -698,12 +699,13 @@ export function NotePage({ initial }: Props) {
     void fetchKeymap();
   }, []);
   const [keysOpen, setKeysOpen] = useState(false);
+  const heldAfterTyping = useTypingHold(note.page.key);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (isTypingTarget(e.target) || e.isComposing) return;
       const combo = comboOf(e);
       const action = combo && actionFor(keymap, combo);
-      if (!action) return;
+      if (!action || heldAfterTyping(combo)) return;
       // 누르고 있으면 되풀이되는 것은 되돌리기·다시 하기·확대·축소만
       if (e.repeat && !["undo", "redo", "zoomIn", "zoomOut"].includes(action))
         return;
@@ -758,7 +760,7 @@ export function NotePage({ initial }: Props) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [keymap, undo, redo, edit, scale, focus, toggleFocus]);
+  }, [keymap, undo, redo, edit, scale, focus, toggleFocus, heldAfterTyping]);
 
   const rename = useCallback(
     async (name: string) => {

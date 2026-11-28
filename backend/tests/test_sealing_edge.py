@@ -448,9 +448,11 @@ async def test_cutting_a_carried_stroke_before_the_switch_leaves_only_the_pieces
 
 async def until_on_new_page(note_id: str, condition) -> None:
     """새 장에 저장된 획이 조건에 맞을 때까지 읽는다(늦은 편집은 받은 차례대로 DB 왕복 한 번에 저장된다)."""
-    async with asyncio.timeout(3):
-        while not condition(await strokes_on(note_id, "2026-10-16")):
-            pass
+
+    async def saved() -> bool:
+        return bool(condition(await strokes_on(note_id, "2026-10-16")))
+
+    await until(saved)
 
 
 @pytest.mark.django_db(transaction=True)
