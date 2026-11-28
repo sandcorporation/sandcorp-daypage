@@ -24,6 +24,17 @@ export const KIND_LABEL: Record<NewsKind, string> = { new: '새 기능', fix: '�
 /** 최신이 위 */
 export const NEWS: NewsEntry[] = [
   {
+    id: '2026-11-28-delete-selected',
+    date: '11월 28일 오후',
+    items: [
+      {
+        kind: 'fix',
+        title: '고른 것 지우기 단추',
+        text: '선택·이동 도구로 획이나 글 상자를 고르면 화면 아래에 ‘지우기’ 단추가 나와요. 키보드가 없는 태블릿·전자칠판·휴대폰에서도 고른 것만 지울 수 있고, 되돌리기 한 번이면 되살아나요.',
+      },
+    ],
+  },
+  {
     id: '2026-11-07-privacy-link',
     date: '11월 7일 오후',
     items: [

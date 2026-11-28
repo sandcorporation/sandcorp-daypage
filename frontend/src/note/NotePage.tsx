@@ -62,6 +62,7 @@ import {
 } from "../page/toolbarDock";
 import { stepZoom, ZoomControl, type Zoom } from "./ZoomControl";
 import { ViewControl } from "./ViewControl";
+import { DeleteSelectedButton } from "./DeleteSelectedButton";
 import { RotateControl } from "./RotateControl";
 import { VIEW_IDENTITY, mirrorView, rotateView, type ViewTransform } from "../page/viewTransform";
 import {
@@ -425,6 +426,13 @@ export function NotePage({ initial }: Props) {
       onSelectionDeleted: () => show("고른 것을 지웠어요."),
     },
   );
+  // 누른 단추는 선택과 함께 사라지므로 초점이 거기 있었으면 선택 도구 버튼으로 옮긴다
+  const deleteFromButton = useCallback(() => {
+    edit.deleteSelected();
+    document
+      .querySelector<HTMLElement>('.toolbar button[aria-label^="선택·이동"]')
+      ?.focus({ preventScroll: true });
+  }, [edit]);
   const askClear = useCallback(() => {
     const n = edit.clearTargets().length;
     if (n === 0) show("지울 획이 없어요.");
@@ -1118,6 +1126,9 @@ export function NotePage({ initial }: Props) {
           </div>
         )}
         <div className="view-dock">
+          {hasSelection(edit.selected) && (
+            <DeleteSelectedButton onDelete={deleteFromButton} />
+          )}
           <ViewControl
             fingerMoves={fingerMoves}
             onFingerMoves={chooseFingerMoves}

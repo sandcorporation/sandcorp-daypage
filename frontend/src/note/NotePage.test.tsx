@@ -884,3 +884,62 @@ describe('떠나기 전 확인', () => {
     expect(screen.getByText('기록 화면')).toBeInTheDocument()
   })
 })
+
+describe('고른 것 지우기 단추(#262)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    HTMLElement.prototype.setPointerCapture = () => {}
+    HTMLElement.prototype.releasePointerCapture = () => {}
+  })
+  const deleteButton = () => screen.queryByRole('button', { name: '고른 것 지우기' })
+  const strokes = () => latest().awareness.doc.getMap('strokes').size
+
+  /** 획 하나를 긋고 선택 도구로 눌러 고른다 */
+  async function drawAndPick() {
+    renderNote()
+    act(() => latest().emit('sync', [true]))
+    const frame = document.querySelector('.page-frame') as HTMLElement
+    const mouse = (type: 'pointerDown' | 'pointerMove' | 'pointerUp', at: number) =>
+      fireEvent[type](frame, { pointerId: 9, pointerType: 'mouse', clientX: at, clientY: at, button: 0, buttons: 1 })
+    mouse('pointerDown', 50)
+    mouse('pointerMove', 90)
+    mouse('pointerUp', 90)
+    await userEvent.click(screen.getByRole('button', { name: '선택·이동' }))
+    expect(deleteButton()).not.toBeInTheDocument()
+    mouse('pointerDown', 70)
+    mouse('pointerUp', 70)
+  }
+
+  test('고르기 전에는 없고, 고르면 보이며, 누르면 지워지고 단추가 사라진다. 되돌리기 한 번으로 되살아난다', async () => {
+    await drawAndPick()
+    await userEvent.click(deleteButton()!)
+    expect(strokes()).toBe(0)
+    expect(deleteButton()).not.toBeInTheDocument()
+    expect(screen.getByText('고른 것을 지웠어요.')).toBeInTheDocument()
+    // 단추가 사라져도 초점은 문서 처음으로 떨어지지 않는다
+    expect(screen.getByRole('button', { name: '선택·이동' })).toHaveFocus()
+    await userEvent.keyboard('{Control>}z{/Control}')
+    expect(strokes()).toBe(1)
+  })
+
+  test('키보드로도 누를 수 있다', async () => {
+    await drawAndPick()
+    deleteButton()!.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(strokes()).toBe(0)
+  })
+
+  test('도구를 바꾸면 선택이 풀려 단추도 사라진다', async () => {
+    await drawAndPick()
+    await userEvent.click(screen.getByRole('button', { name: '글씨' }))
+    expect(deleteButton()).not.toBeInTheDocument()
+  })
+
+  test('고른 채로 쓸 수 없게 되면(정지) 단추가 보이지 않는다', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+    await drawAndPick()
+    expect(deleteButton()).toBeInTheDocument()
+    act(() => latest().emit('connection-close', [{ code: 4403 }]))
+    expect(deleteButton()).not.toBeInTheDocument()
+  })
+})
