@@ -38,7 +38,7 @@ from pycrdt import (
     write_message,
 )
 
-from . import admission, awareness, clock, hub, membership, moderation, pages, presence_rules, rooms
+from . import admission, awareness, boundary, clock, hub, membership, moderation, pages, presence_rules, rooms
 from .hub import EMPTY_UPDATE, db, page_group  # noqa: F401  page_group은 다른 모듈이 여기서 가져간다
 from .models import Note, NoteMember, Page, User
 
@@ -69,6 +69,8 @@ MESSAGE_NOTE_PAGE = 104
 # 노트 그룹에 든 뒤에도 그때의 머리말을 한 번 보낸다(그룹에 들기 전에 나간 알림을 놓치지 않게, #222).
 # seq는 읽은 순서대로 커지는 판이다. 화면은 받은 것보다 작은 판을 버린다(membership.current_info).
 MESSAGE_NOTE_INFO = 105
+# 장이 바뀌는 순간 보낸 편집 중 옮기지 못해 버린 것이 있다(#268): {"type":"edits_lost","count"}. 교체 알림보다 먼저 보낸다.
+MESSAGE_EDITS_LOST = 106
 
 # 열린 연결의 권한(내보냄·정지·노트 닫힘)을 이만큼 지나면 다시 본다. 끊는 것은 보통 알림이 하지만 알림이 실패하면
 # (broadcast.py, 다시 보내지 않음) 끊을 길이 없다(#256). 메시지마다 DB를 치지 않고 시계만 비교한다.
@@ -430,7 +432,8 @@ class PageConsumer(AsyncWebsocketConsumer):
         except ClientDisconnected:
             pass
 
-    async def page_sealed(self, key: str | None) -> None:
+    async def page_sealed(self, key: str | None, lost: int = 0) -> None:
+        await self._tell_lost(lost)
         if key is None:
             await self.close(code=CLOSE_NOT_TODAY)
         else:
@@ -536,29 +539,31 @@ class PageConsumer(AsyncWebsocketConsumer):
             return
         # 봉인 경계는 받은 시각으로 바로 판정한다(DB를 기다리지 않는다).
         received_at = clock.now()
-        if self.room.sealed or (self.due_at is not None and received_at >= self.due_at):
+        if self.room.sealed or boundary.past_due(received_at, self.due_at):
             await self._carry_late(update, received_at)
             return
         await self.room.local_update(self, update, received_at)
         await self._note_input()
 
     async def _carry_late(self, update: bytes, received_at: dt.datetime) -> None:
-        """봉인 예정 뒤 옛 장으로 온 편집(#266). 옛 장에는 넣지 않고, 새로 그은 획은 지금 장의 같은 자리로 옮긴 뒤
-        장이 바뀌었다고 알린다. 옛 장 획을 고친 것은 버린다(옛 장은 봉인 때 모습 그대로)."""
-        strokes = await db(pages.late_strokes)(self.room.ydoc.get_update(), update)
+        """봉인 예정 뒤 옛 장으로 온 편집(#266, #268). 옛 장에는 넣지 않고 boundary가 정한 대로 지금 장의 같은 자리로
+        옮긴 뒤 장이 바뀌었다고 알린다. 옛 장에 남은 것을 고친 편집은 버리고 그 수를 알린다(옛 장은 봉인 때 모습 그대로)."""
         try:
-            page, moved = await db(pages.carry_strokes)(self.note_id, self.page_id, strokes, received_at)
+            carried = await self.room.carry_late(update, received_at, base=self.room.ydoc.get_update())
         except (Note.DoesNotExist, Page.DoesNotExist):
             return await self.close(code=CLOSE_NOT_FOUND)
-        if page.id == self.page_id:
-            # 봉인 예정이 뒤로 미뤄졌는데 아직 못 들었다: 아직 이 장이다
-            self.due_at = page.due_at
+        if carried.page.id == self.page_id:
+            # 봉인 예정이 뒤로 미뤄졌는데 아직 못 들었다(또는 바로 봉인이 도는 중): 아직 이 장이다
+            self.due_at = carried.page.due_at
             if not self.room.sealed:
                 await self.room.local_update(self, update, received_at)
             return
-        if moved is not None:
-            await hub.send_carried(self.channel_layer, page.id, moved)
-        await self._tell_rolled(pages.page_key(page.date, page.seq))
+        await self._tell_lost(carried.lost)
+        await self._tell_rolled(pages.page_key(carried.page.date, carried.page.seq))
+
+    async def _tell_lost(self, count: int) -> None:
+        if count > 0:
+            await self.send(bytes_data=daypage_message(MESSAGE_EDITS_LOST, {"type": "edits_lost", "count": count}))
 
     async def _answer(self, before: asyncio.Task | None, room: hub.Room, through: int, data: bytes) -> None:
         """sync step1에 답한다. 앞선 답이 먼저 나가고, 방이 받은 편집 through개가 커밋돼야 나간다.

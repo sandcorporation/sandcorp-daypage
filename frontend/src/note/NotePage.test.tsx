@@ -656,6 +656,18 @@ describe('새 페이지 알림', () => {
     await waitFor(() => expect(pill()).toBe(DOWN))
   })
 
+  test('장이 바뀌는 순간 서버가 버린 편집이 있으면 새 페이지 알림에 그 수를 함께 말한다(#268)', async () => {
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+    renderNote()
+    connect()
+    const before = latest()
+    await act(async () => before.receive(106, { type: 'edits_lost', count: 2 }))
+    expect(heard('장이 바뀌는 순간 2개는 저장되지 않았어요')).toHaveLength(1)
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    drop(4409, before)
+    await waitFor(() => expect(heard(`${NOTICE}. 장이 바뀌는 순간 2개는 저장되지 않았어요`)).toHaveLength(1))
+  })
+
   test('교체가 오래 걸리면 지금 연결 상태를 보인다', async () => {
     vi.useFakeTimers()
     try {
