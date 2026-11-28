@@ -55,11 +55,16 @@ class Member(Protocol):
     def push(self, data: bytes, volatile: bool = False) -> None:
         """보낼 메시지를 넘긴다(기다리지 않는다). volatile이면 밀려 있을 때 버려도 된다."""
 
-    async def page_sealed(self) -> None:
-        """장이 봉인돼 더 쓸 수 없다."""
+    async def page_sealed(self, key: str | None) -> None:
+        """장이 봉인돼 더 쓸 수 없다. key는 지금 쓰는 장(알면)."""
 
     async def page_gone(self) -> None:
         """노트가 지워져 장이 없다."""
+
+
+async def send_carried(layer, page_id: int, update: bytes) -> None:
+    """다른 장에서 옮겨 와 이미 저장한 갱신을 그 장을 연 방(어느 프로세스든)에 넘긴다. 방은 문서에 합쳐 접속자에게 나눠 준다."""
+    await layer.group_send(page_group(page_id), {"type": "hub.update", "page": page_id, "from": "carry", "update": update})
 
 
 class Room:
@@ -246,10 +251,12 @@ class Room:
         try:
             count = await db(pages.append_update)(self.page_id, merged, received_at)
         except pages.PageSealed:
+            # 봉인 예정이 앞당겨졌다(#266): 앞 장에는 넣지 않고 새로 그은 획은 지금 장으로 옮긴다.
             self.sealed = True
             await self._saved_changed()
+            key = await self._carry(merged, received_at)
             for m in list(self.members):
-                await m.page_sealed()
+                await m.page_sealed(key)
             return
         except Page.DoesNotExist:  # 그사이 노트가 지워졌다
             self.gone = True
@@ -273,6 +280,19 @@ class Room:
                 await db(pages.compact)(self.page_id)
             except Exception:  # 편집은 이미 저장됐다. 합치기는 다음 기회에 한다.
                 logger.exception("장 %s 합치기 실패", self.page_id)
+
+    async def _carry(self, update: bytes, received_at) -> str | None:
+        """저장을 거절당한 편집의 새 획을 지금 장으로 옮기고 그 장의 키를 돌려준다. 실패하면 None(편집은 버린다)."""
+        try:
+            page, moved = await db(pages.carry_refused)(self.page_id, update, received_at)
+        except Exception:
+            logger.exception("장 %s 봉인 뒤 편집을 새 장으로 옮기지 못했다", self.page_id)
+            return None
+        if page.id == self.page_id:
+            return None
+        if moved is not None:
+            await send_carried(self.hub.layer, page.id, moved)
+        return pages.page_key(page.date, page.seq)
 
     async def _saved_changed(self) -> None:
         async with self.save_changed:

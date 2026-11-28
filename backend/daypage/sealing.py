@@ -4,6 +4,7 @@ import datetime as dt
 import logging
 
 from django.db import transaction
+from pycrdt import Doc
 
 from . import broadcast, clock, photos
 from .models import Note, Page
@@ -21,20 +22,38 @@ def seal_page(page_id: int) -> bool:
         if page.sealed_at is not None:
             return False
         doc = _merge(page)
-        # 만들고 아무것도 쓰지 않은 채 남은 빈 글 상자는 기록에 남기지 않는다.
-        dropped = drop_empty_text_boxes(doc)
-        # 봉인된 장은 더 바뀌지 않으니 옛 숫자 배열 점을 바이너리로 다시 써 스냅샷을 줄인다.
-        packed = pack_points(doc)
-        # 문서에서 빠졌거나 한도를 넘은 사진은 저장소에서 지운다.
-        settled = photos.settle_sealed_photos(doc, page)
-        if dropped or packed or settled:
-            page.state = doc.get_update()
-        page.stroke_count, page.participant_count, page.is_empty = doc_stats(doc)
+        _settle(page, doc, changed=False)
         page.sealed_at = clock.now()
         # 그날 쓰던 노트 종이를 남긴다(뒤에 노트 종이를 바꿔도 지난 기록은 그대로 보이게)
         page.paper = Note.objects.filter(pk=page.note_id).values_list("paper", flat=True).first() or {}
         page.save(update_fields=["state", "stroke_count", "participant_count", "is_empty", "sealed_at", "paper"])
         return True
+
+
+def _settle(page: Page, doc: Doc, changed: bool) -> None:
+    """봉인된 장의 최종 문서를 다듬고 숫자를 센다(저장은 부르는 쪽이). changed면 doc이 page.state와 다르다."""
+    # 만들고 아무것도 쓰지 않은 채 남은 빈 글 상자는 기록에 남기지 않는다.
+    dropped = drop_empty_text_boxes(doc)
+    # 봉인된 장은 더 바뀌지 않으니 옛 숫자 배열 점을 바이너리로 다시 써 스냅샷을 줄인다.
+    packed = pack_points(doc)
+    # 문서에서 빠졌거나 한도를 넘은 사진은 저장소에서 지운다.
+    settled = photos.settle_sealed_photos(doc, page)
+    if changed or dropped or packed or settled:
+        page.state = doc.get_update()
+    page.stroke_count, page.participant_count, page.is_empty = doc_stats(doc)
+
+
+def absorb_late(page: Page, update: bytes) -> None:
+    """봉인 예정 전에 받았지만 서버가 모아 두던 사이 봉인이 먼저 돈 편집을 봉인된 장에 합친다(#266).
+
+    부르는 쪽(pages.append_update)이 Page 행 잠금을 쥐고 있다. 봉인 때와 같이 다듬고 숫자를 다시 센다.
+    """
+    doc = Doc()
+    if page.state:
+        doc.apply_update(bytes(page.state))
+    doc.apply_update(update)
+    _settle(page, doc, changed=True)
+    page.save(update_fields=["state", "stroke_count", "participant_count", "is_empty"])
 
 
 def seal_due_pages(now: dt.datetime | None = None) -> list[Page]:
