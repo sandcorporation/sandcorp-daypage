@@ -40,6 +40,9 @@ export const MESSAGE_NOTE_PAGE = 104
  */
 export const MESSAGE_NOTE_INFO = 105
 
+/** 장이 바뀌는 순간 보낸 편집 중 새 장으로 옮기지 못해 버린 것: {type: 'edits_lost', count} (MESSAGE_EDITS_LOST, #268). 교체 알림보다 먼저 온다. */
+export const MESSAGE_EDITS_LOST = 106
+
 /** 받아 쓴 판보다 작거나 같은 머리말 알림은 늦게 도착한 낡은 값이다(#222). 판이 없으면(옛 서버) 받는다. */
 export function isNewerInfo(lastSeq: number, seq: number | undefined): boolean {
   return seq === undefined || seq > lastSeq
@@ -78,6 +81,8 @@ type Options = {
   onNotePaper?: (paper: unknown) => void
   /** 장의 봉인 예정 시각이 바뀜(주인이 봉인 시각을 바꿈) */
   onNotePage?: (change: NotePageChange) => void
+  /** 장이 바뀌는 순간 보낸 편집 중 count개를 서버가 옮기지 못해 버렸다 */
+  onEditsLost?: (count: number) => void
   /** 노트 이름·참여 수·정원이 바뀜(누가 바꿨든, 누가 들어왔든) */
   onNoteInfo?: (info: NoteInfo) => void
 }
@@ -97,7 +102,18 @@ export function wsBaseUrl(noteId: string): string {
   return `${proto}//${window.location.host}/ws/notes/${noteId}/pages`
 }
 
-export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteColors, onNotePaper, onNotePage, onNoteInfo }: Options) {
+export function useRealtime({
+  noteId,
+  pageKey,
+  doc,
+  onNotToday,
+  onFatal,
+  onNoteColors,
+  onNotePaper,
+  onNotePage,
+  onNoteInfo,
+  onEditsLost,
+}: Options) {
   const [provider, setProvider] = useState<WebsocketProvider | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [synced, setSynced] = useState(false)
@@ -178,6 +194,10 @@ export function useRealtime({ noteId, pageKey, doc, onNotToday, onFatal, onNoteC
     p.messageHandlers[MESSAGE_NOTE_PAGE] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string } & NotePageChange
       if (msg.type === 'note_page') onNotePage?.({ key: msg.key, dueAt: msg.dueAt, sealHour: msg.sealHour })
+    }
+    p.messageHandlers[MESSAGE_EDITS_LOST] = (_encoder, decoder) => {
+      const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; count: number }
+      if (msg.type === 'edits_lost' && msg.count > 0) onEditsLost?.(msg.count)
     }
     p.messageHandlers[MESSAGE_NOTE_INFO] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; seq?: number } & NoteInfo

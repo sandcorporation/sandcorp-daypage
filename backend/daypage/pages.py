@@ -1,17 +1,14 @@
 """장 내용 저장: 스냅샷(Page.state) + 증분(PageUpdate)."""
 
 import datetime as dt
+from typing import NamedTuple
 
 from django.conf import settings
 from django.db import models, transaction
-from pycrdt import Doc, Map, XmlFragment, XmlText
+from pycrdt import Doc, Map, XmlFragment
 
-from . import clock
-from .models import Note, Page, PageUpdate
-
-
-# 봉인이 예정보다 이만큼 안에서 늦은 것은 제때 봉인으로 본다(봉인 작업이 몇 초 늦게 돈다)
-SEAL_DELAY_GRACE = dt.timedelta(minutes=1)
+from . import boundary, clock
+from .models import Note, Page, PageUpdate, Photo
 
 
 class PageSealed(Exception):
@@ -113,15 +110,8 @@ def current_key(note: Note, now: dt.datetime | None = None) -> str:
 
 
 def _closed_at(page: Page) -> dt.datetime:
-    """봉인된 장이 실제로 닫힌 순간.
-
-    대개 due_at이다(그 뒤의 쓰기는 거부한다). 주인이 봉인 시각을 이미 지난 시각으로 바꿔 바로 봉인한 장만
-    due_at이 지난 경계로 당겨져 있어 sealed_at까지 열려 있었다. 꼬박 하루짜리 장은 바로 봉인될 수 없으므로
-    봉인 작업이 오래 밀렸어도 due_at이다.
-    """
-    if page.due_at - page.opened_at == dt.timedelta(days=1) or page.sealed_at - page.due_at < SEAL_DELAY_GRACE:
-        return page.due_at
-    return page.sealed_at
+    """봉인된 장이 실제로 닫힌 순간(boundary.closed_at)."""
+    return boundary.closed_at(page.opened_at, page.due_at, page.sealed_at)
 
 
 def recorded_pages(note: Note) -> list[tuple[Page, dt.datetime, dt.datetime]]:
@@ -160,9 +150,9 @@ def load_doc(page_id: int) -> Doc:
 
 
 def append_update(page_id: int, update: bytes, received_at: dt.datetime) -> int:
-    """증분 하나를 저장한다. 받은 시각이 봉인 예정(due_at) 뒤면 거부한다.
+    """증분 하나를 저장한다. 받은 시각에 장이 이미 닫혔으면(boundary.is_open) 거부한다.
 
-    봉인 작업과 같은 Page 행 잠금을 잡아 봉인 직전·직후의 경합을 막는다. due_at 전에 받았는데 서버가 모아 두던
+    봉인 작업과 같은 Page 행 잠금을 잡아 봉인 직전·직후의 경합을 막는다. 닫히기 전에 받았는데 서버가 모아 두던
     사이 봉인이 먼저 돌았으면 봉인된 장에 마저 합친다(#266, sealing.absorb_late). 그 장의 기간에 그린 것이다.
     돌려주는 값은 아직 합쳐지지 않은 증분 수.
     """
@@ -170,7 +160,7 @@ def append_update(page_id: int, update: bytes, received_at: dt.datetime) -> int:
 
     with transaction.atomic():
         page = Page.objects.select_for_update().get(pk=page_id)
-        if received_at >= page.due_at:
+        if not boundary.is_open(received_at, page.opened_at, page.due_at, page.sealed_at):
             raise PageSealed
         if page.sealed_at is not None:
             sealing.absorb_late(page, update)
@@ -179,66 +169,42 @@ def append_update(page_id: int, update: bytes, received_at: dt.datetime) -> int:
         return PageUpdate.objects.filter(page=page).count()
 
 
-def _piece_prefix(key: str) -> str:
-    """지우개가 자른 조각은 원래 획 id의 앞 16자를 잇는다(frontend/src/page/doc.ts pieceId)."""
-    return key[:16]
+class Carried(NamedTuple):
+    """닫힌 장으로 온 편집을 나눈 결과: 지금 쓰는 장, 그 장에 저장한 갱신(없으면 None), 옮기지 못해 버린 편집 수."""
+
+    page: Page
+    update: bytes | None
+    lost: int
 
 
-def late_strokes(base: bytes, update: bytes) -> dict[str, dict]:
-    """봉인 예정 뒤 옛 장으로 온 갱신 update가 새로 그은 획: {id: 필드}. base는 그 갱신 전 방의 문서.
-
-    옛 장에 있던 획을 고친 것(옮기기·지우개 조각·지우기)은 넣지 않는다. 옛 장은 봉인 때 모습 그대로 남고,
-    새 장에는 그 획이 없기 때문이다.
+def carry_late(old_page_id: int, ledger: boundary.LateEdits, update: bytes, received_at: dt.datetime) -> Carried:
+    """닫힌 장(old_page_id)으로 온 편집 update를 boundary가 정한 대로 나눈다(#268): 새로 만든 것과 앞서 옮긴 것을 고친
+    것은 지금 장의 같은 자리로 옮기고, 앞 장에 남은 것을 고친 것은 버리고 센다. 받은 시각에 장이 아직 열려 있었으면
+    page가 그 장 그대로다(봉인 예정이 뒤로 미뤄졌다: 부르는 쪽이 앞 장에 넣는다). 새 장이 없으면 연다. ledger는 방의 장부로, 이 호출이 고친다.
     """
-    doc = Doc()
-    doc.apply_update(base)
-    strokes = doc.get("strokes", type=Map)
-    before = set(strokes.keys())
-    prefixes = {_piece_prefix(k) for k in before}
-    doc.apply_update(update)
-    result = {}
-    for key in set(strokes.keys()) - before:
-        if _piece_prefix(key) in prefixes:
-            continue
-        value = strokes.get(key)
-        if isinstance(value, Map):
-            fields = value.to_py()
-            # 레이어는 옛 장의 것이라 새 장에 없다: 기본 레이어에 둔다
-            fields.pop("layer", None)
-            result[key] = {k: bytes(v) if isinstance(v, bytearray) else v for k, v in fields.items()}
-    return result
-
-
-def carry_refused(page_id: int, update: bytes, received_at: dt.datetime) -> tuple[Page, bytes | None]:
-    """봉인 예정이 앞당겨져(주인이 봉인 시각을 이미 지난 시각으로 바꿈) 방이 저장하지 못한 편집 update의 새 획을
-    지금 장으로 옮긴다. 저장된 장 문서가 그 갱신 전 상태다(앞선 편집은 저장됐다)."""
-    note_id = Page.objects.filter(pk=page_id).values_list("note_id", flat=True).get()
-    strokes = late_strokes(_state_update(page_id), update)
-    return carry_strokes(note_id, page_id, strokes, received_at)
-
-
-def _state_update(page_id: int) -> bytes:
-    doc = load_doc(page_id)
-    return doc.get_update()
-
-
-def carry_strokes(note_id: str, old_page_id: int, strokes: dict[str, dict], received_at: dt.datetime) -> tuple[Page, bytes | None]:
-    """봉인 예정 뒤 옛 장에 그은 획을 지금 쓰는 장의 같은 자리로 옮긴다(#266). (지금 장, 저장한 갱신).
-
-    지금 장이 아직 옛 장이면(봉인 예정이 뒤로 미뤄졌다) 옮기지 않는다. 새 장이 없으면 연다.
-    """
-    note = Note.objects.get(pk=note_id)
+    old = Page.objects.get(pk=old_page_id)
+    if boundary.is_open(received_at, old.opened_at, old.due_at, old.sealed_at):
+        return Carried(old, None, 0)
+    note = Note.objects.get(pk=old.note_id)
     page = open_page(note, received_at)
-    if page.id == old_page_id or not strokes:
-        return page, None
-    doc = Doc()
-    target = doc.get("strokes", type=Map)
-    with doc.transaction():
-        for key, fields in strokes.items():
-            target[key] = Map(fields)
-    update = doc.get_update()
-    append_update(page.id, update, received_at)
-    return page, update
+    old.refresh_from_db(fields=["sealed_at"])
+    if ledger.state is None:
+        ledger.start(ledger.base if ledger.base is not None else load_doc(old_page_id).get_update())
+    late = ledger.doc()
+    routed = boundary.route_late(ledger, late, update, received_at, old.opened_at, old.due_at, old.sealed_at)
+    ledger.state = late.get_update()
+    if not routed.moved:
+        return Carried(page, None, routed.lost)
+    target = load_doc(page.id)
+    before = target.get_state()
+    boundary.write_moved(target, late, routed.moved)
+    moved = target.get_update(before)
+    with transaction.atomic():
+        append_update(page.id, moved, received_at)
+        if routed.photos:
+            # 사진 원본은 올린 장에 매인다: 옮긴 사진은 새 장에 매어 앞 장 봉인이 지우지 않게 한다
+            Photo.objects.filter(note_id=note.id, id__in=routed.photos, page_id=old_page_id).update(page=page)
+    return Carried(page, moved, routed.lost)
 
 
 def _merge(page: Page) -> Doc:
@@ -268,20 +234,13 @@ def should_compact(pending: int) -> bool:
     return pending >= getattr(settings, "COMPACT_EVERY", 200)
 
 
-def _has_text(node) -> bool:
-    """글 상자 내용(XmlFragment) 안에 글자가 하나라도 있는지"""
-    if isinstance(node, XmlText):
-        return len(node) > 0
-    return any(_has_text(child) for child in getattr(node, "children", []))
-
-
 def drop_empty_text_boxes(doc: Doc) -> int:
     """글자가 하나도 없는 글 상자를 지운다(만들고 아무것도 쓰지 않은 채 나간 상자). 지운 수를 돌려준다."""
     boxes = doc.get("textboxes", type=Map)
     empty = [
         key
         for key, box in list(boxes.items())
-        if isinstance(box, Map) and isinstance(box.get("content"), XmlFragment) and not _has_text(box.get("content"))
+        if isinstance(box, Map) and isinstance(box.get("content"), XmlFragment) and not boundary.has_text(box.get("content"))
     ]
     if empty:
         with doc.transaction():

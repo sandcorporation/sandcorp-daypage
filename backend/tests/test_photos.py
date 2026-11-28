@@ -149,6 +149,8 @@ def test_sealing_keeps_visible_photos_and_removes_the_rest(store, monkeypatch, d
     note_id = create_note(owner)
     monkeypatch.setattr(clock, "now", lambda: kst(2026, 10, 15, 12, 0))
     ids = [upload(owner, note_id).json()["id"] for _ in range(5)]
+    # 올린 시각은 시험 시계로(봉인 직전 SEAL_UPLOAD_GRACE 안에 올린 원본은 봉인 때 지우지 않는다)
+    Photo.objects.update(created_at=kst(2026, 10, 15, 12, 0))
     page = Page.objects.get(note_id=note_id)
     # 넷을 붙였고(하나는 동시에 붙여 한도를 넘었다), 하나는 올렸다가 뺐다
     PageUpdate.objects.create(page=page, update=photo_doc({f"p{i}": (ids[i], i) for i in range(4)}))

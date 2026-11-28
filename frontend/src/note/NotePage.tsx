@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { useToast } from "../components/Toast";
+import { addLost, lostText, rolledText, type LostEdits } from "./lostEdits";
 import type { EraseFilter, EraserMode } from "../page/erase";
 import * as Y from "yjs";
 import { PageView, type PointerTool } from "../page/PageView";
@@ -447,11 +448,25 @@ export function NotePage({ initial }: Props) {
     if (n > 0) show(`획 ${n}개를 지웠어요.`, { label: "되돌리기", onClick: undo });
   }, [edit, history, show, undo]);
 
-  // 곧 사라지는 알림에는 단추를 두지 않는다. 기록은 머리글의 「기록」으로 간다(#212)
-  const notifyRolled = useCallback(
-    () => show("새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요"),
+  // 장이 바뀌는 순간 서버가 버린 편집 수(#268). 곧 이어 오는 새 페이지 알림에 붙인다.
+  const lostEdits = useRef<LostEdits | null>(null);
+  const onEditsLost = useCallback(
+    (count: number) => {
+      lostEdits.current = addLost(lostEdits.current, count, Date.now());
+      show(lostText(lostEdits.current.count));
+    },
     [show],
   );
+  // 곧 사라지는 알림에는 단추를 두지 않는다. 기록은 머리글의 「기록」으로 간다(#212)
+  const notifyRolled = useCallback(() => {
+    const text = rolledText(
+      "새 페이지가 열렸어요. 지난 페이지는 기록에서 볼 수 있어요",
+      lostEdits.current,
+      Date.now(),
+    );
+    lostEdits.current = null;
+    show(text);
+  }, [show]);
   const { hold: holdRolledNotice, keepForReload } = useRolledNotice(
     note.id,
     note.page.key,
@@ -557,6 +572,7 @@ export function NotePage({ initial }: Props) {
     onNotePaper: setNotePaper,
     onNotePage: onNotePageChange,
     onNoteInfo: setNoteInfo,
+    onEditsLost,
   });
   reconnectRef.current = reconnect;
   abandonSwitchRef.current = abandonSwitch;

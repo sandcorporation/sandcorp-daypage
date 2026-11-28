@@ -23,7 +23,7 @@ from channels.exceptions import ChannelFull
 from channels.layers import get_channel_layer
 from pycrdt import Doc, create_update_message, merge_updates
 
-from . import awareness, memory, pages, presence_rules
+from . import awareness, boundary, memory, pages, presence_rules
 from .presence_rules import Holder, Slot
 from .models import Page
 
@@ -55,8 +55,8 @@ class Member(Protocol):
     def push(self, data: bytes, volatile: bool = False) -> None:
         """보낼 메시지를 넘긴다(기다리지 않는다). volatile이면 밀려 있을 때 버려도 된다."""
 
-    async def page_sealed(self, key: str | None) -> None:
-        """장이 봉인돼 더 쓸 수 없다. key는 지금 쓰는 장(알면)."""
+    async def page_sealed(self, key: str | None, lost: int = 0) -> None:
+        """장이 봉인돼 더 쓸 수 없다. key는 지금 쓰는 장(알면), lost는 옮기지 못해 버린 편집 수."""
 
     async def page_gone(self) -> None:
         """노트가 지워져 장이 없다."""
@@ -98,6 +98,9 @@ class Room:
         # 봉인돼 더 저장할 수 없다 / 마지막 연결이 나가 닫는 중이다
         self.sealed = False
         self.closed = False
+        # 닫힌 장으로 온 편집의 장부(#268, boundary.LateEdits). 장부는 한 번에 하나만 쓴다.
+        self.late: boundary.LateEdits | None = None
+        self.late_lock = asyncio.Lock()
         # 아직 보내지 않은 커서
         self.aw_out: dict[int, tuple[int, dict | None]] = {}
         self.aw_task: asyncio.Task | None = None
@@ -251,12 +254,13 @@ class Room:
         try:
             count = await db(pages.append_update)(self.page_id, merged, received_at)
         except pages.PageSealed:
-            # 봉인 예정이 앞당겨졌다(#266): 앞 장에는 넣지 않고 새로 그은 획은 지금 장으로 옮긴다.
+            # 받은 시각에 장이 이미 닫혔다(#266, #268): 앞 장에는 넣지 않고 boundary가 정한 대로 지금 장으로 옮긴다.
             self.sealed = True
             await self._saved_changed()
-            key = await self._carry(merged, received_at)
+            key, lost = await self._carry(merged, received_at)
+            # 모아 둔 편집이라 누구 것인지 모른다: 버린 수는 모두에게 알린다
             for m in list(self.members):
-                await m.page_sealed(key)
+                await m.page_sealed(key, lost)
             return
         except Page.DoesNotExist:  # 그사이 노트가 지워졌다
             self.gone = True
@@ -281,18 +285,27 @@ class Room:
             except Exception:  # 편집은 이미 저장됐다. 합치기는 다음 기회에 한다.
                 logger.exception("장 %s 합치기 실패", self.page_id)
 
-    async def _carry(self, update: bytes, received_at) -> str | None:
-        """저장을 거절당한 편집의 새 획을 지금 장으로 옮기고 그 장의 키를 돌려준다. 실패하면 None(편집은 버린다)."""
+    async def _carry(self, update: bytes, received_at) -> tuple[str | None, int]:
+        """저장을 거절당한 편집을 지금 장으로 옮기고 (그 장의 키, 버린 편집 수)를 돌려준다. 실패하면 키가 None(편집은 버린다)."""
         try:
-            page, moved = await db(pages.carry_refused)(self.page_id, update, received_at)
+            carried = await self.carry_late(update, received_at)
         except Exception:
             logger.exception("장 %s 봉인 뒤 편집을 새 장으로 옮기지 못했다", self.page_id)
-            return None
-        if page.id == self.page_id:
-            return None
-        if moved is not None:
-            await send_carried(self.hub.layer, page.id, moved)
-        return pages.page_key(page.date, page.seq)
+            return None, 0
+        if carried.page.id == self.page_id:
+            return None, 0
+        return pages.page_key(carried.page.date, carried.page.seq), carried.lost
+
+    async def carry_late(self, update: bytes, received_at, base: bytes | None = None) -> pages.Carried:
+        """닫힌 이 장으로 온 편집을 나눠 옮긴다(pages.carry_late). 옮긴 것은 지금 장을 연 방들에 넘긴다.
+        base는 장부를 처음 만들 때 앞 장에 남는 내용(없으면 저장된 장 문서)."""
+        async with self.late_lock:
+            if self.late is None:
+                self.late = boundary.LateEdits(base=base)
+            carried = await db(pages.carry_late)(self.page_id, self.late, update, received_at)
+        if carried.update is not None and carried.page.id != self.page_id:
+            await send_carried(self.hub.layer, carried.page.id, carried.update)
+        return carried
 
     async def _saved_changed(self) -> None:
         async with self.save_changed:

@@ -1,4 +1,5 @@
 import datetime as dt
+import hashlib
 import json
 import re
 from typing import Any, Literal
@@ -432,6 +433,10 @@ def today_page_snapshot(request, note_id: str):
     return res
 
 
+# 봉인 뒤 이만큼 지나면 봉인 장 스냅샷이 더 바뀌지 않는다고 본다(방이 모아 두던 편집은 몇 초 안에 합쳐진다)
+SNAPSHOT_SETTLE = dt.timedelta(minutes=10)
+
+
 @api.get("/notes/{note_id}/pages/{key}")
 def sealed_page_snapshot(request, note_id: str, key: str):
     note = member_note(request, note_id)
@@ -440,9 +445,19 @@ def sealed_page_snapshot(request, note_id: str, key: str):
     except ValueError:
         raise Http404
     page = get_object_or_404(Page, note=note, date=day, seq=seq, sealed_at__isnull=False, is_empty=False)
-    res = HttpResponse(bytes(page.state), content_type="application/octet-stream")
-    # 봉인된 장은 바뀌지 않는다.
-    res["Cache-Control"] = "private, max-age=86400, immutable"
+    state = bytes(page.state)
+    etag = f'"{hashlib.sha256(state).hexdigest()[:32]}"'
+    if request.headers.get("If-None-Match") == etag:
+        res = HttpResponse(status=304)
+    else:
+        res = HttpResponse(state, content_type="application/octet-stream")
+    res["ETag"] = etag
+    # 봉인 직후에는 늦게 받은 편집이 더 합쳐질 수 있다(#266, #268): 그동안은 매번 ETag로 다시 확인한다.
+    # 그 뒤로는 바뀌지 않는다.
+    if clock.now() - page.sealed_at < SNAPSHOT_SETTLE:
+        res["Cache-Control"] = "private, no-cache"
+    else:
+        res["Cache-Control"] = "private, max-age=86400, immutable"
     return res
 
 

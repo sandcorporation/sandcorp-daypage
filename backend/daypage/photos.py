@@ -5,6 +5,7 @@
 한 장에 올릴 수 있는 횟수는 UPLOADS_PER_PAGE로 따로 묶는다. 봉인할 때 문서에 남은(보이는) 사진만 두고 나머지는 지운다.
 """
 
+import datetime as dt
 import logging
 import re
 import secrets
@@ -19,6 +20,9 @@ logger = logging.getLogger(__name__)
 PHOTO_LIMIT = 3
 PHOTO_MAX_BYTES = 150_000
 UPLOADS_PER_PAGE = 12
+# 봉인 직전에 올린 사진은 문서에 붙이는 편집이 아직 오는 중일 수 있다(방이 모아 두거나 새 장으로 옮기는 중, #268).
+# 이만큼 안에 올린 원본은 문서에 없어도 봉인 때 지우지 않는다.
+SEAL_UPLOAD_GRACE = dt.timedelta(minutes=2)
 
 # 받는 형식: 바이트 머리로 확인한다(브라우저가 붙인 Content-Type은 믿지 않는다)
 _MAGIC = (
@@ -164,8 +168,9 @@ def visible_photo_ids(doc: Doc) -> list[tuple[str, str]]:
 
 
 def settle_sealed_photos(doc: Doc, page) -> bool:
-    """봉인할 때: 한도를 넘었거나 이 노트에 없는 사진은 문서에서 빼고, 문서에 남지 않은 원본은 지운다.
-    문서를 바꿨으면 True."""
+    """봉인할 때: 한도를 넘었거나 이 노트에 없는 사진은 문서에서 빼고, 문서에 남지 않은 원본은 지운다(SEAL_UPLOAD_GRACE 안에
+    올린 것은 둔다). 문서를 바꿨으면 True."""
+    from . import clock
     from .models import Photo
 
     photos = doc.get("photos", type=Map)
@@ -177,7 +182,8 @@ def settle_sealed_photos(doc: Doc, page) -> bool:
             for key in drop:
                 del photos[key]
     kept_src = set(keep.values())
-    gone = list(Photo.objects.filter(page=page).exclude(id__in=kept_src).values_list("id", flat=True))
+    settled = Photo.objects.filter(page=page, created_at__lt=clock.now() - SEAL_UPLOAD_GRACE)
+    gone = list(settled.exclude(id__in=kept_src).values_list("id", flat=True))
     if gone:
         Photo.objects.filter(id__in=gone).delete()
         delete_later([object_key(page.note_id, pid) for pid in gone])
