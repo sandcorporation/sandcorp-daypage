@@ -2,6 +2,7 @@ import * as decoding from 'lib0/decoding'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { WebsocketProvider } from 'y-websocket'
 import * as Y from 'yjs'
+import { DRAIN_MAX_MS, rollAfter, type RollEvent, type RollPhase } from './rollover'
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline'
 
@@ -40,7 +41,10 @@ export const MESSAGE_NOTE_PAGE = 104
  */
 export const MESSAGE_NOTE_INFO = 105
 
-/** 장이 바뀌는 순간 보낸 편집 중 새 장으로 옮기지 못해 버린 것: {type: 'edits_lost', count} (MESSAGE_EDITS_LOST, #268). 교체 알림보다 먼저 온다. */
+/**
+ * 장이 바뀌는 순간 보낸 편집 중 새 장으로 옮기지 못해 버린 것: {type: 'edits_lost', count} (MESSAGE_EDITS_LOST, #268).
+ * 그 편집을 보낸 연결에만 온다. 교체 알림보다 먼저 오거나, 교체 뒤 서버가 옛 연결을 닫기 전에 온다(#278, rollover.ts).
+ */
 export const MESSAGE_EDITS_LOST = 106
 
 /** 받아 쓴 판보다 작거나 같은 머리말 알림은 늦게 도착한 낡은 값이다(#222). 판이 없으면(옛 서버) 받는다. */
@@ -81,7 +85,7 @@ type Options = {
   onNotePaper?: (paper: unknown) => void
   /** 장의 봉인 예정 시각이 바뀜(주인이 봉인 시각을 바꿈) */
   onNotePage?: (change: NotePageChange) => void
-  /** 장이 바뀌는 순간 보낸 편집 중 count개를 서버가 옮기지 못해 버렸다 */
+  /** 장이 바뀌는 순간 내 편집 중 count개를 옮기지 못해 버렸다(서버가 버렸거나, 옛 연결이 닫힌 뒤 옛 문서에 했다) */
   onEditsLost?: (count: number) => void
   /** 노트 이름·참여 수·정원이 바뀜(누가 바꿨든, 누가 들어왔든) */
   onNoteInfo?: (info: NoteInfo) => void
@@ -159,10 +163,28 @@ export function useRealtime({
     // 같은 브라우저의 다른 탭과 직접 주고받지 않고 항상 서버를 거친다(서버가 봉인·권한을 판단).
     const p = new WebsocketProvider(wsBaseUrl(noteId), pageKey, doc, { disableBc: true, maxBackoffTime: 5000 })
     let everConnected = false
-    // 서버가 이 장을 닫겠다고 했다. 뒤따르는 끊김은 장애가 아니다.
-    let rolled = false
+    // 장 교체 때 이 연결이 할 일(rollover.ts). live가 아니면 서버가 이 장을 닫겠다고 했다: 뒤따르는 끊김은 장애가 아니다.
+    let phase: RollPhase = 'live'
+    let drainTimer: number | undefined
+    const step = (event: RollEvent) => {
+      const next = rollAfter(phase, event)
+      phase = next.phase
+      if (next.lost > 0) onEditsLost?.(next.lost)
+      if (next.destroy) finish()
+    }
+    // 옛 연결이 닫힌 뒤 옛 문서에 한 편집은 보낼 길이 없어 센다. 남이 보낸 것(provider가 적용)은 세지 않는다.
+    const onDocUpdate = (_update: Uint8Array, origin: unknown) => {
+      if (origin !== p) step({ type: 'edit' })
+    }
+    doc.on('update', onDocUpdate)
+    const finish = () => {
+      window.clearTimeout(drainTimer)
+      p.off('connection-close', onClose)
+      p.destroy()
+      if (phase !== 'closed') doc.off('update', onDocUpdate)
+    }
     const roll = () => {
-      rolled = true
+      step({ type: 'rolled' })
       p.shouldConnect = false
       startSwitch()
       onNotToday()
@@ -174,7 +196,7 @@ export function useRealtime({
     // 자정 교체 알림: 새 날짜의 빈 장으로 옮겨 간다.
     p.messageHandlers[MESSAGE_PAGE_ROLLED] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; key: string }
-      if (msg.type === 'page_rolled') roll()
+      if (msg.type === 'page_rolled' && phase === 'live') roll()
     }
     // 대기열 순번. 차례가 오면 서버가 같은 연결로 sync를 보내고, sync를 받으면 대기를 거둔다.
     p.messageHandlers[MESSAGE_QUEUED] = (_encoder, decoder) => {
@@ -197,7 +219,7 @@ export function useRealtime({
     }
     p.messageHandlers[MESSAGE_EDITS_LOST] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; count: number }
-      if (msg.type === 'edits_lost' && msg.count > 0) onEditsLost?.(msg.count)
+      if (msg.type === 'edits_lost' && msg.count > 0) step({ type: 'lost', count: msg.count })
     }
     p.messageHandlers[MESSAGE_NOTE_INFO] = (_encoder, decoder) => {
       const msg = JSON.parse(decoding.readVarString(decoder)) as { type: string; seq?: number } & NoteInfo
@@ -217,7 +239,7 @@ export function useRealtime({
       } else if (s === 'connecting') {
         setStatus(everConnected ? 'reconnecting' : 'connecting')
       } else {
-        if (!rolled) loseConnection()
+        if (phase === 'live') loseConnection()
         setStatus(navigator.onLine ? 'reconnecting' : 'offline')
       }
     }
@@ -228,10 +250,15 @@ export function useRealtime({
       endSwitch()
       setQueuePosition(null)
     }
-    const onClose = (event: CloseEvent | null) => {
+    function onClose(event: CloseEvent | null) {
       const code = event?.code
-      if (code === CLOSE.notToday) {
+      if (phase !== 'live') {
+        // 교체 뒤 옛 연결이 닫혔다. 화면이 아직 옛 장이면 새 장을 다시 찾는다.
+        if (phase === 'rolled' && code === CLOSE.notToday) onNotToday()
+        step({ type: 'closed' })
+      } else if (code === CLOSE.notToday) {
         roll()
+        step({ type: 'closed' })
       } else if (code !== undefined && FATAL_CODES[code]) {
         loseConnection()
         p.shouldConnect = false
@@ -249,7 +276,7 @@ export function useRealtime({
 
     // 대기열에서는(맞추기 전) 서버가 빈 커서를 보내지 않으니 맞춰진 연결만 본다
     const watchdog = window.setInterval(() => {
-      if (p.wsconnected && p.synced && Date.now() - p.wsLastMessageReceived > SILENT_AFTER_MS) {
+      if (phase === 'live' && p.wsconnected && p.synced && Date.now() - p.wsLastMessageReceived > SILENT_AFTER_MS) {
         loseConnection()
         setGeneration((g) => g + 1)
       }
@@ -264,11 +291,12 @@ export function useRealtime({
       window.clearInterval(watchdog)
       p.off('status', onStatus)
       p.off('sync', onSync)
-      p.off('connection-close', onClose)
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('online', onOnline)
-      p.destroy()
       setProvider(null)
+      // 교체 알림을 받은 연결은 서버가 닫을 때까지 두어 늦은 편집을 보내고 버린 수를 받는다(#278). 그 밖에는 바로 닫는다.
+      step({ type: 'switched' })
+      if (phase === 'draining') drainTimer = window.setTimeout(() => step({ type: 'closed' }), DRAIN_MAX_MS)
     }
     // 콜백은 바뀌어도 다시 연결하지 않는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps

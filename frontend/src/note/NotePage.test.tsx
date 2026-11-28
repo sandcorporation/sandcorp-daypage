@@ -668,6 +668,39 @@ describe('새 페이지 알림', () => {
     await waitFor(() => expect(heard(`${NOTICE}. 장이 바뀌는 순간 2개는 저장되지 않았어요`)).toHaveLength(1))
   })
 
+  // 교체 알림 뒤에도 옛 연결을 서버가 닫을 때까지 두어 늦게 온 「저장 안 됨」을 받는다(#278, rollover.ts)
+  test('화면이 새 장으로 바뀐 뒤 옛 연결로 온 버린 수도 알리고, 서버가 닫으면 그때 옛 연결을 닫는다(#278)', async () => {
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+    renderNote()
+    connect()
+    const before = latest()
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await waitFor(() => expect(latest()).not.toBe(before))
+    expect(before.destroyed).toBe(false)
+
+    await act(async () => before.receive(106, { type: 'edits_lost', count: 1 }))
+    expect(heard('장이 바뀌는 순간 1개는 저장되지 않았어요')).toHaveLength(1)
+    drop(4409, before)
+    expect(before.destroyed).toBe(true)
+    expect(pill()).toBe(LIVE)
+  })
+
+  test('옛 연결이 닫힌 뒤 옛 문서에 놓은 편집은 그 사람에게 저장 안 됨으로 알린다(#278)', async () => {
+    vi.stubGlobal('fetch', async (url: string) => json(url === '/api/notes/n1' ? NEXT : {}))
+    renderNote()
+    connect()
+    const before = latest()
+    await act(async () => before.receive(100, { type: 'page_rolled', key: NEXT.page.key }))
+    await waitFor(() => expect(latest()).not.toBe(before))
+    drop(4409, before)
+    // 끌던 사진을 늦게 놓았다: 옛 문서에 쓴다
+    act(() => before.doc.getMap('scratch').set('late', 1))
+    await waitFor(() => expect(heard('장이 바뀌는 순간 1개는 저장되지 않았어요')).toHaveLength(1))
+    // 새 장 문서의 편집은 세지 않는다
+    act(() => latest().doc.getMap('scratch').set('fresh', 1))
+    expect(heard('장이 바뀌는 순간 2개는 저장되지 않았어요')).toHaveLength(0)
+  })
+
   // 장이 바뀌면 편집 칸이 사라져 초점이 body로 간다. 이어 친 글자가 단축키가 되면 안 된다(#272)
   test.each([
     ['포인터 입력', () => fireEvent.pointerDown(document.body)],

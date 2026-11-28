@@ -22,6 +22,8 @@ export class FakeProvider extends ObservableV2<Record<string, (...args: any[]) =
   /** 서버로 보낸 메시지 */
   sent: Uint8Array[] = []
   ws = { send: (message: Uint8Array) => void this.sent.push(message) }
+  /** destroy로 연결을 닫았다(닫힌 연결로는 아무것도 받지 못한다) */
+  destroyed = false
   constructor(_url: string, _room: string, doc: Y.Doc) {
     super()
     this.doc = doc
@@ -30,6 +32,7 @@ export class FakeProvider extends ObservableV2<Record<string, (...args: any[]) =
   }
   /** Daypage 전용 메시지(종류 + JSON 문자열)를 받은 것처럼 */
   receive(kind: number, payload: object) {
+    if (this.destroyed) return
     const enc = encoding.createEncoder()
     encoding.writeVarString(enc, JSON.stringify(payload))
     this.messageHandlers[kind](encoding.createEncoder(), decoding.createDecoder(encoding.toUint8Array(enc)))
@@ -45,6 +48,7 @@ export class FakeProvider extends ObservableV2<Record<string, (...args: any[]) =
     }
   }
   destroy() {
+    this.destroyed = true
     this.awareness.destroy()
     super.destroy()
   }
