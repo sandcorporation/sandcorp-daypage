@@ -32,14 +32,14 @@ export function orderStrokes(strokes: Stroke[]): Stroke[] {
   return [...strokes].sort(compareStrokes)
 }
 
-function toTriples(points: number[]): [number, number, number][] {
+export function toTriples(points: number[]): [number, number, number][] {
   const out: [number, number, number][] = []
   for (let i = 0; i + 2 < points.length; i += 3) out.push([points[i], points[i + 1], points[i + 2]])
   return out
 }
 
 /** 펜 종류별 perfect-freehand 설정. 볼펜(기본)은 펜 종류가 생기기 전과 같은 값이다. */
-function outlineOptions(stroke: Stroke, triples: [number, number, number][]): StrokeOptions {
+export function outlineOptions(stroke: Stroke, triples: [number, number, number][]): StrokeOptions {
   const size = stroke.width
   const simulatePressure = triples.every(([, , p]) => p === 0.5)
   const base: StrokeOptions = { size, thinning: 0.55, smoothing: 0.5, streamline: 0.45, simulatePressure, last: true }
@@ -93,6 +93,11 @@ export function strokePath(stroke: Stroke): Path2D {
   return path
 }
 
+/** 펜 획의 perfect-freehand 외곽선 점들 */
+export function strokeOutline(stroke: Stroke, triples = toTriples(stroke.points)): number[][] {
+  return getStroke(triples, outlineOptions(stroke, triples))
+}
+
 function buildStrokePath(stroke: Stroke): Path2D {
   const triples = toTriples(stroke.points)
   const path = new Path2D()
@@ -103,7 +108,7 @@ function buildStrokePath(stroke: Stroke): Path2D {
     if (triples.length === 1) path.lineTo(triples[0][0] + 0.1, triples[0][1])
     return path
   }
-  const outline = getStroke(triples, outlineOptions(stroke, triples))
+  const outline = strokeOutline(stroke, triples)
   if (outline.length === 0) return path
   path.moveTo(outline[0][0], outline[0][1])
   for (let i = 1; i < outline.length; i++) {
