@@ -51,15 +51,15 @@ export function warnOnLeave(state: Unsent, screen: UnsentScreen): boolean {
 }
 
 /**
- * 맞춰진 동안 그린 뒤 이만큼 지나면 서버에 확인을 묻는다. 서버가 모은 편집을 저장하는 주기(hub.FLUSH_EVERY)와 같아,
- * 확인이 저장을 더 잦게 만들지 않는다.
+ * 맞춰진 동안 그린 뒤 이만큼 지나면 서버에 확인을 묻는다(서버가 모은 편집을 저장하는 주기 hub.FLUSH_EVERY와 같다).
+ * 서버는 확인을 받아도 저장을 앞당기지 않고, 예정된 주기 저장(또는 진행 중 저장)이 끝나기를 기다려 답한다(#260).
  */
 export const CHECK_AFTER_MS = 300
 
 /** y-websocket의 messageSync(시험이 y-websocket을 갈아 끼워도 같은 값을 쓰게 옮겨 둔다) */
 const MESSAGE_SYNC = 0
 
-/** 서버가 지금까지 받은 것을 확인하는 메시지: sync step1(서버는 앞서 받은 메시지를 처리·저장한 뒤 step2로 답한다) */
+/** 서버가 지금까지 받은 것을 확인하는 메시지: sync step1(서버는 그때까지 받은 편집이 DB에 커밋된 뒤에 step2로 답한다) */
 export function checkMessage(doc: Y.Doc): Uint8Array<ArrayBuffer> {
   const encoder = encoding.createEncoder()
   encoding.writeVarUint(encoder, MESSAGE_SYNC)
@@ -82,8 +82,9 @@ export function listenForAnswers(provider: WebsocketProvider, onAnswer: () => vo
  * 서버에 닿지 않은 내 변경이 있는지. 남이 보낸 갱신(origin이 provider)은 세지 않고, 커서(awareness)는 문서를 바꾸지
  * 않으니 처음부터 들어오지 않는다. 장(문서)이 바뀌면 새로 센다.
  *
- * 확인 근거(#258): 맞춰진 동안 그리면 잠시 뒤 같은 연결로 sync step1을 보낸다. 서버는 한 연결의 메시지를 받은
- * 차례대로 처리하므로, 그 답(step2)이 오면 step1보다 먼저 보낸 내 갱신은 모두 서버에 닿았다.
+ * 확인 근거(#258, #260): 맞춰진 동안 그리면 잠시 뒤 같은 연결로 sync step1을 보낸다. 서버는 한 연결의 메시지를 받은
+ * 차례대로 처리하고, 그때까지 받은 편집이 커밋된 뒤에 받은 차례대로 답(step2)을 보내므로, 답이 오면 step1보다 먼저
+ * 보낸 내 갱신은 모두 저장됐다.
  */
 export function useUnsentChanges(doc: Y.Doc, provider: WebsocketProvider | null, live: boolean, screen: UnsentScreen): boolean {
   const [state, dispatch] = useReducer(

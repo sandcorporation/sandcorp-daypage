@@ -85,6 +85,14 @@ class Room:
         self.pending: list[bytes] = []
         self.pending_at = None
         self.flusher: asyncio.Task | None = None
+        # 저장은 방마다 하나씩만 돈다(#260). received는 이 방이 받은 편집 수, saved는 그중 앞에서부터 커밋된 수.
+        self.saving = asyncio.Lock()
+        self.received = 0
+        self.saved = 0
+        self.save_changed = asyncio.Condition()
+        # 봉인돼 더 저장할 수 없다 / 마지막 연결이 나가 닫는 중이다
+        self.sealed = False
+        self.closed = False
         # 아직 보내지 않은 커서
         self.aw_out: dict[int, tuple[int, dict | None]] = {}
         self.aw_task: asyncio.Task | None = None
@@ -113,6 +121,7 @@ class Room:
 
     async def close(self) -> None:
         """마지막 연결이 나갔다. 남은 커서·편집을 보내고 저장한 뒤 닫는다."""
+        self.closed = True
         for task in (self.aw_task, self.flusher, self.regroup):
             if task:
                 task.cancel()
@@ -132,8 +141,8 @@ class Room:
         await self.to_peers({"type": "hub.update", "update": update})
         self.pending.append(update)
         self.pending_at = self.pending_at or received_at
-        if self.flusher is None or self.flusher.done():
-            self.flusher = asyncio.create_task(self._flush_later())
+        self.received += 1
+        self._schedule_flush()
 
     async def local_awareness(self, sender: Member, entries: list[awareness.Entry]) -> None:
         now = time.monotonic()
@@ -211,30 +220,70 @@ class Room:
 
     # ── 저장 ───────────────────────────────────────────────────
 
+    def _schedule_flush(self) -> None:
+        if self.flusher is None or self.flusher.done():
+            self.flusher = asyncio.create_task(self._flush_later())
+
     async def _flush_later(self) -> None:
-        await asyncio.sleep(FLUSH_EVERY)
-        await self.flush()
+        """FLUSH_EVERY마다 쌓인 편집을 저장한다. 저장하는 동안 새로 쌓이거나 실패해 되돌아온 편집이 있으면 이어 간다.
+        이 태스크가 취소돼도(방 닫기) 진행 중인 저장은 끝까지 간다."""
+        while self.pending and not self.gone and not self.sealed:
+            await asyncio.sleep(FLUSH_EVERY)
+            await asyncio.shield(self.flush())
 
     async def flush(self) -> None:
-        """모아 둔 편집을 하나로 합쳐 저장한다. 봉인됐거나 노트가 지워졌으면 연결들을 닫는다."""
-        if not self.pending or self.gone:
+        """모아 둔 편집을 하나로 합쳐 저장한다. 진행 중인 저장이 있으면 끝나기를 기다린 뒤 돈다.
+        봉인됐거나 노트가 지워졌으면 연결들을 닫는다. 그 밖의 실패면 편집을 되돌려 놓아 다음 주기에 다시 저장한다."""
+        async with self.saving:
+            await self._save()
+
+    async def _save(self) -> None:
+        if not self.pending or self.gone or self.sealed:
             return
-        updates, received_at = self.pending, self.pending_at
+        updates, received_at, through = self.pending, self.pending_at, self.received
         self.pending, self.pending_at = [], None
         merged = updates[0] if len(updates) == 1 else merge_updates(*updates)
         try:
             count = await db(pages.append_update)(self.page_id, merged, received_at)
         except pages.PageSealed:
+            self.sealed = True
+            await self._saved_changed()
             for m in list(self.members):
                 await m.page_sealed()
             return
         except Page.DoesNotExist:  # 그사이 노트가 지워졌다
             self.gone = True
+            await self._saved_changed()
             for m in list(self.members):
                 await m.page_gone()
             return
+        except Exception:
+            # 저장하지 못한 편집을 앞에 되돌려 놓는다. saved가 넘어가지 않으니 기다리던 확인도 나가지 않는다.
+            self.pending = updates + self.pending
+            self.pending_at = received_at
+            if self.closed:
+                raise
+            logger.exception("장 %s 편집 저장 실패, 다음 주기에 다시 저장한다", self.page_id)
+            self._schedule_flush()
+            return
+        self.saved = through
+        await self._saved_changed()
         if pages.should_compact(count):
-            await db(pages.compact)(self.page_id)
+            try:
+                await db(pages.compact)(self.page_id)
+            except Exception:  # 편집은 이미 저장됐다. 합치기는 다음 기회에 한다.
+                logger.exception("장 %s 합치기 실패", self.page_id)
+
+    async def _saved_changed(self) -> None:
+        async with self.save_changed:
+            self.save_changed.notify_all()
+
+    async def saved_through(self, through: int) -> bool:
+        """이 방이 받은 편집 through개가 모두 커밋되기를 기다린다. 확인(sync step2)은 이것이 참일 때만 나간다.
+        강제로 저장하지 않고 예정된 주기 저장(또는 진행 중 저장)을 기다린다. 봉인·삭제로 더 저장할 수 없으면 False."""
+        async with self.save_changed:
+            await self.save_changed.wait_for(lambda: self.saved >= through or self.gone or self.sealed)
+        return self.saved >= through
 
     # ── 다른 프로세스 ──────────────────────────────────────────
 
