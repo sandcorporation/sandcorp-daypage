@@ -273,6 +273,11 @@ export function SealedPageView({
   const [scale, setScale] = useState(0.5)
   const [zoom, setZoom] = useState<Zoom>('fit')
   const onZoom = useCallback((z: number) => setZoom(z), [])
+  const [home, setHome] = useState(0)
+  const chooseZoom = (z: Zoom) => {
+    setZoom(z)
+    if (z === 'fit') setHome((n) => n + 1)
+  }
   const [saving, setSaving] = useState(false)
   const { toast, show } = useToast()
   const photoSrc = photos ?? photoBase(noteId)
@@ -330,6 +335,7 @@ export function SealedPageView({
           readOnly
           onScale={setScale}
           zoom={zoom}
+          home={home}
           onZoom={onZoom}
           underlay={<PhotoImages doc={doc} base={photoSrc} />}
         >
@@ -347,7 +353,7 @@ export function SealedPageView({
           />
         </PageView>
       )}
-      <ZoomControl scale={scale} zoom={zoom} onZoom={setZoom} />
+      <ZoomControl scale={scale} zoom={zoom} onZoom={chooseZoom} />
       {toast}
     </section>
   )

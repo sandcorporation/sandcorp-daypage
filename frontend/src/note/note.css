@@ -2764,7 +2764,8 @@
 .rotate-control button:hover {
   background: var(--paper-dark);
 }
-.rotate-control button[aria-pressed='true'] {
+.rotate-control button[aria-pressed='true'],
+.rotate-control[data-changed] .view-reset {
   background: var(--accent-soft);
   color: var(--accent);
 }

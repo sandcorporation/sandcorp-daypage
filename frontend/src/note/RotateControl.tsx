@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { isIdentityView, type ViewTransform } from '../page/viewTransform'
 import { keyHint } from '../page/shortcuts'
 import type { Keymap } from '../page/shortcuts'
@@ -19,6 +20,7 @@ const STROKE = { stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round
  */
 export function RotateControl({ view, keymap, onRotate, onMirror, onReset }: Props) {
   const changed = !isIdentityView(view)
+  const stateId = useId()
   return (
     <div className="rotate-control" role="group" aria-label="돌리기·뒤집기" data-changed={changed || undefined}>
       <button type="button" aria-label="반시계 방향으로 돌리기" title={`반시계 방향으로 돌리기${keyHint(keymap, 'rotateCcw')}`} onClick={() => onRotate(-1)}>
@@ -45,13 +47,18 @@ export function RotateControl({ view, keymap, onRotate, onMirror, onReset }: Pro
       </button>
       <button
         type="button"
+        className="view-reset"
         aria-label="돌리기·뒤집기 원위치"
+        aria-describedby={stateId}
         title={changed ? `원위치${keyHint(keymap, 'viewReset')}` : `원위치 (지금 그대로예요)${keyHint(keymap, 'viewReset')}`}
-        aria-pressed={changed}
         onClick={onReset}
       >
         1:1
       </button>
+      {/* 원위치는 켜고 끄는 단추가 아니라서 aria-pressed 대신 설명으로 알린다(눌림은 「이미 원위치」로 들린다) */}
+      <span id={stateId} className="visually-hidden">
+        {changed ? '보기가 돌아가거나 뒤집혀 있어요' : '지금 원위치예요'}
+      </span>
     </div>
   )
 }
