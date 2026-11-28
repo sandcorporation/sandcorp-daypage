@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { Hands, frameScale, nextFrames, openNote, scrollTopOf, zoomIn, type Saved } from './helpers'
+import { Hands, frameScale, nextFrames, openNote, scrollTopOf, serverDoc, zoomIn, type Saved } from './helpers'
 
 // #82 더해 고르기, #84 고른 것 손가락 끌기
 
@@ -92,4 +92,27 @@ test('#84 선택 도구에서 빈 곳 한 손가락 끌기는 종이를 스크�
   await expect.poll(() => scrollTopOf(page)).toBeGreaterThan(top + 100)
   await nextFrames(page)
   expect(saved.strokes()[0].points[1]).toBe(still)
+})
+
+test('#262 손가락으로 고른 것을 지우기 단추로 지우면, 새로고침해도 지워져 있다', async ({ page }) => {
+  const saved = await openNote(page)
+  const hands = await Hands.on(page)
+  const vp = await strokeAndBox(page, saved)
+  const remove = page.getByRole('button', { name: '고른 것 지우기' })
+  await expect(remove).toHaveCount(0)
+  await page.getByRole('button', { name: '더해 고르기' }).click()
+  await hands.fingerTap(onStroke(vp))
+  await nextFrames(page)
+  await hands.fingerTap(onBox(vp))
+  await expect(remove).toBeVisible()
+  expect((await remove.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await remove.tap()
+  await expect(remove).toHaveCount(0)
+  await expect.poll(() => saved.strokes().length + saved.boxes().length).toBe(0)
+
+  const server = serverDoc(page)
+  await page.reload()
+  await expect.poll(() => server.synced()).toBe(true)
+  expect(server.strokes()).toBe(0)
+  await expect(page.locator('.textbox')).toHaveCount(0)
 })
